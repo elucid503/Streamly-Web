@@ -11,6 +11,12 @@ import {
   initialQualityAttempts,
   nextLowerQualityHeight,
 } from "@/lib/stream";
+import {
+  pickQualityByHeight,
+  qualityHasProxy,
+  streamFromQuality,
+  streamPlaybackUrl,
+} from "@/lib/streamClient";
 import type {
   Episode,
   IntroInfo,
@@ -19,6 +25,7 @@ import type {
   StreamInfo,
   StreamQuality,
   SubtitleTrack,
+  WatchHistoryItem,
 } from "@/lib/types";
 
 interface WatchPageProps {
@@ -84,6 +91,30 @@ const EMPTY_STATE: Omit<WatchPageState, "loading" | "error" | "ready"> = {
   episodeCache: {},
   streamGeneration: 0,
 };
+
+function episodeProgress(
+  items: WatchHistoryItem[],
+  showId: number,
+  season: number,
+  episode: number,
+): number {
+  const entry = items.find(
+    (item) =>
+      item.kind === "show" &&
+      item.mediaId === showId &&
+      item.season === season &&
+      item.episode === episode &&
+      !item.completed,
+  );
+  return entry?.positionMs ?? 0;
+}
+
+function movieProgress(items: WatchHistoryItem[], movieId: number): number {
+  const entry = items.find(
+    (item) => item.kind === "movie" && item.mediaId === movieId && !item.completed,
+  );
+  return entry?.positionMs ?? 0;
+}
 
 export class WatchPage extends Component<WatchPageProps, WatchPageState> {
   private progressDebounce: ReturnType<typeof setTimeout> | null = null;
@@ -173,6 +204,8 @@ export class WatchPage extends Component<WatchPageProps, WatchPageState> {
     }
   };
 
+  preferredHeight = (): number => store.settings?.preferredHeight ?? 1080;
+
   requestStream = async (height: number): Promise<StreamInfo> => {
     const { kind, mediaId, season, episode } = this.state;
     if (kind === "movie") return api.movieStream(mediaId, height);
@@ -180,12 +213,29 @@ export class WatchPage extends Component<WatchPageProps, WatchPageState> {
     throw new Error("no stream available");
   };
 
+  mergeQualities = (
+    incoming: StreamQuality[] | undefined,
+    previous: StreamQuality[],
+  ): StreamQuality[] => {
+    const merged = dedupeQualitiesByHeight(incoming ?? previous);
+    const proxyByHeight = new Map(
+      previous.filter((quality) => quality.proxyUrl).map((quality) => [quality.height, quality.proxyUrl]),
+    );
+    return merged.map((quality) =>
+      quality.proxyUrl || !proxyByHeight.has(quality.height)
+        ? quality
+        : { ...quality, proxyUrl: proxyByHeight.get(quality.height) },
+    );
+  };
+
   applyStream = (stream: StreamInfo, requestedHeight: number, positionMs: number) => {
+    const playbackUrl = streamPlaybackUrl(stream);
+    if (!playbackUrl) throw new Error("no stream available");
     this.setState((prev) => ({
       ...prev,
-      streamUrl: stream.proxyUrl,
+      streamUrl: playbackUrl,
       isHls: stream.isHls,
-      qualities: dedupeQualitiesByHeight(stream.qualities ?? prev.qualities),
+      qualities: this.mergeQualities(stream.qualities, prev.qualities),
       selectedHeight: stream.selectedHeight ?? requestedHeight,
       startPositionMs: Math.floor(positionMs),
       streamGeneration: prev.streamGeneration + 1,
@@ -194,113 +244,140 @@ export class WatchPage extends Component<WatchPageProps, WatchPageState> {
   };
 
   switchStream = async (height: number, positionMs: number) => {
+    const { qualities } = this.state;
+    const localQuality = pickQualityByHeight(qualities, height);
+    if (localQuality && qualityHasProxy(localQuality)) {
+      this.applyStream(streamFromQuality(qualities, localQuality, height), height, positionMs);
+      return;
+    }
     const stream = await this.requestStream(height);
-    if (!stream?.proxyUrl) throw new Error("no stream available");
+    if (!streamPlaybackUrl(stream)) throw new Error("no stream available");
     this.applyStream(stream, height, positionMs);
   };
 
   loadMovie = async (id: number, gen: number) => {
-    const preferredHeight = store.settings?.preferredHeight;
-    const [details, historyItems, subtitles] = await Promise.all([
-      api.movieDetails(id),
-      api.getHistory().catch(() => []),
-      api.movieSubtitles(id).catch(() => []),
+    const preferredHeight = this.preferredHeight();
+    const [stream, historyItems] = await Promise.all([
+      api.movieStream(id, preferredHeight),
+      api.getHistory(5, id).catch(() => []),
     ]);
 
     if (gen !== this.loadGen) return;
-
-    this.setState({ kind: "movie", mediaId: id });
-    const { stream } = await fetchStreamWithFallback(
-      initialQualityAttempts(preferredHeight),
-      (height) => api.movieStream(id, height),
-    );
-
-    if (gen !== this.loadGen) return;
-
-    const progress = historyItems.find((h) => h.kind === "movie" && h.mediaId === id);
+    if (!streamPlaybackUrl(stream)) throw new Error("no stream available");
 
     this.setState((prev) => ({
-      streamUrl: stream.proxyUrl,
+      streamUrl: streamPlaybackUrl(stream),
       isHls: stream.isHls,
       qualities: dedupeQualitiesByHeight(stream.qualities ?? []),
-      selectedHeight: stream.selectedHeight ?? preferredHeight ?? 1080,
+      selectedHeight: stream.selectedHeight ?? preferredHeight,
       streamGeneration: prev.streamGeneration + 1,
-      subtitleTracks: subtitles,
-      title: details.title,
-      subtitle: details.year,
-      episodeTitle: "",
-      description: details.description,
-      intro: null,
-      nextEpisode: null,
-      startPositionMs: progress && !progress.completed ? progress.positionMs : 0,
+      startPositionMs: movieProgress(historyItems, id),
       loading: false,
       ready: true,
       kind: "movie",
       mediaId: id,
-      poster: details.poster,
-      historyPoster: details.poster,
+      subtitle: "",
     }));
+
+    void this.enrichMovie(id, gen);
+    void this.loadMovieSubtitles(id, gen);
+  };
+
+  enrichMovie = async (id: number, gen: number) => {
+    try {
+      const details = await api.movieDetails(id);
+      if (gen !== this.loadGen) return;
+      this.setState({
+        title: details.title,
+        subtitle: details.year,
+        description: details.description,
+        poster: details.poster,
+        historyPoster: details.poster,
+      });
+    } catch {
+      /* metadata is optional for playback */
+    }
+  };
+
+  loadMovieSubtitles = async (id: number, gen: number) => {
+    try {
+      const subtitles = await api.movieSubtitles(id);
+      if (gen !== this.loadGen) return;
+      this.setState({ subtitleTracks: subtitles });
+    } catch {
+      /* subtitles are optional */
+    }
   };
 
   loadEpisode = async (showId: number, season: number, episode: number, gen: number) => {
-    const preferredHeight = store.settings?.preferredHeight;
-    const [details, next, historyItems, subtitles, episodeDetails, seasons, menuEpisodes] =
-      await Promise.all([
-        api.showDetails(showId),
-        api.nextEpisode(showId, season, episode).catch(() => null),
-        api.getHistory().catch(() => []),
-        api.episodeSubtitles(showId, season, episode).catch(() => []),
-        api.episodeDetails(showId, season, episode).catch(() => null),
-        api.showSeasons(showId).catch(() => []),
-        api.seasonEpisodes(showId, season).catch(() => []),
-      ]);
+    const preferredHeight = this.preferredHeight();
+    const [stream, historyItems] = await Promise.all([
+      api.episodeStream(showId, season, episode, preferredHeight),
+      api.getHistory(30, showId).catch(() => []),
+    ]);
 
     if (gen !== this.loadGen) return;
-
-    this.setState({ kind: "show", mediaId: showId, season, episode });
-    const { stream } = await fetchStreamWithFallback(
-      initialQualityAttempts(preferredHeight),
-      (height) => api.episodeStream(showId, season, episode, height),
-    );
-
-    if (gen !== this.loadGen) return;
-
-    const progress = historyItems.find(
-      (h) =>
-        h.kind === "show" &&
-        h.mediaId === showId &&
-        h.season === season &&
-        h.episode === episode,
-    );
+    if (!streamPlaybackUrl(stream)) throw new Error("no stream available");
 
     this.setState((prev) => ({
-      streamUrl: stream.proxyUrl,
+      streamUrl: streamPlaybackUrl(stream),
       isHls: stream.isHls,
       qualities: dedupeQualitiesByHeight(stream.qualities ?? []),
-      selectedHeight: stream.selectedHeight ?? preferredHeight ?? 1080,
+      selectedHeight: stream.selectedHeight ?? preferredHeight,
       streamGeneration: prev.streamGeneration + 1,
-      subtitleTracks: subtitles,
-      title: details.title,
-      subtitle: `Season ${season}, Episode ${episode}`,
-      episodeTitle: episodeDetails?.title ?? "",
-      description: episodeDetails?.description || details.description,
-      intro: null,
-      nextEpisode: next,
-      startPositionMs: progress && !progress.completed ? progress.positionMs : 0,
+      startPositionMs: episodeProgress(historyItems, showId, season, episode),
       loading: false,
       ready: true,
       kind: "show",
       mediaId: showId,
       season,
       episode,
-      poster: episodeDetails?.poster || details.poster,
-      historyPoster: details.poster,
-      seasons,
-      menuEpisodes,
+      subtitle: `Season ${season}, Episode ${episode}`,
       menuSeason: season,
-      menuEpisodesLoading: false,
-      episodeCache: menuEpisodes.length > 0 ? { [season]: menuEpisodes } : {},
     }));
+
+    void this.enrichEpisode(showId, season, episode, gen);
+    void this.loadEpisodeSubtitles(showId, season, episode, gen);
+    void this.loadNextEpisode(showId, season, episode, gen);
+  };
+
+  enrichEpisode = async (showId: number, season: number, episode: number, gen: number) => {
+    try {
+      const [details, episodeDetails] = await Promise.all([
+        api.showDetails(showId),
+        api.episodeDetails(showId, season, episode).catch(() => null),
+      ]);
+      if (gen !== this.loadGen) return;
+      this.setState({
+        title: details.title,
+        episodeTitle: episodeDetails?.title ?? "",
+        description: episodeDetails?.description || details.description,
+        poster: episodeDetails?.poster || details.poster,
+        historyPoster: details.poster,
+      });
+    } catch {
+      /* metadata is optional for playback */
+    }
+  };
+
+  loadEpisodeSubtitles = async (showId: number, season: number, episode: number, gen: number) => {
+    try {
+      const subtitles = await api.episodeSubtitles(showId, season, episode);
+      if (gen !== this.loadGen) return;
+      this.setState({ subtitleTracks: subtitles });
+    } catch {
+      /* subtitles are optional */
+    }
+  };
+
+  loadNextEpisode = async (showId: number, season: number, episode: number, gen: number) => {
+    try {
+      const next = await api.nextEpisode(showId, season, episode);
+      if (gen !== this.loadGen) return;
+      if (next) this.setState({ nextEpisode: next });
+    } catch {
+      /* up-next is optional */
+    }
   };
 
   loadMenuEpisodes = async (season: number) => {
@@ -314,10 +391,17 @@ export class WatchPage extends Component<WatchPageProps, WatchPageState> {
     }
 
     this.setState({ menuEpisodesLoading: true, menuSeason: season });
+
     try {
-      const episodes = await api.seasonEpisodes(mediaId, season);
+      const [seasons, episodes] = await Promise.all([
+        this.state.seasons.length > 0
+          ? Promise.resolve(this.state.seasons)
+          : api.showSeasons(mediaId).catch(() => []),
+        api.seasonEpisodes(mediaId, season),
+      ]);
       if (this.state.mediaId !== mediaId) return;
       this.setState((prev) => ({
+        seasons: prev.seasons.length > 0 ? prev.seasons : seasons,
         menuEpisodes: episodes,
         menuEpisodesLoading: false,
         episodeCache: { ...prev.episodeCache, [season]: episodes },
@@ -336,12 +420,13 @@ export class WatchPage extends Component<WatchPageProps, WatchPageState> {
   loadLive = async (daddyId: string, gen: number) => {
     const stream = await api.liveStream(daddyId);
     if (gen !== this.loadGen) return;
-    if (!stream?.proxyUrl) {
+    const playbackUrl = streamPlaybackUrl(stream);
+    if (!playbackUrl) {
       throw new Error("no stream available for this channel");
     }
 
     this.setState({
-      streamUrl: stream.proxyUrl,
+      streamUrl: playbackUrl,
       isHls: true,
       title: stream.channel.name,
       subtitle: stream.channel.category,
@@ -449,7 +534,15 @@ export class WatchPage extends Component<WatchPageProps, WatchPageState> {
       await this.switchStream(nextHeight, positionMs);
     } catch {
       this.failedQualityHeights.add(nextHeight);
-      await this.handlePlaybackError(positionMs);
+      try {
+        const { stream } = await fetchStreamWithFallback(
+          initialQualityAttempts(nextHeight).filter((h) => h <= nextHeight),
+          (height) => this.requestStream(height),
+        );
+        this.applyStream(stream, stream.selectedHeight ?? nextHeight, positionMs);
+      } catch {
+        await this.handlePlaybackError(positionMs);
+      }
     }
   };
 
@@ -531,8 +624,8 @@ export class WatchPage extends Component<WatchPageProps, WatchPageState> {
           isHls={isHls}
           live={this.state.kind === "live"}
           lowLatency={this.state.kind === "live"}
-          title={title}
-          subtitle={subtitle}
+          title={title || subtitle}
+          subtitle={title ? subtitle : undefined}
           episodeTitle={episodeTitle}
           description={description}
           poster={poster}

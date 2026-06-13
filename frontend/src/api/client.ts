@@ -193,7 +193,7 @@ export const api = {
   },
 
   liveStream(daddyId: string) {
-    return request<{ proxyUrl: string; isHls: boolean; channel: LiveChannel }>(
+    return request<{ url?: string; proxyUrl: string; isHls: boolean; channel: LiveChannel }>(
       `/api/live/channels/${daddyId}/stream`,
     );
   },

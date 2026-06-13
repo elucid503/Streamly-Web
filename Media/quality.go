@@ -1,7 +1,6 @@
 package mediakit
 
 import (
-	"math"
 	"regexp"
 	"sort"
 	"strconv"
@@ -43,10 +42,52 @@ func qualityHeight(label string) int {
 	}
 
 	if qualityOrgRE.MatchString(label) {
-		return math.MaxInt
+		if quality4KRE.MatchString(label) {
+			return 2160
+		}
+		return 1080
 	}
 
 	return 0
+}
+
+// IsWebPlayableURL reports whether a URL points at a browser-friendly container.
+func IsWebPlayableURL(raw string) bool {
+	path := strings.ToLower(strings.SplitN(strings.TrimSpace(raw), "?", 2)[0])
+	switch {
+	case strings.HasSuffix(path, ".mkv"),
+		strings.HasSuffix(path, ".avi"),
+		strings.HasSuffix(path, ".wmv"),
+		strings.HasSuffix(path, ".flv"):
+		return false
+	default:
+		return path != ""
+	}
+}
+
+func isMP4URL(raw string) bool {
+	path := strings.ToLower(strings.SplitN(strings.TrimSpace(raw), "?", 2)[0])
+	return strings.HasSuffix(path, ".mp4") || strings.HasSuffix(path, ".m4v")
+}
+
+func webPlayableQualities(qualities []Quality) []Quality {
+	playable := make([]Quality, 0, len(qualities))
+	for _, quality := range qualities {
+		if quality.URL != "" && IsWebPlayableURL(quality.URL) {
+			playable = append(playable, quality)
+		}
+	}
+	if len(playable) > 0 {
+		return playable
+	}
+
+	hls := make([]Quality, 0, len(qualities))
+	for _, quality := range qualities {
+		if quality.URL != "" && quality.IsHLS {
+			hls = append(hls, quality)
+		}
+	}
+	return hls
 }
 
 func toQualities(items []febbox.Quality) []Quality {
@@ -121,14 +162,35 @@ func PickNextLowerQuality(qualities []Quality, belowHeight int) *Quality {
 }
 
 func preferProgressiveQualities(qualities []Quality) []Quality {
-	progressive := make([]Quality, 0, len(qualities))
+	qualities = webPlayableQualities(qualities)
+
+	mp4 := make([]Quality, 0, len(qualities))
+	otherProgressive := make([]Quality, 0, len(qualities))
 	for _, quality := range qualities {
-		if quality.URL != "" && !quality.IsHLS {
-			progressive = append(progressive, quality)
+		if quality.URL == "" || quality.IsHLS {
+			continue
+		}
+		if isMP4URL(quality.URL) {
+			mp4 = append(mp4, quality)
+		} else {
+			otherProgressive = append(otherProgressive, quality)
 		}
 	}
-	if len(progressive) > 0 {
-		return progressive
+	if len(mp4) > 0 {
+		return mp4
+	}
+	if len(otherProgressive) > 0 {
+		return otherProgressive
+	}
+
+	hls := make([]Quality, 0, len(qualities))
+	for _, quality := range qualities {
+		if quality.IsHLS && quality.URL != "" {
+			hls = append(hls, quality)
+		}
+	}
+	if len(hls) > 0 {
+		return hls
 	}
 	return qualities
 }

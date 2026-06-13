@@ -1,4 +1,16 @@
+import { isWebPlayableUrl, qualityPlaybackUrl, streamPlaybackUrl } from "@/lib/streamClient";
 import type { StreamInfo, StreamQuality } from "@/lib/types";
+
+function qualityPreferenceScore(quality: StreamQuality): number {
+  const url = qualityPlaybackUrl(quality) || quality.url;
+  if (!url || !isWebPlayableUrl(url)) return -100;
+  let score = 0;
+  const path = url.split("?")[0].toLowerCase();
+  if (path.endsWith(".mp4") || path.endsWith(".m4v")) score += 30;
+  if (!quality.isHls) score += 10;
+  if (quality.proxyUrl) score += 5;
+  return score;
+}
 
 const QUALITY_TIERS = [2160, 1440, 1080, 720, 480, 360];
 
@@ -15,7 +27,9 @@ export function dedupeQualitiesByHeight(qualities: StreamQuality[]): StreamQuali
       byHeight.set(quality.height, quality);
       continue;
     }
-    if (existing.isHls && !quality.isHls) {
+    const existingScore = qualityPreferenceScore(existing);
+    const nextScore = qualityPreferenceScore(quality);
+    if (nextScore > existingScore) {
       byHeight.set(quality.height, quality);
     }
   }
@@ -48,7 +62,7 @@ export async function fetchStreamWithFallback(
   for (const height of heights) {
     try {
       const stream = await fetchStream(height);
-      if (stream?.proxyUrl) return { stream, height };
+      if (streamPlaybackUrl(stream)) return { stream, height };
     } catch (err) {
       lastError = err;
     }

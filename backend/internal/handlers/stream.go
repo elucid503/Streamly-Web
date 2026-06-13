@@ -5,7 +5,6 @@ import (
 	"strconv"
 
 	"github.com/gin-gonic/gin"
-	mediakit "mediakit"
 	"streamly/internal/services"
 )
 
@@ -37,18 +36,15 @@ func (h *StreamHandler) MovieStream(c *gin.Context) {
 		return
 	}
 
-	stream, err := h.proxy.StreamQualities(
-		services.QualitiesToDTO(qualities),
-		best.URL,
-		"",
-		best.IsHLS || mediakit.IsHLSURL(best.URL),
-		baseURL(c),
-	)
-	if err != nil {
+	stream := services.BuildStreamDTO(qualities, best)
+	if stream == nil {
+		writeError(c, http.StatusNotFound, "no stream available")
+		return
+	}
+	if err := h.proxy.AttachProxyURLs(c.Request.Context(), stream, "", baseURL(c)); err != nil {
 		handleServiceError(c, err)
 		return
 	}
-	stream.SelectedHeight = best.Height
 	c.JSON(http.StatusOK, stream)
 }
 
@@ -89,18 +85,15 @@ func (h *StreamHandler) EpisodeStream(c *gin.Context) {
 		return
 	}
 
-	stream, err := h.proxy.StreamQualities(
-		services.QualitiesToDTO(qualities),
-		best.URL,
-		"",
-		best.IsHLS || mediakit.IsHLSURL(best.URL),
-		baseURL(c),
-	)
-	if err != nil {
+	stream := services.BuildStreamDTO(qualities, best)
+	if stream == nil {
+		writeError(c, http.StatusNotFound, "no stream available")
+		return
+	}
+	if err := h.proxy.AttachProxyURLs(c.Request.Context(), stream, "", baseURL(c)); err != nil {
 		handleServiceError(c, err)
 		return
 	}
-	stream.SelectedHeight = best.Height
 	c.JSON(http.StatusOK, stream)
 }
 

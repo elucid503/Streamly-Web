@@ -52,7 +52,7 @@ export class PauseOverlay extends Component<PauseOverlayProps> {
               className={cn(
                 "pointer-events-none relative z-10 flex w-full animate-fade-in flex-col items-center gap-4",
                 still
-                  ? "max-w-5xl -mt-3 md:flex-row md:items-start md:gap-7 md:text-left"
+                  ? "max-w-5xl -mt-3 md:flex-row md:items-center md:gap-7 md:text-left"
                   : "max-w-2xl text-center",
               )}
             >

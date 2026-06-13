@@ -221,6 +221,26 @@ func (s *ProxyService) createChildToken(ctx context.Context, targetURL, referer 
 	return token, nil
 }
 
+func (s *ProxyService) AttachProxyURLs(ctx context.Context, stream *StreamDTO, referer, baseProxyURL string) error {
+	if stream == nil || stream.URL == "" {
+		return errors.New("empty stream")
+	}
+
+	session, err := s.CreateSession(ctx, stream.URL, referer, stream.IsHLS)
+	if err != nil {
+		return err
+	}
+	stream.ProxyURL = baseProxyURL + session.ProxyPath
+
+	for i := range stream.Qualities {
+		quality := &stream.Qualities[i]
+		if quality.URL == stream.URL {
+			quality.ProxyURL = stream.ProxyURL
+		}
+	}
+	return nil
+}
+
 func (s *ProxyService) StreamQualities(qualities []QualityDTO, bestURL, referer string, isHLS bool, baseProxyURL string) (*StreamDTO, error) {
 	session, err := s.CreateSession(context.Background(), bestURL, referer, isHLS)
 	if err != nil {

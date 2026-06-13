@@ -20,6 +20,7 @@ import { PlayerOptionsMenu } from "@/components/player/PlayerOptionsMenu";
 import { SubtitleDisplay } from "@/components/player/SubtitleDisplay";
 import { ControlButton, VolumeControl } from "@/components/player/VolumeControl";
 import { hasIntroWindow, isInIntroWindow } from "@/lib/intro";
+import { isProxiedStream, isWebPlayableUrl } from "@/lib/streamClient";
 import { cn, formatDuration } from "@/lib/utils";
 import type { Episode, IntroInfo, NextEpisode, Season, StreamQuality, SubtitleTrack } from "@/lib/types";
 
@@ -97,6 +98,7 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
   private durationReported = false;
   private playbackErrorReported = false;
   private hlsRecoveryAttempts = 0;
+  private audioProbeTimer: ReturnType<typeof setTimeout> | null = null;
   private static readonly MAX_HLS_RECOVERIES = 3;
 
   state: VideoPlayerState = {
@@ -324,8 +326,45 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
     if (this.upNextTimer) clearInterval(this.upNextTimer);
     if (this.waitingTimer) clearTimeout(this.waitingTimer);
     if (this.feedbackTimer) clearTimeout(this.feedbackTimer);
+    if (this.audioProbeTimer) clearTimeout(this.audioProbeTimer);
     this.waitingTimer = null;
     this.feedbackTimer = null;
+    this.audioProbeTimer = null;
+  };
+
+  hlsManifestHasAudio = (hls: Hls): boolean => {
+    if ((hls.audioTracks?.length ?? 0) > 0) return true;
+    return hls.levels.some((level) => {
+      const codecs = level.attrs?.CODECS ?? "";
+      return /mp4a\.|ac-3|ec-3|opus/i.test(codecs);
+    });
+  };
+
+  ensureHlsAudio = () => {
+    if (!this.hls) return;
+    const tracks = this.hls.audioTracks ?? [];
+    if (tracks.length > 0) {
+      const defaultIndex = tracks.findIndex((track) => track.default);
+      const nextIndex = defaultIndex >= 0 ? defaultIndex : 0;
+      if (this.hls.audioTrack !== nextIndex) {
+        this.hls.audioTrack = nextIndex;
+      }
+      return;
+    }
+    if (!this.props.live && !this.hlsManifestHasAudio(this.hls)) {
+      this.onVideoError();
+    }
+  };
+
+  scheduleAudioProbe = () => {
+    if (this.props.live || this.audioProbeTimer) return;
+    this.audioProbeTimer = setTimeout(() => {
+      this.audioProbeTimer = null;
+      const video = this.videoRef.current;
+      if (!video || video.paused || !this.hls) return;
+      if (this.hlsManifestHasAudio(this.hls)) return;
+      this.onVideoError();
+    }, 3500);
   };
 
   destroyHls = () => {
@@ -412,8 +451,12 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
   attachSource = async () => {
     const video = this.videoRef.current;
     const { src, isHls, lowLatency, startPositionMs } = this.props;
-    if (!video || !src.trim()) {
-      this.setState({ loading: false, playing: false });
+    if (!video || !src.trim() || !isWebPlayableUrl(src)) {
+      if (src.trim() && !isWebPlayableUrl(src)) {
+        this.onVideoError();
+      } else {
+        this.setState({ loading: false, playing: false });
+      }
       return;
     }
 
@@ -454,19 +497,27 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
         }
         return;
       }
+      const proxied = isProxiedStream(src);
       this.hls = new HlsConstructor({
         enableWorker: true,
         lowLatencyMode: !!lowLatency,
         maxBufferLength: lowLatency ? 12 : 45,
         maxMaxBufferLength: lowLatency ? 24 : 90,
         backBufferLength: 30,
-        xhrSetup: (xhr) => {
-          xhr.withCredentials = true;
-        },
+        xhrSetup: proxied
+          ? (xhr) => {
+              xhr.withCredentials = true;
+            }
+          : undefined,
       });
       this.hls.loadSource(src);
       this.hls.attachMedia(video);
-      this.hls.on(HlsConstructor.Events.MANIFEST_PARSED, onReady);
+      this.hls.on(HlsConstructor.Events.MANIFEST_PARSED, () => {
+        this.ensureHlsAudio();
+        onReady();
+        this.scheduleAudioProbe();
+      });
+      this.hls.on(HlsConstructor.Events.AUDIO_TRACKS_UPDATED, this.ensureHlsAudio);
       this.hls.on(HlsConstructor.Events.SUBTITLE_TRACKS_UPDATED, this.syncHlsSubtitles);
       this.hls.on(HlsConstructor.Events.ERROR, (_, data) => {
         if (!data.fatal || !this.hls) return;
@@ -489,6 +540,13 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
         this.onVideoError();
       });
     } else {
+      if (isProxiedStream(src)) {
+        video.crossOrigin = this.props.ambienceEnabled ? "anonymous" : "use-credentials";
+      } else if (this.props.ambienceEnabled) {
+        video.crossOrigin = "anonymous";
+      } else {
+        video.removeAttribute("crossorigin");
+      }
       video.src = src;
       video.addEventListener("loadedmetadata", onReady, { once: true });
     }

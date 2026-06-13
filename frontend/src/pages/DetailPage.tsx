@@ -51,6 +51,7 @@ export class DetailPage extends Component<DetailPageProps, DetailPageState> {
   };
 
   async componentDidMount() {
+    void import("@/pages/WatchPage");
     await this.load();
   }
 

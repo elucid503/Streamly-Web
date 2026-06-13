@@ -28,6 +28,10 @@ type MediaService struct {
 	vodMu          sync.RWMutex
 	seasonsCache   map[int]vodCacheEntry[[]SeasonDTO]
 	episodesCache  map[string]vodCacheEntry[[]EpisodeDTO]
+
+	qualitiesMu           sync.RWMutex
+	movieQualitiesCache   map[int]qualitiesCacheEntry
+	episodeQualitiesCache map[string]qualitiesCacheEntry
 }
 
 func NewMediaService(cfg *config.Config) *MediaService {
@@ -47,8 +51,10 @@ func NewMediaService(cfg *config.Config) *MediaService {
 			showCategoryTitles:  make(map[string][]SearchResultDTO),
 		},
 		searchCache:   make(map[string]searchCacheEntry),
-		seasonsCache:  make(map[int]vodCacheEntry[[]SeasonDTO]),
-		episodesCache: make(map[string]vodCacheEntry[[]EpisodeDTO]),
+		seasonsCache:          make(map[int]vodCacheEntry[[]SeasonDTO]),
+		episodesCache:         make(map[string]vodCacheEntry[[]EpisodeDTO]),
+		movieQualitiesCache:   make(map[int]qualitiesCacheEntry),
+		episodeQualitiesCache: make(map[string]qualitiesCacheEntry),
 	}
 }
 
@@ -93,16 +99,19 @@ type EpisodeDTO struct {
 }
 
 type QualityDTO struct {
-	Label  string `json:"label"`
-	Height int    `json:"height"`
-	IsHLS  bool   `json:"isHls"`
+	Label    string `json:"label"`
+	Height   int    `json:"height"`
+	IsHLS    bool   `json:"isHls"`
+	URL      string `json:"url"`
+	ProxyURL string `json:"proxyUrl,omitempty"`
 }
 
 type StreamDTO struct {
-	Qualities       []QualityDTO `json:"qualities"`
-	ProxyURL        string       `json:"proxyUrl"`
-	IsHLS           bool         `json:"isHls"`
-	SelectedHeight  int          `json:"selectedHeight"`
+	Qualities      []QualityDTO `json:"qualities"`
+	URL            string       `json:"url"`
+	ProxyURL       string       `json:"proxyUrl,omitempty"`
+	IsHLS          bool         `json:"isHls"`
+	SelectedHeight int          `json:"selectedHeight"`
 }
 
 type SubtitleDTO struct {
@@ -207,8 +216,7 @@ func (s *MediaService) EpisodeDetails(showID, season, episode int) (*EpisodeDTO,
 }
 
 func (s *MediaService) MovieQualities(id, height int) ([]mediakit.Quality, *mediakit.Quality, error) {
-	movie := s.client.Movie(id)
-	qualities, err := movie.Qualities()
+	qualities, err := s.cachedMovieQualities(id)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -228,8 +236,7 @@ func (s *MediaService) EpisodeSubtitles(showID, season, episode int) ([]mediakit
 }
 
 func (s *MediaService) EpisodeQualities(showID, season, episode, height int) ([]mediakit.Quality, *mediakit.Quality, error) {
-	ep := s.client.Show(showID).Episode(season, episode)
-	qualities, err := ep.Qualities()
+	qualities, err := s.cachedEpisodeQualities(showID, season, episode)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -315,9 +322,22 @@ func QualitiesToDTO(items []mediakit.Quality) []QualityDTO {
 			Label:  q.Label,
 			Height: q.Height,
 			IsHLS:  q.IsHLS,
+			URL:    q.URL,
 		})
 	}
 	return out
+}
+
+func BuildStreamDTO(qualities []mediakit.Quality, best *mediakit.Quality) *StreamDTO {
+	if best == nil || best.URL == "" {
+		return nil
+	}
+	return &StreamDTO{
+		Qualities:      QualitiesToDTO(qualities),
+		URL:            best.URL,
+		IsHLS:          best.IsHLS || mediakit.IsHLSURL(best.URL),
+		SelectedHeight: best.Height,
+	}
 }
 
 func hitToDTO(hit mediakit.SearchHit) SearchResultDTO {

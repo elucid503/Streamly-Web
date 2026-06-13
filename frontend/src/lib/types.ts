@@ -56,11 +56,14 @@ export interface StreamQuality {
   label: string;
   height: number;
   isHls: boolean;
+  url: string;
+  proxyUrl?: string;
 }
 
 export interface StreamInfo {
   qualities: StreamQuality[];
-  proxyUrl: string;
+  url: string;
+  proxyUrl?: string;
   isHls: boolean;
   selectedHeight?: number;
 }
