@@ -67,16 +67,10 @@ export class SettingsPanel extends Component<SettingsPanelProps, SettingsPanelSt
 
               {[720, 1080, 2160].map((h) => (
 
-                <button key={h}
+                <button key={h} className={`rounded-md border px-3 py-1.5 text-xs transition-colors ${ settings.preferredHeight === h ? "border-foreground bg-foreground text-surface" : "border-border text-foreground-muted hover:text-foreground" }`}
 
                   onClick={() => this.update({ preferredHeight: h })}
                   disabled={this.state.saving}
-
-                  className={`rounded-md border px-3 py-1.5 text-xs transition-colors ${
-                    settings.preferredHeight === h
-                      ? "border-foreground bg-foreground text-surface"
-                      : "border-border text-foreground-muted hover:text-foreground"
-                  }`}
 
                 >
 
@@ -91,30 +85,44 @@ export class SettingsPanel extends Component<SettingsPanelProps, SettingsPanelSt
           </div>
 
           <Switch
+
             label="Auto-play next episode"
             checked={settings.autoPlayNext}
+
             onChange={(v) => this.update({ autoPlayNext: v })}
+
           />
 
           <Switch
+
             label="Show skip intro"
             checked={settings.skipIntro}
+
             onChange={(v) => this.update({ skipIntro: v })}
+
           />
 
           <Switch
+
             label="Ambience lighting"
             checked={settings.ambienceEnabled}
+
             onChange={(v) => this.update({ ambienceEnabled: v })}
+
           />
 
           <Switch
+
             label="Subtitles on by default"
             checked={settings.subtitlesEnabled ?? false}
+
             onChange={(v) => {
-              localStorage.setItem("streamly:subtitlesEnabled", v ? "1" : "0");
+
+              localStorage.setItem("streamly:subtitlesEnabled", v ? "1" : "0"); // for instant feedback in player
               void this.update({ subtitlesEnabled: v });
+
             }}
+
           />
 
         </div>

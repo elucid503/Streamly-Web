@@ -4,17 +4,15 @@ import type { StreamInfo, StreamQuality } from "@/lib/types";
 function qualityPreferenceScore(quality: StreamQuality): number {
 
   const url = qualityPlaybackUrl(quality) || quality.url;
-
-  if (!url || !isWebPlayableUrl(url)) return -100;
+  if (!url || !isWebPlayableUrl(url)) return -100; // unplayable urls are the least preferred
 
   let score = 0;
   const path = url.split("?")[0].toLowerCase();
 
-  if (path.endsWith(".mp4") || path.endsWith(".m4v")) score += 30;
+  if (path.endsWith(".mp4") || path.endsWith(".m4v")) score += 30; // prefer direct mp4 links
 
-  if (!quality.isHls) score += 10;
-
-  if (quality.proxyUrl) score += 5;
+  if (!quality.isHls) score += 10; // prefer non-hls streams
+  if (quality.proxyUrl) score += 5; // prefer proxied urls for potential caching benefits
 
   return score;
 
@@ -41,7 +39,6 @@ export function dedupeQualitiesByHeight(qualities: StreamQuality[]): StreamQuali
     if (!existing) {
 
       byHeight.set(quality.height, quality);
-
       continue;
 
     }
@@ -61,10 +58,7 @@ export function dedupeQualitiesByHeight(qualities: StreamQuality[]): StreamQuali
 
 }
 
-export function nextLowerQualityHeight(
-  qualities: StreamQuality[],
-  currentHeight: number
-): number | null {
+export function nextLowerQualityHeight( qualities: StreamQuality[], currentHeight: number ): number | null {
 
   if (currentHeight <= 0) return null;
 
@@ -89,10 +83,7 @@ export function initialQualityAttempts(preferredHeight?: number): number[] {
 
 }
 
-export async function fetchStreamWithFallback(
-  heights: number[],
-  fetchStream: (height: number) => Promise<StreamInfo>
-): Promise<{ stream: StreamInfo; height: number }> {
+export async function fetchStreamWithFallback(heights: number[], fetchStream: (height: number) => Promise<StreamInfo>): Promise<{ stream: StreamInfo; height: number }> {
 
   let lastError: unknown;
 

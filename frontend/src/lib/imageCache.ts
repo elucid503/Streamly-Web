@@ -40,7 +40,6 @@ class ImageCacheStore {
       img.onload = () => {
 
         this.loaded.add(src);
-
         resolve();
 
       };

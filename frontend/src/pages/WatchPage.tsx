@@ -5,28 +5,11 @@ import { Button } from "@/components/ui/Button";
 
 import { history, navigate, saveReturnPath, type NavigateFn } from "@/lib/navigation";
 import { store } from "@/lib/store";
-import {
-  dedupeQualitiesByHeight,
-  fetchStreamWithFallback,
-  initialQualityAttempts,
-  nextLowerQualityHeight,
-} from "@/lib/stream";
-import {
-  pickQualityByHeight,
-  qualityHasProxy,
-  streamFromQuality,
-  streamPlaybackUrl,
-} from "@/lib/streamClient";
-import type {
-  Episode,
-  IntroInfo,
-  NextEpisode,
-  Season,
-  StreamInfo,
-  StreamQuality,
-  SubtitleTrack,
-  WatchHistoryItem,
-} from "@/lib/types";
+
+import type { Episode, IntroInfo, NextEpisode, Season, StreamInfo, StreamQuality, SubtitleTrack, WatchHistoryItem, } from "@/lib/types";
+import { dedupeQualitiesByHeight, fetchStreamWithFallback, initialQualityAttempts, nextLowerQualityHeight, } from "@/lib/stream";
+import { pickQualityByHeight, qualityHasProxy, streamFromQuality, streamPlaybackUrl, } from "@/lib/streamClient";
+
 import { parseWatchPath } from "@/lib/watchRoute";
 
 import { Component } from "react";
@@ -125,31 +108,16 @@ const EMPTY_STATE: Omit<WatchPageState, "loading" | "error" | "ready"> = {
 
 };
 
-function episodeProgress(
-  items: WatchHistoryItem[],
-  showId: number,
-  season: number,
-  episode: number
-): number {
+function episodeProgress(items: WatchHistoryItem[], showId: number, season: number, episode: number): number {
 
-  const entry = items.find(
-    (item) =>
-      item.kind === "show" &&
-      item.mediaId === showId &&
-      item.season === season &&
-      item.episode === episode &&
-      !item.completed
-  );
-
+  const entry = items.find((item) => item.kind === "show" && item.mediaId === showId && item.season === season && item.episode === episode && !item.completed);
   return entry?.positionMs ?? 0;
 
 }
 
 function movieProgress(items: WatchHistoryItem[], movieId: number): number {
 
-  const entry = items.find(
-    (item) => item.kind === "movie" && item.mediaId === movieId && !item.completed
-  );
+  const entry = items.find((item) => item.kind === "movie" && item.mediaId === movieId && !item.completed);
 
   return entry?.positionMs ?? 0;
 
@@ -170,7 +138,6 @@ export class WatchPage extends Component<WatchPageProps, WatchPageState> {
     ...EMPTY_STATE,
 
     loading: true,
-
     error: "",
 
     ready: false,
@@ -246,15 +213,19 @@ export class WatchPage extends Component<WatchPageProps, WatchPageState> {
     this.failedQualityHeights.clear();
 
     this.setState({
+
       ...EMPTY_STATE,
+
       loading: true,
       error: "",
+
       ready: false,
+
     });
 
     if (!route.valid) {
 
-      this.setState({ error: route.reason, loading: false });
+      this.setState({ error: route.reason || "unknwon error", loading: false });
 
       return;
 
@@ -264,15 +235,15 @@ export class WatchPage extends Component<WatchPageProps, WatchPageState> {
 
       if (route.kind === "movie") {
 
-        await this.loadMovie(route.id, gen);
+        await this.loadMovie(route.id || 0, gen);
 
       } else if (route.kind === "show") {
 
-        await this.loadEpisode(route.showId, route.season, route.episode, gen);
+        await this.loadEpisode(route.showId || 0, route.season || 1, route.episode || 1, gen);
 
       } else {
 
-        await this.loadLive(route.channelId, gen);
+        await this.loadLive(route.channelId || "0", gen);
 
       }
 
@@ -289,9 +260,12 @@ export class WatchPage extends Component<WatchPageProps, WatchPageState> {
       }
 
       this.setState({
+
         error: err instanceof Error ? err.message : "failed to load stream",
+
         loading: false,
         ready: false,
+
       });
 
     }
@@ -305,31 +279,19 @@ export class WatchPage extends Component<WatchPageProps, WatchPageState> {
     const { kind, mediaId, season, episode } = this.state;
 
     if (kind === "movie") return api.movieStream(mediaId, height);
-
     if (kind === "show") return api.episodeStream(mediaId, season, episode, height);
 
     throw new Error("no stream available");
 
   };
 
-  mergeQualities = (
-    incoming: StreamQuality[] | undefined,
-    previous: StreamQuality[]
-  ): StreamQuality[] => {
+  mergeQualities = (incoming: StreamQuality[] | undefined, previous: StreamQuality[]): StreamQuality[] => {
 
     const merged = dedupeQualitiesByHeight(incoming ?? previous);
 
-    const proxyByHeight = new Map(
-      previous
-        .filter((quality) => quality.proxyUrl)
-        .map((quality) => [quality.height, quality.proxyUrl])
-    );
+    const proxyByHeight = new Map(previous.filter((quality) => quality.proxyUrl).map((quality) => [quality.height, quality.proxyUrl]));
 
-    return merged.map((quality) =>
-      quality.proxyUrl || !proxyByHeight.has(quality.height)
-        ? quality
-        : { ...quality, proxyUrl: proxyByHeight.get(quality.height) }
-    );
+    return merged.map((quality) => quality.proxyUrl || !proxyByHeight.has(quality.height) ? quality : { ...quality, proxyUrl: proxyByHeight.get(quality.height) });
 
   };
 
@@ -340,14 +302,21 @@ export class WatchPage extends Component<WatchPageProps, WatchPageState> {
     if (!playbackUrl) throw new Error("no stream available");
 
     this.setState((prev) => ({
+
       ...prev,
+
       streamUrl: playbackUrl,
+
       isHls: stream.isHls,
+
       qualities: this.mergeQualities(stream.qualities, prev.qualities),
       selectedHeight: stream.selectedHeight ?? requestedHeight,
+
       startPositionMs: Math.floor(positionMs),
       streamGeneration: prev.streamGeneration + 1,
+
       error: "",
+
     }));
 
   };
@@ -379,8 +348,10 @@ export class WatchPage extends Component<WatchPageProps, WatchPageState> {
     const preferredHeight = this.preferredHeight();
 
     const [stream, historyItems] = await Promise.all([
+
       api.movieStream(id, preferredHeight),
       api.getHistory(5, id).catch(() => []),
+
     ]);
 
     if (gen !== this.loadGen) return;
@@ -388,17 +359,25 @@ export class WatchPage extends Component<WatchPageProps, WatchPageState> {
     if (!streamPlaybackUrl(stream)) throw new Error("no stream available");
 
     this.setState((prev) => ({
+
       streamUrl: streamPlaybackUrl(stream),
+
       isHls: stream.isHls,
+
       qualities: dedupeQualitiesByHeight(stream.qualities ?? []),
       selectedHeight: stream.selectedHeight ?? preferredHeight,
+
       streamGeneration: prev.streamGeneration + 1,
       startPositionMs: movieProgress(historyItems, id),
+
       loading: false,
       ready: true,
+
       kind: "movie",
       mediaId: id,
+
       subtitle: "",
+
     }));
 
     void this.enrichMovie(id, gen);
@@ -416,11 +395,14 @@ export class WatchPage extends Component<WatchPageProps, WatchPageState> {
       if (gen !== this.loadGen) return;
 
       this.setState({
+
         title: details.title,
         subtitle: details.year,
         description: details.description,
+
         poster: details.poster,
         historyPoster: details.poster,
+
       });
 
     } catch {
@@ -454,8 +436,10 @@ export class WatchPage extends Component<WatchPageProps, WatchPageState> {
     const preferredHeight = this.preferredHeight();
 
     const [stream, historyItems] = await Promise.all([
+
       api.episodeStream(showId, season, episode, preferredHeight),
       api.getHistory(30, showId).catch(() => []),
+
     ]);
 
     if (gen !== this.loadGen) return;
@@ -463,27 +447,39 @@ export class WatchPage extends Component<WatchPageProps, WatchPageState> {
     if (!streamPlaybackUrl(stream)) throw new Error("no stream available");
 
     this.setState(
+
       (prev) => ({
+
         streamUrl: streamPlaybackUrl(stream),
+
         isHls: stream.isHls,
+
         qualities: dedupeQualitiesByHeight(stream.qualities ?? []),
         selectedHeight: stream.selectedHeight ?? preferredHeight,
+
         streamGeneration: prev.streamGeneration + 1,
         startPositionMs: episodeProgress(historyItems, showId, season, episode),
+
         loading: false,
         ready: true,
+
         kind: "show",
         mediaId: showId,
+
         season,
         episode,
+
         subtitle: `Season ${season}, Episode ${episode}`,
         menuSeason: season,
+
       }),
+
       () => {
 
         void this.loadMenuEpisodes(season);
 
       }
+
     );
 
     void this.enrichEpisode(showId, season, episode, gen);
@@ -499,18 +495,24 @@ export class WatchPage extends Component<WatchPageProps, WatchPageState> {
     try {
 
       const [details, episodeDetails] = await Promise.all([
+
         api.showDetails(showId),
         api.episodeDetails(showId, season, episode).catch(() => null),
+
       ]);
 
       if (gen !== this.loadGen) return;
 
       this.setState({
+
         title: details.title,
         episodeTitle: episodeDetails?.title ?? "",
+
         description: episodeDetails?.description || details.description,
+
         poster: episodeDetails?.poster || details.poster,
         historyPoster: details.poster,
+
       });
 
     } catch {
@@ -578,19 +580,23 @@ export class WatchPage extends Component<WatchPageProps, WatchPageState> {
     try {
 
       const [seasons, episodes] = await Promise.all([
-        this.state.seasons.length > 0
-          ? Promise.resolve(this.state.seasons)
-          : api.showSeasons(mediaId).catch(() => []),
+
+        this.state.seasons.length > 0 ? Promise.resolve(this.state.seasons) : api.showSeasons(mediaId).catch(() => []),
         api.seasonEpisodes(mediaId, season),
+
       ]);
 
       if (this.state.mediaId !== mediaId) return;
 
       this.setState((prev) => ({
+
         seasons: prev.seasons.length > 0 ? prev.seasons : seasons,
+
         menuEpisodes: episodes,
         menuEpisodesLoading: false,
+
         episodeCache: { ...prev.episodeCache, [season]: episodes },
+
       }));
 
     } catch {
@@ -626,19 +632,29 @@ export class WatchPage extends Component<WatchPageProps, WatchPageState> {
     }
 
     this.setState({
+
       streamUrl: playbackUrl,
+
       isHls: true,
+
       title: stream.channel.name,
       subtitle: stream.channel.category,
+
       intro: null,
       nextEpisode: null,
+
       startPositionMs: 0,
+
       loading: false,
       ready: true,
+
       kind: "live",
+
       mediaId: 0,
       channelId: daddyId,
+
       poster: stream.channel.logo,
+
     });
 
   };
@@ -649,8 +665,7 @@ export class WatchPage extends Component<WatchPageProps, WatchPageState> {
 
     this.progressDebounce = setTimeout(async () => {
 
-      const { kind, mediaId, title, poster, historyPoster, season, episode, channelId, ready } =
-        this.state;
+      const { kind, mediaId, title, poster, historyPoster, season, episode, channelId, ready } = this.state;
 
       if (!ready) return;
 
@@ -659,16 +674,23 @@ export class WatchPage extends Component<WatchPageProps, WatchPageState> {
       try {
 
         await api.upsertHistory({
+
           kind,
           mediaId: kind === "live" ? 0 : mediaId,
+
           title,
           poster: kind === "show" ? historyPoster || poster : poster,
+
           season,
           episode,
+
           channelId,
+
           positionMs: Math.floor(positionMs),
           durationMs: Math.floor(durationMs),
+
           completed,
+
         });
 
       } catch {
@@ -717,12 +739,7 @@ export class WatchPage extends Component<WatchPageProps, WatchPageState> {
 
     try {
 
-      const intro =
-        kind === "movie"
-          ? await api.movieIntro(mediaId, durationMs)
-          : kind === "show"
-            ? await api.episodeIntro(mediaId, season, episode, durationMs)
-            : null;
+      const intro = kind === "movie" ? await api.movieIntro(mediaId, durationMs) : kind === "show" ? await api.episodeIntro(mediaId, season, episode, durationMs) : null;
 
       if (intro) this.setState({ intro });
 
@@ -763,7 +780,6 @@ export class WatchPage extends Component<WatchPageProps, WatchPageState> {
     this.failedQualityHeights.add(selectedHeight);
 
     let remaining = qualities;
-
     let nextHeight = nextLowerQualityHeight(remaining, selectedHeight);
 
     while (nextHeight !== null && this.failedQualityHeights.has(nextHeight)) {
@@ -786,10 +802,7 @@ export class WatchPage extends Component<WatchPageProps, WatchPageState> {
 
       try {
 
-        const { stream } = await fetchStreamWithFallback(
-          initialQualityAttempts(nextHeight).filter((h) => h <= nextHeight),
-          (height) => this.requestStream(height)
-        );
+        const { stream } = await fetchStreamWithFallback(initialQualityAttempts(nextHeight).filter((h) => h <= nextHeight), (height) => this.requestStream(height));
 
         this.applyStream(stream, stream.selectedHeight ?? nextHeight, positionMs);
 
@@ -833,33 +846,7 @@ export class WatchPage extends Component<WatchPageProps, WatchPageState> {
 
   render() {
 
-    const {
-      streamUrl,
-      isHls,
-      qualities,
-      selectedHeight,
-      subtitleTracks,
-      title,
-      subtitle,
-      episodeTitle,
-      description,
-      poster,
-      intro,
-      nextEpisode,
-      startPositionMs,
-      loading,
-      error,
-      ready,
-      seasons,
-      menuEpisodes,
-      menuSeason,
-      menuEpisodesLoading,
-      season,
-      episode,
-      kind,
-      streamGeneration,
-    } = this.state;
-
+    const { streamUrl, isHls, qualities, selectedHeight, subtitleTracks, title, subtitle, episodeTitle, description, poster, intro, nextEpisode, startPositionMs, loading, error, ready, seasons, menuEpisodes, menuSeason, menuEpisodesLoading, season, episode, kind, streamGeneration } = this.state;
     const settings = store.settings;
 
     if (loading) {
@@ -915,41 +902,56 @@ export class WatchPage extends Component<WatchPageProps, WatchPageState> {
       <div className="relative h-screen overflow-hidden bg-black">
 
         <VideoPlayer
+
           key={`${streamUrl}-${selectedHeight}-${streamGeneration}`}
           src={streamUrl}
+
           isHls={isHls}
+
           live={this.state.kind === "live"}
           lowLatency={this.state.kind === "live"}
+
           title={title || subtitle}
           subtitle={title ? subtitle : undefined}
           episodeTitle={episodeTitle}
           description={description}
           poster={poster}
+
           qualities={qualities}
           selectedHeight={selectedHeight}
+
           subtitleTracks={subtitleTracks}
+
           intro={this.state.kind === "live" ? null : intro}
           nextEpisode={this.state.kind === "live" ? null : nextEpisode}
           autoPlayNext={this.state.kind !== "live" && (settings?.autoPlayNext ?? true)}
           skipIntroEnabled={this.state.kind !== "live" && (settings?.skipIntro ?? true)}
+
           ambienceEnabled={settings?.ambienceEnabled ?? true}
           subtitlesEnabled={settings?.subtitlesEnabled ?? false}
-          onSubtitlesEnabledChange={this.handleSubtitlesEnabledChange}
-          startPositionMs={this.state.kind === "live" ? 0 : startPositionMs}
+
           onBack={this.handleBack}
-          onProgress={this.state.kind === "live" ? undefined : this.saveProgress}
           onNextEpisode={this.handleNextEpisode}
-          onQualityChange={this.state.kind === "live" ? undefined : this.handleQualityChange}
+          onSubtitlesEnabledChange={this.handleSubtitlesEnabledChange}
+          onSeasonChange={kind === "show" ? this.loadMenuEpisodes : undefined}
+          onProgress={this.state.kind === "live" ? undefined : this.saveProgress}
+          onEpisodeSelect={kind === "show" ? this.handleEpisodeSelect : undefined}
           onDurationReady={this.state.kind === "live" ? undefined : this.loadIntro}
+          onQualityChange={this.state.kind === "live" ? undefined : this.handleQualityChange}
           onPlaybackError={this.state.kind === "live" ? undefined : this.handlePlaybackError}
+
+          startPositionMs={this.state.kind === "live" ? 0 : startPositionMs}
+
           seasons={kind === "show" ? seasons : undefined}
           episodes={kind === "show" ? menuEpisodes : undefined}
+
           currentSeason={kind === "show" ? season : undefined}
           currentEpisode={kind === "show" ? episode : undefined}
+
           menuSeason={kind === "show" ? menuSeason : undefined}
+
           episodesLoading={kind === "show" ? menuEpisodesLoading : undefined}
-          onSeasonChange={kind === "show" ? this.loadMenuEpisodes : undefined}
-          onEpisodeSelect={kind === "show" ? this.handleEpisodeSelect : undefined}
+
         />
 
       </div>

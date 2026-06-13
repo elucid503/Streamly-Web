@@ -1,30 +1,23 @@
 import { api } from "@/api/client";
 
-import {
-  consumeReturnPath,
-  currentPath,
-  history,
-  navigate,
-  parseRoute,
-  saveReturnPath,
-} from "@/lib/navigation";
+import { consumeReturnPath, currentPath, history, navigate, parseRoute, saveReturnPath, } from "@/lib/navigation";
+
 import { store } from "@/lib/store";
 
 import { Component, lazy, Suspense, type ReactNode } from "react";
 import type { Location } from "history";
 
+// Lazy loads pages for better performance.
+
 const AuthPage = lazy(() => import("@/pages/AuthPage").then((m) => ({ default: m.AuthPage })));
-const DetailPage = lazy(() =>
-  import("@/pages/DetailPage").then((m) => ({ default: m.DetailPage }))
-);
+const DetailPage = lazy(() => import("@/pages/DetailPage").then((m) => ({ default: m.DetailPage })) );
 const HomePage = lazy(() => import("@/pages/HomePage").then((m) => ({ default: m.HomePage })));
 const WatchPage = lazy(() => import("@/pages/WatchPage").then((m) => ({ default: m.WatchPage })));
 
 interface AppState {
 
   location: Location;
-
-  booting: boolean;
+  booting: boolean; // Indicates whether the app is still booting (used to show a loading spinner).
 
 }
 
@@ -75,13 +68,11 @@ export class App extends Component<object, AppState> {
       const [user, settings] = await Promise.all([api.me(), api.getSettings()]);
 
       store.setUser(user);
-
       store.setSettings(settings);
 
     } catch {
 
       store.setUser(null);
-
       store.setSettings(null);
 
       saveReturnPath(currentPath(history.location));
@@ -111,13 +102,17 @@ export class App extends Component<object, AppState> {
   renderShell = (children: ReactNode) => (
 
     <Suspense
+
       fallback={
+
         <div className="flex min-h-screen items-center justify-center">
 
           <div className="h-8 w-8 animate-spin rounded-full border-2 border-foreground/20 border-t-foreground" />
 
         </div>
+
       }
+
     >
 
       {children}
@@ -159,17 +154,25 @@ export class App extends Component<object, AppState> {
       case "auth":
 
         return this.renderShell(
+
           store.isAuthenticated ? (
+
             <HomePage navigate={navigate} />
+
           ) : (
+
             <AuthPage onSuccess={this.onAuthSuccess} />
+
           )
+
         );
 
       case "detail":
 
         return this.renderShell(
+
           <DetailPage navigate={navigate} kind={route.kind!} id={route.id!} />
+
         );
 
       case "watch":
@@ -198,7 +201,7 @@ export class App extends Component<object, AppState> {
 
         );
 
-    }
+     }
 
   }
 

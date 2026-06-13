@@ -11,9 +11,10 @@ import { ViewCarousel } from "@/components/layout/ViewCarousel";
 import { AdminPanel } from "@/pages/AdminPanel";
 import { SettingsPanel } from "@/pages/SettingsPanel";
 
-import { resumePath } from "@/lib/history";
 import type { NavigateFn } from "@/lib/navigation";
+import { resumePath } from "@/lib/history";
 import { store } from "@/lib/store";
+
 import type { LiveChannel, MainView, SearchHit, WatchHistoryItem } from "@/lib/types";
 
 import { Component } from "react";
@@ -273,11 +274,14 @@ export class HomePage extends Component<HomePageProps, HomePageState> {
       <div className="min-h-screen overflow-x-hidden">
 
         <Header
+
           searchQuery={searchQuery}
+
           onSearch={this.handleSearch}
           onOpenSettings={() => this.setState({ settingsOpen: true })}
           onOpenAdmin={() => this.setState({ adminOpen: true })}
           onLogout={this.handleLogout}
+
         />
 
         <div className="sticky top-16 z-30 border-b border-border-subtle bg-surface/80 py-3 backdrop-blur-md">
@@ -287,22 +291,38 @@ export class HomePage extends Component<HomePageProps, HomePageState> {
         </div>
 
         {showSearch ? (
+
           this.renderSearchResults()
+
         ) : (
+
           <ViewCarousel
+
             active={view}
+
             panels={{
+
               shows: <ShowsView onSelect={this.handleSelect} history={history} />,
+
               movies: (
+
                 <MoviesView
+
                   onSelect={this.handleSelect}
                   onResume={this.handleResume}
+
                   history={history}
+
                 />
+
               ),
+
               live: <LiveView onSelect={this.handleLiveSelect} searchQuery={searchQuery} />,
+
             }}
+
           />
+
         )}
 
         <SettingsPanel open={settingsOpen} onClose={() => this.setState({ settingsOpen: false })} />

@@ -67,8 +67,7 @@ export function alignCtc(input: CtcAlignInput): AlignedWordTiming[] {
   if (frameCount <= 0 || tokenCount === 0 || tokenWordIndex.length !== tokenCount) return [];
 
   const logProbs = logSoftmaxRows(input.logits, frameCount, vocabSize);
-  const emit = (frame: number, id: number) =>
-    id >= 0 && id < vocabSize ? logProbs[frame * vocabSize + id] : NEG_INF;
+  const emit = (frame: number, id: number) => id >= 0 && id < vocabSize ? logProbs[frame * vocabSize + id] : NEG_INF;
 
   const width = tokenCount + 1;
   const trellisSize = (frameCount + 1) * width;
@@ -77,13 +76,11 @@ export function alignCtc(input: CtcAlignInput): AlignedWordTiming[] {
   trellisBuffer = trellis;
   trellis.fill(NEG_INF, 0, trellisSize);
 
-  // Backpointer per cell; ties prefer advance so word starts snap to the
-  // earliest optimal frame instead of lagging the audio.
-
-  const fromAdvance = ensureUintBuffer(fromAdvanceBuffer, frameCount * width);
+  const fromAdvance = ensureUintBuffer(fromAdvanceBuffer, frameCount * width); // Backpointer per cell
 
   fromAdvanceBuffer = fromAdvance;
   fromAdvance.fill(0);
+
   trellis[0] = 0;
 
   for (let frame = 0; frame < frameCount; frame += 1) {
@@ -148,13 +145,14 @@ export function alignCtc(input: CtcAlignInput): AlignedWordTiming[] {
 
   }
 
-  const frameToSeconds = (f: number) =>
-    input.windowStart + ((input.windowEnd - input.windowStart) * f) / Math.max(frameCount, 1);
+  const frameToSeconds = (f: number) => input.windowStart + ((input.windowEnd - input.windowStart) * f) / Math.max(frameCount, 1);
 
   const words: AlignedWordTiming[] = [];
   let currentWord = -1;
+
   let startF = 0;
   let endF = 0;
+
   let valid = false;
 
   const flush = () => {
@@ -184,9 +182,12 @@ export function alignCtc(input: CtcAlignInput): AlignedWordTiming[] {
     if (wordIndex !== currentWord) {
 
       flush();
+
       currentWord = wordIndex;
+
       startF = f;
       endF = f;
+
       valid = f >= 0;
 
     } else if (f >= 0) {
@@ -202,7 +203,6 @@ export function alignCtc(input: CtcAlignInput): AlignedWordTiming[] {
   }
 
   // The path may end mid-word; only emit the last word if all its tokens were consumed.
-
   if (consumed >= tokenCount || tokenWordIndex[consumed] !== currentWord) flush();
 
   return words;

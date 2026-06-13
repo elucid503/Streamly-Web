@@ -15,7 +15,6 @@ export const navigate: NavigateFn = (path) => {
 export function saveReturnPath(path: string) {
 
   const trimmed = path.trim();
-
   if (!trimmed || trimmed === "/auth") return;
 
   sessionStorage.setItem(RETURN_KEY, trimmed);
@@ -38,20 +37,11 @@ export function currentPath(location: Location = history.location): string {
 
 }
 
-export function parseRoute(location: Location): {
-
-  name: "home" | "auth" | "detail" | "watch" | "notfound";
-
-  kind?: "movie" | "show";
-  id?: string;
-  watchPath?: string;
-
-} {
+export function parseRoute(location: Location): { name: "home" | "auth" | "detail" | "watch" | "notfound"; kind?: "movie" | "show"; id?: string; watchPath?: string; } {
 
   const path = location.pathname;
 
   if (path === "/" || path === "") return { name: "home" };
-
   if (path === "/auth") return { name: "auth" };
 
   const detail = path.match(/^\/(movie|show)\/(\d+)$/);

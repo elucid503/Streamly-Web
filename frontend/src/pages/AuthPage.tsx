@@ -67,8 +67,10 @@ export class AuthPage extends Component<AuthPageProps, AuthPageState> {
     } catch (err) {
 
       this.setState({
+
         error: err instanceof Error ? err.message : "authentication failed",
         loading: false,
+
       });
 
     }
@@ -91,6 +93,7 @@ export class AuthPage extends Component<AuthPageProps, AuthPageState> {
           transition={{ duration: 0.5 }}
 
         >
+
           <div className="mb-8 text-center">
 
             <div className="mb-2 flex items-center justify-center gap-1.5">
@@ -184,7 +187,9 @@ export class AuthPage extends Component<AuthPageProps, AuthPageState> {
             <button type="button"
 
               onClick={() =>
+
                 this.setState({ mode: mode === "login" ? "register" : "login", error: "" })
+
               }
 
               className="text-foreground underline-offset-2 hover:underline"

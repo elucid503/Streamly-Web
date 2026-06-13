@@ -17,6 +17,7 @@ const timeToSeconds = (value: string) => {
 
     const [h, m, rest] = parts;
     const [s, ms = "0"] = rest.split(".");
+
     const seconds = Number(h) * 3600 + Number(m) * 60 + Number(s) + Number(ms) / 1000;
 
     return Number.isFinite(seconds) ? seconds : NaN;
@@ -27,6 +28,7 @@ const timeToSeconds = (value: string) => {
 
     const [m, rest] = parts;
     const [s, ms = "0"] = rest.split(".");
+
     const seconds = Number(m) * 60 + Number(s) + Number(ms) / 1000;
 
     return Number.isFinite(seconds) ? seconds : NaN;
@@ -37,18 +39,13 @@ const timeToSeconds = (value: string) => {
 
 };
 
-const cleanCueText = (lines: string[]) =>
-
-  lines
-    .join("\n")
-    .replace(/<[^>]+>/g, "")
-    .replace(/\{[^}]+\}/g, "")
-    .trim();
+const cleanCueText = (lines: string[]) => lines.join("\n").replace(/<[^>]+>/g, "").replace(/\{[^}]+\}/g, "").trim(); // Removes HTML tags and SRT formatting
 
 export const parseVtt = (raw: string): VttCue[] => {
 
   const lines = raw.replace(/\r/g, "").split("\n");
   const cues: VttCue[] = [];
+
   let i = 0;
 
   while (i < lines.length) {
@@ -65,9 +62,7 @@ export const parseVtt = (raw: string): VttCue[] => {
 
     if (!line.includes("-->")) continue;
 
-    const [startRaw, endRaw] = line
-      .split("-->")
-      .map((part) => normalizeTimestamp(part.trim().split(" ")[0]));
+    const [startRaw, endRaw] = line .split("-->").map((part) => normalizeTimestamp(part.trim().split(" ")[0]));
     const textLines: string[] = [];
 
     while (i < lines.length && lines[i].trim() !== "") {
@@ -96,16 +91,15 @@ export const parseSrt = (raw: string): VttCue[] => {
 
   const lines = raw.replace(/\r/g, "").split("\n");
   const cues: VttCue[] = [];
+
   let i = 0;
 
   while (i < lines.length) {
 
-    while (i < lines.length && !lines[i].trim()) i += 1;
-
+    while (i < lines.length && !lines[i].trim()) i += 1; // skips empty lines
     if (i >= lines.length) break;
 
-    if (/^\d+$/.test(lines[i].trim())) i += 1;
-
+    if (/^\d+$/.test(lines[i].trim())) i += 1; // skips cue number, if present
     if (i >= lines.length) break;
 
     const timingLine = lines[i]?.trim() ?? "";
@@ -120,16 +114,13 @@ export const parseSrt = (raw: string): VttCue[] => {
 
     i += 1;
 
-    const [startRaw, endRaw] = timingLine
-      .split("-->")
-      .map((part) => normalizeTimestamp(part.trim().split(" ")[0]));
+    const [startRaw, endRaw] = timingLine .split("-->").map((part) => normalizeTimestamp(part.trim().split(" ")[0]));
 
     const textLines: string[] = [];
 
     while (i < lines.length && lines[i].trim()) {
 
       textLines.push(lines[i].trim());
-
       i += 1;
 
     }
@@ -174,6 +165,7 @@ const formatVttTime = (seconds: number) => {
   const h = Math.floor(seconds / 3600);
   const m = Math.floor((seconds % 3600) / 60);
   const s = Math.floor(seconds % 60);
+
   const ms = Math.round((seconds % 1) * 1000);
 
   return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}.${String(ms).padStart(3, "0")}`;
@@ -224,8 +216,6 @@ export const loadSubtitleCues = async (url: string, format: string): Promise<Vtt
 
   }
 
-  return cues.filter(
-    (cue) => Number.isFinite(cue.start) && Number.isFinite(cue.end) && cue.end > cue.start
-  );
+  return cues.filter((cue) => Number.isFinite(cue.start) && Number.isFinite(cue.end) && cue.end > cue.start);
 
 };

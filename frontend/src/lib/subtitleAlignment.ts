@@ -28,10 +28,7 @@ const wordWeight = (word: string) => {
 
 };
 
-// Cues entirely wrapped in () or [] are non-speech annotations (music, applause, etc.)
-// They should show fully highlighted immediately — no word-level sync needed.
-
-const isAnnotationText = (text: string) => /^\s*[\(\[][\s\S]*[\)\]]\s*$/.test(text.trim());
+const isAnnotationText = (text: string) => /^\s*[\(\[][\s\S]*[\)\]]\s*$/.test(text.trim()); // Cues entirely wrapped in () or [] are non-speech annotations (music, applause, etc.)
 
 const ANNOTATION_UNIT_WEIGHT = 0.8;
 
@@ -55,6 +52,7 @@ const splitAnnotationSegments = (line: string) => {
 
   const segments: { text: string; isAnnotation: boolean }[] = [];
   const pattern = /(\([^)]*\)|\[[^\]]*\])/g;
+
   let lastIndex = 0;
   let match: RegExpExecArray | null;
 
@@ -96,6 +94,7 @@ const parseCueTokens = (text: string): ParsedToken[] => {
         tokens.push({
 
           text: word,
+
           lineBreakBefore: lineIndex > 0 && segmentIndex === 0 && wordIndex === 0,
           isAnnotation: segment.isAnnotation,
 
@@ -148,13 +147,7 @@ const buildPaceUnits = (words: SubtitleWord[]): PaceUnit[] => {
 
 };
 
-const assignUnitStarts = (
-  words: SubtitleWord[],
-  units: PaceUnit[],
-  fromUnit: number,
-  spanStart: number,
-  spanEnd: number
-) => {
+const assignUnitStarts = (words: SubtitleWord[], units: PaceUnit[], fromUnit: number, spanStart: number, spanEnd: number) => {
 
   const selected = units.slice(fromUnit);
 
@@ -162,6 +155,7 @@ const assignUnitStarts = (
 
   const totalWeight = selected.reduce((sum, unit) => sum + unit.weight, 0);
   const span = Math.max(spanEnd - spanStart, 0.05 * selected.length);
+
   let elapsedWeight = 0;
 
   selected.forEach((unit) => {
@@ -223,13 +217,14 @@ export function alignCue(cue: VttCue): AlignedSubtitleCue {
 
   if (tokens.length === 0) return { ...cue, words: [], isAnnotation: annotation };
 
-  // Annotations: all words start at cue.start so they light up immediately.
-
   if (annotation) {
+
+    // For cues that are purely annotations, we skip pacing and just anchor all words to the cue start
 
     return {
 
       ...cue,
+
       isAnnotation: true,
       words: tokens.map((token) => ({ ...token, start: cue.start })),
 
@@ -273,27 +268,11 @@ export function activeWordIndex(cue: AlignedSubtitleCue, time: number) {
 
 }
 
-// Overlays model timings onto estimated words and re-paces everything the
-// model has not (yet) heard into the remaining cue time. A timing bias shifts
-// word highlights earlier to account for model alignment latency.
-//
-// currentTime: the playhead at the moment of the merge. Used to prevent two
-// visual glitches:
-//   - Un-highlighting: word starts only ever decrease, so a later model pass
-//     can never push a start forward and un-highlight a word.
-//   - Batch lighting: if the model would retroactively set a not-yet-lit word
-//     into the past, we leave it at its existing start so it lights up
-//     naturally as the playhead reaches it, instead of all at once.
-// Pass Infinity (the default) to skip both constraints, e.g. for the final
-// cue-exit pass that pre-bakes timings for replay.
+// Overlays model timings onto estimated words and re-paces everything the model has not (yet) heard into the remaining cue time.
 
-const TIMING_BIAS_SECONDS = 0.05;
+const TIMING_BIAS_SECONDS = 0.075; // Model timings are biased slightly early to better match human perception
 
-export function mergeModelTimings(
-  cue: AlignedSubtitleCue,
-  timings: AlignedWordTiming[],
-  currentTime = Infinity
-): AlignedSubtitleCue {
+export function mergeModelTimings(cue: AlignedSubtitleCue, timings: AlignedWordTiming[], currentTime = Infinity): AlignedSubtitleCue {
 
   if (timings.length === 0) return cue;
 
@@ -310,8 +289,7 @@ export function mergeModelTimings(
 
       if (clamped < word.start) {
 
-        // Model wants to move start earlier — apply unless doing so would
-        // retroactively light up a not-yet-lit word (causes batch lighting).
+        // Model wants to move start earlier
 
         const retroactive = clamped < currentTime && word.start >= currentTime;
 
@@ -319,15 +297,13 @@ export function mergeModelTimings(
 
       }
 
-      // If clamped >= word.start the model wants to move the start later;
-      // keep the existing earlier start so words never un-highlight.
-
     }
 
   }
 
   const last = timings[timings.length - 1];
   const units = buildPaceUnits(words);
+
   const lastUnitIndex = units.findIndex((unit) => unit.indices.includes(last.index));
 
   if (lastUnitIndex >= 0 && lastUnitIndex < units.length - 1) {
@@ -340,7 +316,7 @@ export function mergeModelTimings(
 
   anchorAnnotationSpans(words);
 
-  // Model starts are monotonic; pull estimated neighbours into order around them.
+  // If a word has been moved earlier than the cue start, subsequent words should be anchored to it
 
   for (let i = words.length - 2; i >= 0; i -= 1) {
 

@@ -1,18 +1,8 @@
 import type { IntroInfo } from "@/lib/types";
 
-export function hasIntroWindow(intro?: IntroInfo | null): intro is IntroInfo & {
+export function hasIntroWindow(intro?: IntroInfo | null): intro is IntroInfo & { introStartMs: number; introEndMs: number; } {
 
-  introStartMs: number;
-  introEndMs: number;
-
-} {
-
-  return (
-    intro != null &&
-    typeof intro.introStartMs === "number" &&
-    typeof intro.introEndMs === "number" &&
-    intro.introEndMs > intro.introStartMs
-  );
+  return (intro != null && typeof intro.introStartMs === "number" && typeof intro.introEndMs === "number" && intro.introEndMs > intro.introStartMs);
 
 }
 

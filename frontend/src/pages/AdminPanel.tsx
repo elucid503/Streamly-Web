@@ -185,16 +185,17 @@ export class AdminPanel extends Component<AdminPanelProps, AdminPanelState> {
 
             {codes.map((code) => (
 
-              <div key={code.id}
-                className="flex items-center justify-between rounded-md border border-border-subtle bg-surface px-3 py-2"
-              >
+              <div key={code.id} className="flex items-center justify-between rounded-md border border-border-subtle bg-surface px-3 py-2">
+
                 <div className="min-w-0">
 
                   <p className="truncate font-mono text-xs">{code.code}</p>
 
                   <p className="text-[10px] text-foreground-faint">
+
                     {code.uses}
                     {code.maxUses > 0 ? ` / ${code.maxUses}` : ""} uses
+
                   </p>
 
                 </div>
@@ -224,7 +225,9 @@ export class AdminPanel extends Component<AdminPanelProps, AdminPanelState> {
         )}
 
         {copied && (
+
           <p className="mt-3 text-center text-xs text-foreground-muted">Copied to clipboard</p>
+
         )}
 
       </Modal>

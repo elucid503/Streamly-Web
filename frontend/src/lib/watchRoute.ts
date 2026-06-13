@@ -1,33 +1,21 @@
-export type WatchRoute =
-  | {
+export type WatchRoute = {
 
-      valid: true;
-      kind: "movie";
-      id: number;
+  valid: boolean; // whether the path was successfully parsed
+  kind?: "movie" | "show" | "live";
 
-    }
-  | {
+  reason?: string; // if not valid, a message describing why
 
-      valid: true;
-      kind: "show";
-      showId: number;
-      season: number;
-      episode: number;
+  id?: number; // general-use
 
-    }
-  | {
+  // for series
 
-      valid: true;
-      kind: "live";
-      channelId: string;
+  season?: number;
+  episode?: number;
 
-    }
-  | {
+  showId?: number; // for shows
+  channelId?: string; // for live channels
 
-      valid: false;
-      reason: string;
-
-    };
+};
 
 function parsePositiveInt(value: string): number | null {
 
@@ -58,7 +46,6 @@ export function parseWatchPath(path: string): WatchRoute {
     }
 
     const id = parsePositiveInt(parts[1]);
-
     if (id === null) return { valid: false, reason: "invalid movie id" };
 
     return { valid: true, kind: "movie", id };
@@ -106,11 +93,9 @@ export function parseWatchPath(path: string): WatchRoute {
 export function watchPathFromLocation(pathname: string): string | null {
 
   const watch = pathname.match(/^\/watch\/(.+)$/);
-
   if (watch) return watch[1];
 
   const live = pathname.match(/^\/live\/([^/]+)$/);
-
   if (live) return `live/${live[1]}`;
 
   return null;

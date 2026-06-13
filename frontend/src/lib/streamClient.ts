@@ -4,12 +4,7 @@ export function isWebPlayableUrl(url: string): boolean {
 
   const path = url.split("?")[0]?.toLowerCase() ?? "";
 
-  return (
-    !path.endsWith(".mkv") &&
-    !path.endsWith(".avi") &&
-    !path.endsWith(".wmv") &&
-    !path.endsWith(".flv")
-  );
+  return (!path.endsWith(".mkv") && !path.endsWith(".avi") && !path.endsWith(".wmv") && !path.endsWith(".flv")); // not generally supported by browsers
 
 }
 
@@ -35,10 +30,7 @@ export function qualityPlaybackUrl(quality: StreamQuality): string {
 
 }
 
-export function pickQualityByHeight(
-  qualities: StreamQuality[],
-  height: number
-): StreamQuality | null {
+export function pickQualityByHeight(qualities: StreamQuality[], height: number): StreamQuality | null {
 
   if (height <= 0) return null;
 
@@ -52,20 +44,17 @@ export function qualityHasProxy(quality: StreamQuality): boolean {
 
 }
 
-export function streamFromQuality(
-  qualities: StreamQuality[],
-  quality: StreamQuality,
-  selectedHeight?: number
-): StreamInfo {
+export function streamFromQuality(qualities: StreamQuality[], quality: StreamQuality, selectedHeight?: number): StreamInfo {
 
   return {
 
     qualities,
+    selectedHeight: selectedHeight ?? quality.height,
+
     url: quality.url,
     proxyUrl: quality.proxyUrl,
-    isHls: quality.isHls,
 
-    selectedHeight: selectedHeight ?? quality.height,
+    isHls: quality.isHls,
 
   };
 

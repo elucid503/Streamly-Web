@@ -12,9 +12,8 @@ export function formatDuration(ms: number): string {
   if (!Number.isFinite(ms) || ms <= 0) return "0:00";
 
   const total = Math.floor(ms / 1000);
-  const h = Math.floor(total / 3600);
-  const m = Math.floor((total % 3600) / 60);
-  const s = total % 60;
+
+  const h = Math.floor(total / 3600), m = Math.floor((total % 3600) / 60), s = total % 60;
 
   if (h > 0) {
 

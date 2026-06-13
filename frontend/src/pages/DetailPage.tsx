@@ -95,7 +95,6 @@ export class DetailPage extends Component<DetailPageProps, DetailPageState> {
     const { kind, id: idStr } = this.props;
 
     const id = Number(idStr);
-
     const gen = ++this.loadGen;
 
     if (!id || (kind !== "movie" && kind !== "show")) {
@@ -113,8 +112,10 @@ export class DetailPage extends Component<DetailPageProps, DetailPageState> {
       if (kind === "movie") {
 
         const [details, history] = await Promise.all([
+
           api.movieDetails(id),
           api.getHistory().catch(() => []),
+
         ]);
 
         if (gen !== this.loadGen) return;
@@ -124,8 +125,10 @@ export class DetailPage extends Component<DetailPageProps, DetailPageState> {
       } else {
 
         const [details, history] = await Promise.all([
+
           api.showDetails(id),
-          api.getHistory(500, id).catch(() => []),
+          api.getHistory(500, id).catch(() => [])
+
         ]);
 
         if (gen !== this.loadGen) return;
@@ -168,19 +171,8 @@ export class DetailPage extends Component<DetailPageProps, DetailPageState> {
 
         const episodeCache = episodes.length > 0 ? { [selectedSeason]: episodes } : {};
 
-        this.setState({
-          details,
-          seasons,
-          episodes,
-          episodeCache,
-          selectedSeason,
-          loadingSeason: null,
-          seasonsError,
-          history,
-          loading: false,
-        });
-
-        this.prefetchSeasons(id, seasons, selectedSeason, episodeCache);
+        this.setState({ details, seasons, episodes, episodeCache, selectedSeason, loadingSeason: null, seasonsError, history, loading: false });
+        this.prefetchSeasons(id, seasons, selectedSeason, episodeCache); // saves loading time later
 
       }
 
@@ -189,25 +181,19 @@ export class DetailPage extends Component<DetailPageProps, DetailPageState> {
       if (gen !== this.loadGen) return;
 
       this.setState({
+
         error: err instanceof Error ? err.message : "failed to load",
         loading: false,
+
       });
 
     }
 
   };
 
-  prefetchSeasons = (
-    showId: number,
-    seasons: Season[],
-    activeSeason: number,
-    cached: Record<number, Episode[]>
-  ) => {
+  prefetchSeasons = ( showId: number, seasons: Season[], activeSeason: number, cached: Record<number, Episode[]> ) => {
 
-    seasons
-      .filter((season) => season.number !== activeSeason && !cached[season.number])
-      .slice(0, 3)
-      .forEach((season) => {
+    seasons.filter((season) => season.number !== activeSeason && !cached[season.number]).slice(0, 3).forEach((season) => { // prefetches up to 3 seasons, not active one
 
         void api.seasonEpisodes(showId, season.number).then((episodes) => {
 
@@ -216,7 +202,9 @@ export class DetailPage extends Component<DetailPageProps, DetailPageState> {
             if (prev.episodeCache[season.number]) return null;
 
             return {
+
               episodeCache: { ...prev.episodeCache, [season.number]: episodes },
+
             };
 
           });
@@ -249,12 +237,7 @@ export class DetailPage extends Component<DetailPageProps, DetailPageState> {
 
       const episodes = await api.seasonEpisodes(id, season);
 
-      this.setState((prev) => ({
-        selectedSeason: season,
-        episodes,
-        loadingSeason: null,
-        episodeCache: { ...prev.episodeCache, [season]: episodes },
-      }));
+      this.setState((prev) => ({ selectedSeason: season, episodes, loadingSeason: null, episodeCache: { ...prev.episodeCache, [season]: episodes } }));
 
     } catch {
 
@@ -308,25 +291,14 @@ export class DetailPage extends Component<DetailPageProps, DetailPageState> {
 
   };
 
-  episodeProgress = (episode: Episode) =>
-    showEpisodeHistory(this.state.history, Number(this.props.id), episode.season, episode.episode);
+  episodeProgress = (episode: Episode) => showEpisodeHistory(this.state.history, Number(this.props.id), episode.season, episode.episode);
 
   heroImage = (details: TitleDetails) => details.banner || details.poster;
 
   render() {
 
     const { navigate } = this.props;
-
-    const {
-      details,
-      seasons,
-      episodes,
-      selectedSeason,
-      loadingSeason,
-      seasonsError,
-      loading,
-      error,
-    } = this.state;
+    const { details, seasons, episodes, selectedSeason, loadingSeason, seasonsError, loading, error, } = this.state;
 
     const kind = this.props.kind;
 
@@ -379,7 +351,9 @@ export class DetailPage extends Component<DetailPageProps, DetailPageState> {
         <div className="relative h-[42vh] min-h-[280px] max-h-[480px] overflow-hidden sm:h-[48vh]">
 
           {hero &&
+
             (hasBanner ? (
+
               <img className="absolute inset-0 size-full object-cover object-[center_20%] brightness-[0.55]"
 
                 src={hero}
@@ -388,7 +362,9 @@ export class DetailPage extends Component<DetailPageProps, DetailPageState> {
                 decoding="async"
 
               />
+
             ) : (
+
               <CachedImage className="absolute inset-0 size-full"
 
                 src={hero}
@@ -398,6 +374,7 @@ export class DetailPage extends Component<DetailPageProps, DetailPageState> {
                 rounded=""
 
               />
+
             ))}
 
           <div className="absolute inset-0 bg-gradient-to-t from-surface via-surface/50 to-surface/10" />
@@ -441,9 +418,13 @@ export class DetailPage extends Component<DetailPageProps, DetailPageState> {
                 {details.rating && <span>{details.rating}</span>}
 
                 {kind === "show" && seasons.length > 0 && (
+
                   <span>
+
                     {seasons.length} season{seasons.length === 1 ? "" : "s"}
+
                   </span>
+
                 )}
 
               </div>
@@ -481,7 +462,9 @@ export class DetailPage extends Component<DetailPageProps, DetailPageState> {
           <div className="px-4 py-6 sm:px-8 sm:py-8">
 
             {seasonsError && seasons.length === 0 && (
+
               <p className="mb-4 text-sm text-foreground-muted">{seasonsError}</p>
+
             )}
 
             {seasons.length > 0 && (
@@ -504,13 +487,14 @@ export class DetailPage extends Component<DetailPageProps, DetailPageState> {
                         disabled={isLoading}
 
                         className={cn(
+
                           "flex-shrink-0 rounded-md border px-3 py-1.5 text-xs transition-colors",
-                          isActive
-                            ? "border-foreground bg-foreground text-surface"
-                            : "border-border text-foreground-muted hover:border-border hover:text-foreground"
+                          isActive ? "border-foreground bg-foreground text-surface" : "border-border text-foreground-muted hover:border-border hover:text-foreground"
+
                         )}
 
                       >
+
                         <span className={cn(isLoading && "animate-pulse")}>{sn.label}</span>
 
                       </button>
@@ -522,9 +506,12 @@ export class DetailPage extends Component<DetailPageProps, DetailPageState> {
                 </div>
 
                 <div className={cn(
+
                     "divide-y divide-border rounded-md border border-border transition-opacity duration-200",
                     loadingSeason !== null && "opacity-60"
+
                   )}
+
                 >
 
                   {episodes.map((ep) => {
@@ -538,7 +525,6 @@ export class DetailPage extends Component<DetailPageProps, DetailPageState> {
                       <button key={`${ep.season}-${ep.episode}`}
 
                         onClick={() => this.play(ep.season, ep.episode)}
-
                         className="group flex w-full items-center gap-4 px-3 py-3 text-left transition-colors first:rounded-t-md last:rounded-b-md hover:bg-surface-raised"
 
                       >
@@ -581,10 +567,7 @@ export class DetailPage extends Component<DetailPageProps, DetailPageState> {
 
                         )}
 
-                        <Play
-                          size={14}
-                          className="flex-shrink-0 text-foreground-faint group-hover:text-foreground"
-                        />
+                        <Play size={14} className="flex-shrink-0 text-foreground-faint group-hover:text-foreground" />
 
                       </button>
 

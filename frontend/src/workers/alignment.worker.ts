@@ -5,7 +5,6 @@ import { AutoModelForCTC, AutoProcessor, AutoTokenizer, env } from "@huggingface
 interface AlignRequest {
 
   id: number;
-
   type: "align";
 
   audio: Float32Array;
@@ -13,7 +12,6 @@ interface AlignRequest {
   words: string[];
 
   start: number;
-
   end: number;
 
 }
@@ -32,7 +30,6 @@ interface LoadedModel {
   uppercase: boolean;
 
   blankId: number;
-
   separatorId: number | undefined;
 
   model: any;
@@ -44,11 +41,14 @@ let loading: Promise<LoadedModel> | null = null;
 const hasWebGpu = () => typeof (self.navigator as any)?.gpu !== "undefined";
 
 const load = () =>
+
   (loading ??= (async () => {
 
     const [processor, tokenizer] = await Promise.all([
+
       AutoProcessor.from_pretrained(MODEL_ID),
       AutoTokenizer.from_pretrained(MODEL_ID),
+
     ]);
 
     let model: any;
@@ -74,7 +74,6 @@ const load = () =>
     const vocab = tokenizer.get_vocab() as Map<string, number>;
 
     const uppercase = vocab.has("A") && !vocab.has("a");
-
     const blankId = tokenizer.pad_token_id ?? vocab.get("<pad>") ?? 0;
 
     self.postMessage({ type: "ready" });
@@ -83,23 +82,12 @@ const load = () =>
 
   })());
 
-const normalizeWord = (word: string, uppercase: boolean) =>
-  word
-    .normalize("NFKD")
-    .replace(/[\u0300-\u036f]/g, "")
-    [uppercase ? "toUpperCase" : "toLowerCase"]();
+const normalizeWord = (word: string, uppercase: boolean) => word.normalize("NFKD") .replace(/[\u0300-\u036f]/g, "") [uppercase ? "toUpperCase" : "toLowerCase"]();
 
-// Tokens carry the index of the display word they came from, so alignment
-// results map straight back to rendered words without any text matching.
-const tokenize = (
-  words: string[],
-  vocab: Map<string, number>,
-  uppercase: boolean,
-  separatorId: number | undefined
-) => {
+// Tokens carry the index of the display word they came from, so alignment results can be mapped back in many cases.
+const tokenize = (words: string[], vocab: Map<string, number>, uppercase: boolean, separatorId: number | undefined) => {
 
   const tokenIds: number[] = [];
-
   const tokenWordIndex: number[] = [];
 
   for (let wordIndex = 0; wordIndex < words.length; wordIndex += 1) {
@@ -175,14 +163,20 @@ self.onmessage = async (event: MessageEvent<AlignRequest | { type: "warmup" }>) 
       const dims = logits.dims as number[];
 
       words = alignCtc({
+
         logits: logits.data as Float32Array,
+
         frameCount: dims[dims.length - 2],
         vocabSize: dims[dims.length - 1],
+
         blankId,
+
         tokenIds,
         tokenWordIndex,
+
         windowStart: message.start,
         windowEnd: message.end,
+
       });
 
       logits.dispose?.();
@@ -194,9 +188,12 @@ self.onmessage = async (event: MessageEvent<AlignRequest | { type: "warmup" }>) 
   } catch (error) {
 
     self.postMessage({
+
       id: message.id,
+
       type: "error",
       error: error instanceof Error ? error.message : "alignment failed",
+
     });
 
   }
