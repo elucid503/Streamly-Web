@@ -25,9 +25,9 @@ type MediaService struct {
 	searchCacheMu sync.RWMutex
 	searchCache   map[string]searchCacheEntry
 
-	vodMu          sync.RWMutex
-	seasonsCache   map[int]vodCacheEntry[[]SeasonDTO]
-	episodesCache  map[string]vodCacheEntry[[]EpisodeDTO]
+	vodMu         sync.RWMutex
+	seasonsCache  map[int]vodCacheEntry[[]SeasonDTO]
+	episodesCache map[string]vodCacheEntry[[]EpisodeDTO]
 
 	qualitiesMu           sync.RWMutex
 	movieQualitiesCache   map[int]qualitiesCacheEntry
@@ -50,7 +50,7 @@ func NewMediaService(cfg *config.Config) *MediaService {
 			movieCategoryTitles: make(map[string][]SearchResultDTO),
 			showCategoryTitles:  make(map[string][]SearchResultDTO),
 		},
-		searchCache:   make(map[string]searchCacheEntry),
+		searchCache:           make(map[string]searchCacheEntry),
 		seasonsCache:          make(map[int]vodCacheEntry[[]SeasonDTO]),
 		episodesCache:         make(map[string]vodCacheEntry[[]EpisodeDTO]),
 		movieQualitiesCache:   make(map[int]qualitiesCacheEntry),

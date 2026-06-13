@@ -3,9 +3,10 @@ package handlers
 import (
 	"net/http"
 
-	"github.com/gin-gonic/gin"
 	"streamly/internal/middleware"
 	"streamly/internal/services"
+
+	"github.com/gin-gonic/gin"
 )
 
 type SettingsHandler struct {

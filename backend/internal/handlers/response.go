@@ -5,9 +5,10 @@ import (
 	"net/http"
 	"strings"
 
+	"streamly/internal/services"
+
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/mongo"
-	"streamly/internal/services"
 )
 
 func writeError(c *gin.Context, status int, message string) {

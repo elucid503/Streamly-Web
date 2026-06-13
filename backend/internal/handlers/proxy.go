@@ -6,8 +6,9 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/gin-gonic/gin"
 	"streamly/internal/services"
+
+	"github.com/gin-gonic/gin"
 )
 
 type ProxyHandler struct {

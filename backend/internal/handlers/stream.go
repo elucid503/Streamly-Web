@@ -4,13 +4,14 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/gin-gonic/gin"
 	"streamly/internal/services"
+
+	"github.com/gin-gonic/gin"
 )
 
 type StreamHandler struct {
-	media    *services.MediaService
-	proxy    *services.ProxyService
+	media     *services.MediaService
+	proxy     *services.ProxyService
 	subtitles *services.SubtitleResolver
 }
 

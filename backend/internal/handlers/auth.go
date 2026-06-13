@@ -4,9 +4,10 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/gin-gonic/gin"
 	"streamly/internal/middleware"
 	"streamly/internal/services"
+
+	"github.com/gin-gonic/gin"
 )
 
 type AuthHandler struct {
@@ -95,5 +96,5 @@ func (h *AuthHandler) Me(c *gin.Context) {
 func (h *AuthHandler) setTokenCookie(c *gin.Context, token string) {
 	secure, domain := h.auth.CookieSettings()
 	c.SetSameSite(http.SameSiteLaxMode)
-	c.SetCookie("streamly_token", token, int((7*24*time.Hour).Seconds()), "/", domain, secure, true)
+	c.SetCookie("streamly_token", token, int((7 * 24 * time.Hour).Seconds()), "/", domain, secure, true)
 }

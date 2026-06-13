@@ -7,6 +7,7 @@ import (
 )
 
 var foreignSubtitleTokens = []string{
+
 	".ar.", "_ar_", ".ara.", ".arabic.",
 	".fr.", "_fr_", ".fre.", ".french.",
 	".es.", "_es_", ".spa.", ".spanish.",
@@ -35,90 +36,161 @@ var foreignSubtitleTokens = []string{
 	".ro.", "_ro_", ".rum.", ".romanian.",
 	".hu.", "_hu_", ".hun.", ".hungarian.",
 	".bg.", "_bg_", ".bul.", ".bulgarian.",
+
 }
 
 func hasForeignLanguageName(name string) bool {
+
 	lower := strings.ToLower(name)
+
 	for _, token := range foreignSubtitleTokens {
+
 		if strings.Contains(lower, token) {
+
 			return true
+
 		}
+
 	}
+
 	return false
+
 }
 
 func looksEnglishName(name string) bool {
+
 	return !hasForeignLanguageName(name)
+
 }
 
 func looksEnglishLanguageTag(language string) bool {
+
 	language = strings.ToLower(strings.TrimSpace(language))
+
 	if language == "" {
+
 		return true
+
 	}
+
 	switch language {
+
 	case "en", "eng", "english", "en-us", "en-gb", "en_us", "en_gb":
+
 		return true
+
 	}
+
 	for _, token := range foreignSubtitleTokens {
+
 		if strings.Contains(language, strings.Trim(strings.Trim(token, "."), "_")) {
+
 			return false
+
 		}
+
 	}
+
 	return false
+
 }
 
 func looksEnglishSubtitle(data []byte) bool {
+
 	sample := subtitleDialogueSample(data)
+
 	if sample == "" {
+
 		return true
+
 	}
 
 	var latin, arabic, cyrillic, cjk int
+
 	for _, r := range sample {
+
 		switch {
+
 		case isLatinLetter(r):
+
 			latin++
+
 		case r >= 0x0600 && r <= 0x06FF:
+
 			arabic++
+
 		case r >= 0x0400 && r <= 0x04FF:
+
 			cyrillic++
+
 		case unicode.In(r, unicode.Han, unicode.Hiragana, unicode.Katakana, unicode.Hangul):
+
 			cjk++
+
 		}
+
 	}
 
 	if arabic > 0 && arabic >= latin/3 {
+
 		return false
+
 	}
+
 	if cyrillic > 0 && cyrillic >= latin/3 {
+
 		return false
+
 	}
+
 	if cjk > 0 && cjk >= latin/3 {
+
 		return false
+
 	}
+
 	return latin > 0
+
 }
 
 func subtitleDialogueSample(data []byte) string {
+
 	lines := strings.Split(string(data), "\n")
+
 	var parts []string
+
 	for _, line := range lines {
+
 		line = strings.TrimSpace(line)
+
 		if line == "" || strings.Contains(line, "-->") {
+
 			continue
+
 		}
+
 		if _, err := strconv.Atoi(line); err == nil {
+
 			continue
+
 		}
+
 		parts = append(parts, line)
+
 		if len(parts) >= 12 {
+
 			break
+
 		}
+
 	}
+
 	return strings.Join(parts, " ")
+
 }
 
 func isLatinLetter(r rune) bool {
+
 	return (r >= 'A' && r <= 'Z') || (r >= 'a' && r <= 'z') || (r < 128 && unicode.IsLetter(r) && !unicode.Is(unicode.Greek, r))
+
 }

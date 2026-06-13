@@ -4,10 +4,11 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/gin-gonic/gin"
 	"streamly/internal/middleware"
 	"streamly/internal/models"
 	"streamly/internal/services"
+
+	"github.com/gin-gonic/gin"
 )
 
 type HistoryHandler struct {

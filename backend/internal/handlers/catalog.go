@@ -4,9 +4,10 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/gin-gonic/gin"
 	mediakit "mediakit"
 	"streamly/internal/services"
+
+	"github.com/gin-gonic/gin"
 )
 
 type CatalogHandler struct {

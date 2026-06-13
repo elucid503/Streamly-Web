@@ -30,32 +30,45 @@ type catalogSnapshot struct {
 
 // StartCatalogCache loads a disk snapshot immediately and refreshes in the background.
 func (s *MediaService) StartCatalogCache(ctx context.Context) {
+
 	s.loadCatalogFromDisk()
 
 	child, cancel := context.WithCancel(ctx)
+
 	s.cacheCancel = cancel
 
 	go func() {
+
 		s.refreshCatalog()
 
 		ticker := time.NewTicker(s.cfg.CatalogCacheTTL)
 		defer ticker.Stop()
 
 		for {
+
 			select {
+
 			case <-child.Done():
 				return
 			case <-ticker.C:
 				s.refreshCatalog()
+
 			}
+
 		}
+
 	}()
+
 }
 
 func (s *MediaService) StopCatalogCache() {
+
 	if s.cacheCancel != nil {
+
 		s.cacheCancel()
+
 	}
+
 }
 
 func (s *MediaService) refreshCatalog() {
@@ -287,4 +300,3 @@ func (s *MediaService) loadLiveChannels() ([]LiveChannelDTO, error) {
 	}
 	return out, nil
 }
-
