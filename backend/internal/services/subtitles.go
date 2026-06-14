@@ -3,10 +3,10 @@ package services
 import (
 	"context"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"os"
 	"strings"
 	"sync"
 	"time"
@@ -30,7 +30,6 @@ type subtitleCacheEntry struct {
 type SubtitleResolver struct {
 
 	media *MediaService
-	proxy *ProxyService
 	subdl *captions.SubDLClient
 	ttl time.Duration
 
@@ -43,7 +42,7 @@ type SubtitleResolver struct {
 
 }
 
-func NewSubtitleResolver(media *MediaService, proxy *ProxyService, subdl *captions.SubDLClient, cfg *config.Config) *SubtitleResolver {
+func NewSubtitleResolver(media *MediaService, subdl *captions.SubDLClient, cfg *config.Config) *SubtitleResolver {
 
 	ttl := cfg.SubtitleCacheTTL
 
@@ -57,7 +56,6 @@ func NewSubtitleResolver(media *MediaService, proxy *ProxyService, subdl *captio
 
 		media: media,
 
-		proxy: proxy,
 		subdl: subdl,
 
 		ttl: ttl,
@@ -69,7 +67,7 @@ func NewSubtitleResolver(media *MediaService, proxy *ProxyService, subdl *captio
 
 }
 
-func (r *SubtitleResolver) MovieTracks(ctx context.Context, baseURL string, id int) []SubtitleDTO {
+func (r *SubtitleResolver) MovieTracks(ctx context.Context, id int) []SubtitleDTO {
 
 	if tracks, ok := r.getMovieCached(id); ok {
 
@@ -79,7 +77,7 @@ func (r *SubtitleResolver) MovieTracks(ctx context.Context, baseURL string, id i
 
 	result, _, _ := r.group.Do(fmt.Sprintf("movie:%d", id), func() (any, error) {
 
-		tracks := r.resolveMovieTracks(ctx, baseURL, id)
+		tracks := r.resolveMovieTracks(ctx, id)
 
 		r.setMovieCached(id, tracks)
 
@@ -91,7 +89,7 @@ func (r *SubtitleResolver) MovieTracks(ctx context.Context, baseURL string, id i
 
 }
 
-func (r *SubtitleResolver) EpisodeTracks(ctx context.Context, baseURL string, showID, season, episode int) []SubtitleDTO {
+func (r *SubtitleResolver) EpisodeTracks(ctx context.Context, showID, season, episode int) []SubtitleDTO {
 
 	key := episodeCacheKey(showID, season, episode)
 
@@ -103,7 +101,7 @@ func (r *SubtitleResolver) EpisodeTracks(ctx context.Context, baseURL string, sh
 
 	result, _, _ := r.group.Do("episode:"+key, func() (any, error) {
 
-		tracks := r.resolveEpisodeTracks(ctx, baseURL, showID, season, episode)
+		tracks := r.resolveEpisodeTracks(ctx, showID, season, episode)
 
 		r.setEpisodeCached(key, tracks)
 
@@ -115,11 +113,11 @@ func (r *SubtitleResolver) EpisodeTracks(ctx context.Context, baseURL string, sh
 
 }
 
-func (r *SubtitleResolver) resolveMovieTracks(ctx context.Context, baseURL string, id int) []SubtitleDTO {
+func (r *SubtitleResolver) resolveMovieTracks(ctx context.Context, id int) []SubtitleDTO {
 
 	items, _ := r.media.MovieSubtitles(id)
 
-	out := r.proxyFebboxTracks(ctx, baseURL, items)
+	out := r.febboxTracks(items)
 
 	if len(out) > 0 {
 
@@ -129,15 +127,15 @@ func (r *SubtitleResolver) resolveMovieTracks(ctx context.Context, baseURL strin
 
 	query, err := r.media.MovieCaptionQuery(id)
 
-	return r.subdlTracks(ctx, baseURL, query, err)
+	return r.subdlTracks(ctx, query, err)
 
 }
 
-func (r *SubtitleResolver) resolveEpisodeTracks(ctx context.Context, baseURL string, showID, season, episode int) []SubtitleDTO {
+func (r *SubtitleResolver) resolveEpisodeTracks(ctx context.Context, showID, season, episode int) []SubtitleDTO {
 
 	items, _ := r.media.EpisodeSubtitles(showID, season, episode)
 
-	out := r.proxyFebboxTracks(ctx, baseURL, items)
+	out := r.febboxTracks(items)
 
 	if len(out) > 0 {
 
@@ -147,7 +145,7 @@ func (r *SubtitleResolver) resolveEpisodeTracks(ctx context.Context, baseURL str
 
 	query, err := r.media.EpisodeCaptionQuery(showID, season, episode)
 
-	return r.subdlTracks(ctx, baseURL, query, err)
+	return r.subdlTracks(ctx, query, err)
 
 }
 
@@ -265,7 +263,7 @@ func cloneSubtitleTracks(tracks []SubtitleDTO) []SubtitleDTO {
 
 }
 
-func (r *SubtitleResolver) proxyFebboxTracks(ctx context.Context, baseURL string, items []mediakit.Subtitle) []SubtitleDTO {
+func (r *SubtitleResolver) febboxTracks(items []mediakit.Subtitle) []SubtitleDTO {
 
 	out := make([]SubtitleDTO, 0, len(items))
 
@@ -281,24 +279,6 @@ func (r *SubtitleResolver) proxyFebboxTracks(ctx context.Context, baseURL string
 
 		}
 
-		febboxOrigin := os.Getenv("FEBBOX_BASE_URL")
-
-		if febboxOrigin == "" {
-
-			febboxOrigin = "https://www.febbox.com"
-
-		}
-
-		referer := febboxOrigin + "/share/" + item.ShareKey()
-
-		session, err := r.proxy.CreateSession(ctx, url, referer, false)
-
-		if err != nil {
-
-			continue
-
-		}
-
 		label := friendlyFebboxLabel(item.Label, item.Language, langCount)
 
 		out = append(out, SubtitleDTO{
@@ -307,7 +287,7 @@ func (r *SubtitleResolver) proxyFebboxTracks(ctx context.Context, baseURL string
 			Label: label,
 			Language: item.Language,
 			Format: item.Format,
-			ProxyURL: baseURL + session.ProxyPath,
+			ProxyURL: url,
 			Source: "febbox",
 
 		})
@@ -318,7 +298,7 @@ func (r *SubtitleResolver) proxyFebboxTracks(ctx context.Context, baseURL string
 
 }
 
-func (r *SubtitleResolver) subdlTracks(ctx context.Context, baseURL string, query captions.Query, err error) []SubtitleDTO {
+func (r *SubtitleResolver) subdlTracks(ctx context.Context, query captions.Query, err error) []SubtitleDTO {
 
 	if err != nil || r.subdl == nil || !r.subdl.Configured() {
 
@@ -366,14 +346,6 @@ func (r *SubtitleResolver) subdlTracks(ctx context.Context, baseURL string, quer
 
 		}
 
-		session, err := r.proxy.CreateInlineSession(ctx, content, subtitleContentType(format))
-
-		if err != nil {
-
-			continue
-
-		}
-
 		label := friendlySubdlLabel(track, langCount)
 
 		out = append(out, SubtitleDTO{
@@ -382,7 +354,7 @@ func (r *SubtitleResolver) subdlTracks(ctx context.Context, baseURL string, quer
 			Label: label,
 			Language: track.Language,
 			Format: format,
-			ProxyURL: baseURL + session.ProxyPath,
+			ProxyURL: subtitleDataURI(content, format),
 			Source: "subdl",
 
 		})
@@ -390,6 +362,26 @@ func (r *SubtitleResolver) subdlTracks(ctx context.Context, baseURL string, quer
 	}
 
 	return out
+
+}
+
+func subtitleDataURI(content []byte, format string) string {
+
+	var mimeType string
+
+	switch strings.ToLower(strings.TrimSpace(format)) {
+
+	case "vtt":
+
+		mimeType = "text/vtt;charset=utf-8"
+
+	default:
+
+		mimeType = "text/plain;charset=utf-8"
+
+	}
+
+	return "data:" + mimeType + ";base64," + base64.StdEncoding.EncodeToString(content)
 
 }
 
@@ -552,22 +544,6 @@ func subdlTrackID(track captions.Track) string {
 	sum := sha256.Sum256([]byte(strings.TrimSpace(track.Path)))
 
 	return "subdl-" + hex.EncodeToString(sum[:8])
-
-}
-
-func subtitleContentType(format string) string {
-
-	switch strings.ToLower(strings.TrimSpace(format)) {
-
-	case "vtt":
-
-		return "text/vtt; charset=utf-8"
-
-	default:
-
-		return "text/plain; charset=utf-8"
-
-	}
 
 }
 

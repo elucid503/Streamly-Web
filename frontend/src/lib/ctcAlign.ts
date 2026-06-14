@@ -4,6 +4,10 @@ export interface AlignedWordTiming {
   start: number;
   end: number;
 
+  // Mean log-probability of character frames for this word — used to filter
+  // uncertain alignments before merging into subtitle timings.
+  confidence: number;
+
 }
 
 export interface CtcAlignInput {
@@ -22,6 +26,11 @@ export interface CtcAlignInput {
 }
 
 const NEG_INF = -1e30;
+
+// Scan backward from the CTC advance frame to find where the character's
+// log-prob first crossed this threshold — gives a tighter acoustic onset.
+const ONSET_THRESHOLD = Math.log(0.15);
+const MAX_ONSET_SCAN = 8; // frames (~160ms at 50 fps)
 
 let logProbBuffer: Float32Array | null = null;
 let trellisBuffer: Float32Array | null = null;
@@ -152,6 +161,10 @@ export function alignCtc(input: CtcAlignInput): AlignedWordTiming[] {
 
   let startF = 0;
   let endF = 0;
+  let startTokenId = -1;
+
+  let wordLogprobSum = 0;
+  let wordLogprobCount = 0;
 
   let valid = false;
 
@@ -159,11 +172,37 @@ export function alignCtc(input: CtcAlignInput): AlignedWordTiming[] {
 
     if (currentWord >= 0 && valid) {
 
+      // Scan backward from the advance frame to find the acoustic onset —
+      // the earliest frame where the character's probability was already
+      // above ONSET_THRESHOLD, catching cases where the model held blank
+      // while the phoneme had already started.
+      let onsetF = startF;
+
+      if (startTokenId >= 0 && startF > 0) {
+
+        const scanLimit = Math.max(0, startF - MAX_ONSET_SCAN);
+
+        for (let f = startF - 1; f >= scanLimit; f -= 1) {
+
+          if (logProbs[f * vocabSize + startTokenId] < ONSET_THRESHOLD) {
+
+            onsetF = f + 1;
+            break;
+
+          }
+
+          onsetF = f;
+
+        }
+
+      }
+
       words.push({
 
         index: currentWord,
-        start: frameToSeconds(startF),
+        start: frameToSeconds(onsetF),
         end: frameToSeconds(endF + 1),
+        confidence: wordLogprobCount > 0 ? wordLogprobSum / wordLogprobCount : NEG_INF,
 
       });
 
@@ -178,6 +217,7 @@ export function alignCtc(input: CtcAlignInput): AlignedWordTiming[] {
     if (wordIndex < 0) continue;
 
     const f = advanceFrame[token];
+    const tokenId = tokenIds[token];
 
     if (wordIndex !== currentWord) {
 
@@ -187,12 +227,18 @@ export function alignCtc(input: CtcAlignInput): AlignedWordTiming[] {
 
       startF = f;
       endF = f;
+      startTokenId = tokenId;
 
       valid = f >= 0;
+
+      wordLogprobSum = valid ? logProbs[f * vocabSize + tokenId] : 0;
+      wordLogprobCount = valid ? 1 : 0;
 
     } else if (f >= 0) {
 
       endF = f;
+      wordLogprobSum += logProbs[f * vocabSize + tokenId];
+      wordLogprobCount += 1;
 
     } else {
 

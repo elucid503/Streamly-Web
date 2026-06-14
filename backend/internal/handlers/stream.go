@@ -59,15 +59,6 @@ func (h *StreamHandler) MovieStream(c *gin.Context) {
 
 	}
 
-	forceProxy := c.Query("proxy") == "1"
-
-	if err := h.proxy.AttachProxyURLs(c.Request.Context(), stream, "", baseURL(c), forceProxy); err != nil {
-
-		handleServiceError(c, err)
-		return
-
-	}
-
 	c.JSON(http.StatusOK, stream)
 
 }
@@ -83,7 +74,7 @@ func (h *StreamHandler) MovieSubtitles(c *gin.Context) {
 
 	}
 
-	c.JSON(http.StatusOK, h.subtitles.MovieTracks(c.Request.Context(), baseURL(c), id))
+	c.JSON(http.StatusOK, h.subtitles.MovieTracks(c.Request.Context(), id))
 
 }
 
@@ -143,15 +134,6 @@ func (h *StreamHandler) EpisodeStream(c *gin.Context) {
 
 	}
 
-	forceProxy := c.Query("proxy") == "1"
-
-	if err := h.proxy.AttachProxyURLs(c.Request.Context(), stream, "", baseURL(c), forceProxy); err != nil {
-
-		handleServiceError(c, err)
-		return
-
-	}
-
 	c.JSON(http.StatusOK, stream)
 
 }
@@ -185,7 +167,7 @@ func (h *StreamHandler) EpisodeSubtitles(c *gin.Context) {
 
 	}
 
-	c.JSON(http.StatusOK, h.subtitles.EpisodeTracks(c.Request.Context(), baseURL(c), showID, season, episode))
+	c.JSON(http.StatusOK, h.subtitles.EpisodeTracks(c.Request.Context(), showID, season, episode))
 
 }
 

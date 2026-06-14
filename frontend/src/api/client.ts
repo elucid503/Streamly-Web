@@ -224,12 +224,11 @@ export const api = {
 
   },
 
-  movieStream(id: number, height?: number, forceProxy = false) {
+  movieStream(id: number, height?: number) {
 
     const params = new URLSearchParams();
 
     if (height) params.set("height", String(height));
-    if (forceProxy) params.set("proxy", "1");
 
     const q = params.toString() ? `?${params}` : "";
 
@@ -243,12 +242,11 @@ export const api = {
 
   },
 
-  episodeStream(showId: number, season: number, episode: number, height?: number, forceProxy = false) {
+  episodeStream(showId: number, season: number, episode: number, height?: number) {
 
     const params = new URLSearchParams();
 
     if (height) params.set("height", String(height));
-    if (forceProxy) params.set("proxy", "1");
 
     const q = params.toString() ? `?${params}` : "";
 

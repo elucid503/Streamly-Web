@@ -78,14 +78,3 @@ type FavoriteItem struct {
 	CreatedAt time.Time `bson:"createdAt" json:"createdAt"`
 }
 
-type ProxyToken struct {
-	ID        primitive.ObjectID `bson:"_id,omitempty" json:"id"`
-	Token     string             `bson:"token" json:"token"`
-	TargetURL string             `bson:"targetUrl,omitempty" json:"targetUrl,omitempty"`
-	Referer   string             `bson:"referer,omitempty" json:"referer,omitempty"`
-
-	InlineContent     []byte `bson:"inlineContent,omitempty" json:"-"`
-	InlineContentType string `bson:"inlineContentType,omitempty" json:"inlineContentType,omitempty"`
-
-	ExpiresAt time.Time `bson:"expiresAt" json:"expiresAt"`
-}

@@ -176,7 +176,7 @@ const looksLikeSrt = (raw: string) => /-->\s*\d/.test(raw) && !raw.trim().starts
 
 export const loadSubtitleCues = async (url: string, format: string): Promise<VttCue[]> => {
 
-  const res = await fetch(url, { credentials: "include" });
+  const res = await fetch(url, { credentials: "same-origin" });
 
   if (!res.ok) throw new Error("subtitle fetch failed");
 

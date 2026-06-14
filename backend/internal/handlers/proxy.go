@@ -27,27 +27,11 @@ func (h *ProxyHandler) Serve(c *gin.Context) {
 
 	token := c.Param("token")
 
-	entry, err := h.proxy.ResolveToken(c.Request.Context(), token)
+	entry, err := h.proxy.ResolveToken(token)
 
 	if err != nil {
 
 		writeError(c, http.StatusNotFound, "stream session expired or not found")
-		return
-
-	}
-
-	if len(entry.InlineContent) > 0 {
-
-		contentType := entry.InlineContentType
-
-		if contentType == "" {
-
-			contentType = "text/plain; charset=utf-8"
-
-		}
-
-		c.Header("Cache-Control", "no-store")
-		c.Data(http.StatusOK, contentType, entry.InlineContent)
 		return
 
 	}
@@ -98,7 +82,7 @@ func (h *ProxyHandler) Serve(c *gin.Context) {
 
 		}
 
-		rewritten := h.proxy.RewritePlaylist(ctx, body, entry, baseURL(c))
+		rewritten := h.proxy.RewritePlaylist(body, entry, baseURL(c))
 		c.Data(http.StatusOK, "application/vnd.apple.mpegurl", rewritten)
 		return
 

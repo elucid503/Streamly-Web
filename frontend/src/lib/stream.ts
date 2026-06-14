@@ -12,7 +12,6 @@ function qualityPreferenceScore(quality: StreamQuality): number {
   if (path.endsWith(".mp4") || path.endsWith(".m4v")) score += 30; // prefer direct mp4 links
 
   if (!quality.isHls) score += 10; // prefer non-hls streams
-  if (quality.proxyUrl) score += 5; // prefer proxied urls for potential caching benefits
 
   return score;
 

@@ -270,7 +270,10 @@ export function activeWordIndex(cue: AlignedSubtitleCue, time: number) {
 
 // Overlays model timings onto estimated words and re-paces everything the model has not (yet) heard into the remaining cue time.
 
-const TIMING_BIAS_SECONDS = 0.075; // Model timings are biased slightly early to better match human perception
+const TIMING_BIAS_SECONDS = 0.075; // Model timings are shifted early to better match human perception
+
+// Timings whose mean character log-prob falls below this are too uncertain to apply.
+const CONFIDENCE_THRESHOLD = -2.5;
 
 export function mergeModelTimings(cue: AlignedSubtitleCue, timings: AlignedWordTiming[], currentTime = Infinity): AlignedSubtitleCue {
 
@@ -278,37 +281,36 @@ export function mergeModelTimings(cue: AlignedSubtitleCue, timings: AlignedWordT
 
   const words = cue.words.map((word) => ({ ...word }));
 
+  let lastApplied: AlignedWordTiming | null = null;
+
   for (const timing of timings) {
 
     const word = words[timing.index];
 
-    if (word && !word.isAnnotation) {
+    if (!word || word.isAnnotation) continue;
 
-      const biased = timing.start - TIMING_BIAS_SECONDS;
-      const clamped = Math.min(Math.max(biased, cue.start), cue.end);
+    if (timing.confidence < CONFIDENCE_THRESHOLD) continue;
 
-      if (clamped < word.start) {
+    const biased = timing.start - TIMING_BIAS_SECONDS;
+    const clamped = Math.min(Math.max(biased, cue.start), cue.end);
 
-        // Model wants to move start earlier
+    // Block only the case that would retroactively un-highlight a word currently being displayed.
+    if (word.start < currentTime && clamped >= currentTime) continue;
 
-        const retroactive = clamped < currentTime && word.start >= currentTime;
-
-        if (!retroactive) word.start = clamped;
-
-      }
-
-    }
+    word.start = clamped;
+    lastApplied = timing;
 
   }
 
-  const last = timings[timings.length - 1];
+  if (!lastApplied) return { ...cue, words };
+
   const units = buildPaceUnits(words);
 
-  const lastUnitIndex = units.findIndex((unit) => unit.indices.includes(last.index));
+  const lastUnitIndex = units.findIndex((unit) => unit.indices.includes(lastApplied!.index));
 
   if (lastUnitIndex >= 0 && lastUnitIndex < units.length - 1) {
 
-    const from = Math.min(Math.max(last.end, cue.start), cue.end);
+    const from = Math.min(Math.max(lastApplied.end, cue.start), cue.end);
 
     assignUnitStarts(words, units, lastUnitIndex + 1, from, cue.end);
 
@@ -316,8 +318,14 @@ export function mergeModelTimings(cue: AlignedSubtitleCue, timings: AlignedWordT
 
   anchorAnnotationSpans(words);
 
-  // If a word has been moved earlier than the cue start, subsequent words should be anchored to it
+  // Forward pass: pull any word whose estimate now sits before a model-anchored predecessor up to match it, so the series stays non-decreasing.
+  for (let i = 1; i < words.length; i += 1) {
 
+    if (words[i].start < words[i - 1].start) words[i].start = words[i - 1].start;
+
+  }
+
+  // Backward pass: resolve any remaining forward violations (safety net).
   for (let i = words.length - 2; i >= 0; i -= 1) {
 
     words[i].start = Math.min(words[i].start, words[i + 1].start);

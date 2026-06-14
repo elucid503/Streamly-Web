@@ -8,7 +8,7 @@ import { store } from "@/lib/store";
 
 import type { Episode, IntroInfo, NextEpisode, Season, StreamInfo, StreamQuality, SubtitleTrack, WatchHistoryItem, } from "@/lib/types";
 import { dedupeQualitiesByHeight, fetchStreamWithFallback, initialQualityAttempts, nextLowerQualityHeight, } from "@/lib/stream";
-import { isProxiedStream, pickQualityByHeight, qualityHasProxy, qualityPlaybackUrl, streamFromQuality, streamPlaybackUrl, } from "@/lib/streamClient";
+import { pickQualityByHeight, qualityHasProxy, qualityPlaybackUrl, streamFromQuality, streamPlaybackUrl, } from "@/lib/streamClient";
 
 import { parseWatchPath } from "@/lib/watchRoute";
 
@@ -284,12 +284,12 @@ export class WatchPage extends Component<WatchPageProps, WatchPageState> {
 
   preferredHeight = (): number => store.settings?.preferredHeight ?? 1080;
 
-  requestStream = async (height: number, forceProxy = false): Promise<StreamInfo> => {
+  requestStream = async (height: number): Promise<StreamInfo> => {
 
     const { kind, mediaId, season, episode } = this.state;
 
-    if (kind === "movie") return api.movieStream(mediaId, height, forceProxy);
-    if (kind === "show") return api.episodeStream(mediaId, season, episode, height, forceProxy);
+    if (kind === "movie") return api.movieStream(mediaId, height);
+    if (kind === "show") return api.episodeStream(mediaId, season, episode, height);
 
     throw new Error("no stream available");
 
@@ -297,11 +297,7 @@ export class WatchPage extends Component<WatchPageProps, WatchPageState> {
 
   mergeQualities = (incoming: StreamQuality[] | undefined, previous: StreamQuality[]): StreamQuality[] => {
 
-    const merged = dedupeQualitiesByHeight(incoming ?? previous);
-
-    const proxyByHeight = new Map(previous.filter((quality) => quality.proxyUrl).map((quality) => [quality.height, quality.proxyUrl]));
-
-    return merged.map((quality) => quality.proxyUrl || !proxyByHeight.has(quality.height) ? quality : { ...quality, proxyUrl: proxyByHeight.get(quality.height) });
+    return dedupeQualitiesByHeight(incoming ?? previous);
 
   };
 
@@ -846,27 +842,9 @@ export class WatchPage extends Component<WatchPageProps, WatchPageState> {
 
   handlePlaybackError = async (positionMs: number) => {
 
-    const { ready, kind, selectedHeight, qualities, streamUrl } = this.state;
+    const { ready, kind, selectedHeight, qualities } = this.state;
 
     if (!ready || kind === "live") return;
-
-    if (streamUrl && !isProxiedStream(streamUrl)) {
-
-      try {
-
-        const stream = await this.requestStream(selectedHeight, true);
-
-        this.applyStream(stream, stream.selectedHeight ?? selectedHeight, positionMs);
-
-        return;
-
-      } catch {
-
-        /* fall through to lower-quality recovery */
-
-      }
-
-    }
 
     this.failedQualityHeights.add(selectedHeight);
 

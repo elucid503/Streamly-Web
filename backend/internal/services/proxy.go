@@ -6,7 +6,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
-	"fmt"
 	"io"
 	"net"
 	"net/http"
@@ -18,11 +17,7 @@ import (
 	"time"
 
 	"streamly/internal/config"
-	"streamly/internal/database"
-	"streamly/internal/models"
 
-	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/mongo"
 	"golang.org/x/sync/singleflight"
 )
 
@@ -30,16 +25,12 @@ var hlsURIAttr = regexp.MustCompile(`URI="([^"]+)"`)
 
 const proxyTokenCacheMax = 4096
 
-type ProxyService struct {
+type ProxyEntry struct {
 
-	db *database.DB
-	ttl time.Duration
-	client *http.Client
-
-	tokenMu sync.Mutex
-	tokenByKey map[string]proxyTokenCacheEntry
-	entryByToken map[string]models.ProxyToken
-	tokenGroup singleflight.Group
+	Token string
+	TargetURL string
+	Referer string
+	ExpiresAt time.Time
 
 }
 
@@ -50,7 +41,19 @@ type proxyTokenCacheEntry struct {
 
 }
 
-func NewProxyService(db *database.DB, cfg *config.Config) *ProxyService {
+type ProxyService struct {
+
+	ttl time.Duration
+	client *http.Client
+
+	tokenMu sync.Mutex
+	tokenByKey map[string]proxyTokenCacheEntry
+	entryByToken map[string]ProxyEntry
+	tokenGroup singleflight.Group
+
+}
+
+func NewProxyService(cfg *config.Config) *ProxyService {
 
 	transport := &http.Transport{
 
@@ -66,11 +69,10 @@ func NewProxyService(db *database.DB, cfg *config.Config) *ProxyService {
 
 	return &ProxyService{
 
-		db: db,
 		ttl: cfg.ProxyTokenTTL,
 
 		tokenByKey: make(map[string]proxyTokenCacheEntry),
-		entryByToken: make(map[string]models.ProxyToken),
+		entryByToken: make(map[string]ProxyEntry),
 
 		client: &http.Client{
 
@@ -103,52 +105,6 @@ type ProxySession struct {
 
 }
 
-func (s *ProxyService) CreateInlineSession(ctx context.Context, content []byte, contentType string) (*ProxySession, error) {
-
-	if len(content) == 0 {
-
-		return nil, errors.New("empty subtitle content")
-
-	}
-
-	token, err := randomToken(24)
-
-	if err != nil {
-
-		return nil, err
-
-	}
-
-	if strings.TrimSpace(contentType) == "" {
-
-		contentType = "text/plain; charset=utf-8"
-
-	}
-
-	entry := models.ProxyToken{
-
-		Token: token,
-		InlineContent: content,
-		InlineContentType: contentType,
-		ExpiresAt: time.Now().Add(s.ttl),
-
-	}
-
-	if _, err := s.db.ProxyTokens().InsertOne(ctx, entry); err != nil {
-
-		return nil, err
-
-	}
-
-	return &ProxySession{
-
-		Token: token,
-		ProxyPath: "/api/proxy/" + token,
-
-	}, nil
-
-}
-
 func (s *ProxyService) CreateSession(ctx context.Context, targetURL, referer string, isHLS bool) (*ProxySession, error) {
 
 	targetURL = strings.TrimSpace(targetURL)
@@ -159,7 +115,7 @@ func (s *ProxyService) CreateSession(ctx context.Context, targetURL, referer str
 
 	}
 
-	token, err := s.getOrCreateURLToken(ctx, targetURL, referer)
+	token, err := s.getOrCreateToken(targetURL, referer)
 
 	if err != nil {
 
@@ -177,31 +133,31 @@ func (s *ProxyService) CreateSession(ctx context.Context, targetURL, referer str
 
 }
 
-func (s *ProxyService) ResolveToken(ctx context.Context, token string) (*models.ProxyToken, error) {
+func (s *ProxyService) ResolveToken(token string) (*ProxyEntry, error) {
 
-	if entry, ok := s.cachedEntry(token); ok {
+	s.tokenMu.Lock()
 
-		return entry, nil
+	defer s.tokenMu.Unlock()
+
+	entry, ok := s.entryByToken[token]
+
+	if !ok || time.Now().After(entry.ExpiresAt) {
+
+		if ok {
+
+			delete(s.entryByToken, token)
+
+		}
+
+		return nil, errors.New("stream session expired or not found")
 
 	}
-
-	var entry models.ProxyToken
-
-	err := s.db.ProxyTokens().FindOne(ctx, bson.M{"token": token, "expiresAt": bson.M{"$gt": time.Now()}}).Decode(&entry)
-
-	if err != nil {
-
-		return nil, err
-
-	}
-
-	s.cacheEntry(entry)
 
 	return &entry, nil
 
 }
 
-func (s *ProxyService) Fetch(ctx context.Context, entry *models.ProxyToken, incoming http.Header) (*http.Response, error) {
+func (s *ProxyService) Fetch(ctx context.Context, entry *ProxyEntry, incoming http.Header) (*http.Response, error) {
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, entry.TargetURL, nil)
 
@@ -237,7 +193,7 @@ func (s *ProxyService) Fetch(ctx context.Context, entry *models.ProxyToken, inco
 
 }
 
-func (s *ProxyService) proxyMediaURL(ctx context.Context, base *url.URL, referer, baseProxyURL, raw string) (string, error) {
+func (s *ProxyService) proxyMediaURL(base *url.URL, referer, baseProxyURL, raw string) (string, error) {
 
 	trimmed := strings.TrimSpace(raw)
 
@@ -249,7 +205,7 @@ func (s *ProxyService) proxyMediaURL(ctx context.Context, base *url.URL, referer
 
 	resolved := resolveRelativeURL(base, trimmed)
 
-	token, err := s.getOrCreateURLToken(ctx, resolved, referer)
+	token, err := s.getOrCreateToken(resolved, referer)
 
 	if err != nil {
 
@@ -261,7 +217,7 @@ func (s *ProxyService) proxyMediaURL(ctx context.Context, base *url.URL, referer
 
 }
 
-func (s *ProxyService) RewritePlaylist(ctx context.Context, body []byte, entry *models.ProxyToken, baseProxyURL string) []byte {
+func (s *ProxyService) RewritePlaylist(body []byte, entry *ProxyEntry, baseProxyURL string) []byte {
 
 	text := strings.ReplaceAll(string(body), "\r\n", "\n")
 
@@ -297,7 +253,7 @@ func (s *ProxyService) RewritePlaylist(ctx context.Context, body []byte, entry *
 
 				}
 
-				proxyURL, err := s.proxyMediaURL(ctx, base, entry.Referer, baseProxyURL, parts[1])
+				proxyURL, err := s.proxyMediaURL(base, entry.Referer, baseProxyURL, parts[1])
 
 				if err != nil {
 
@@ -315,7 +271,7 @@ func (s *ProxyService) RewritePlaylist(ctx context.Context, body []byte, entry *
 
 		}
 
-		proxyURL, err := s.proxyMediaURL(ctx, base, entry.Referer, baseProxyURL, trimmed)
+		proxyURL, err := s.proxyMediaURL(base, entry.Referer, baseProxyURL, trimmed)
 
 		if err != nil {
 
@@ -333,7 +289,7 @@ func (s *ProxyService) RewritePlaylist(ctx context.Context, body []byte, entry *
 
 }
 
-func (s *ProxyService) getOrCreateURLToken(ctx context.Context, targetURL, referer string) (string, error) {
+func (s *ProxyService) getOrCreateToken(targetURL, referer string) (string, error) {
 
 	key := proxyTokenKey(targetURL, referer)
 	now := time.Now()
@@ -376,29 +332,25 @@ func (s *ProxyService) getOrCreateURLToken(ctx context.Context, targetURL, refer
 
 		}
 
-		entry := models.ProxyToken{
+		expiresAt := time.Now().Add(s.ttl)
+
+		entry := ProxyEntry{
 
 			Token: token,
 			TargetURL: targetURL,
 			Referer: referer,
-			ExpiresAt: time.Now().Add(s.ttl),
-
-		}
-
-		if _, err := s.db.ProxyTokens().InsertOne(ctx, entry); err != nil {
-
-			return "", err
+			ExpiresAt: expiresAt,
 
 		}
 
 		s.tokenMu.Lock()
 
-		s.pruneTokenCacheLocked(now)
+		s.pruneTokenCacheLocked(time.Now())
 
 		s.tokenByKey[key] = proxyTokenCacheEntry{
 
 			token: token,
-			expiresAt: entry.ExpiresAt,
+			expiresAt: expiresAt,
 
 		}
 
@@ -416,58 +368,7 @@ func (s *ProxyService) getOrCreateURLToken(ctx context.Context, targetURL, refer
 
 	}
 
-	token := result.(string)
-
-	return token, nil
-
-}
-
-func (s *ProxyService) cachedEntry(token string) (*models.ProxyToken, bool) {
-
-	now := time.Now()
-
-	s.tokenMu.Lock()
-
-	defer s.tokenMu.Unlock()
-
-	entry, ok := s.entryByToken[token]
-
-	if !ok || now.After(entry.ExpiresAt) {
-
-		if ok {
-
-			delete(s.entryByToken, token)
-
-		}
-
-		return nil, false
-
-	}
-
-	return &entry, true
-
-}
-
-func (s *ProxyService) cacheEntry(entry models.ProxyToken) {
-
-	s.tokenMu.Lock()
-
-	defer s.tokenMu.Unlock()
-
-	s.pruneTokenCacheLocked(time.Now())
-
-	s.entryByToken[entry.Token] = entry
-
-	if entry.TargetURL != "" {
-
-		s.tokenByKey[proxyTokenKey(entry.TargetURL, entry.Referer)] = proxyTokenCacheEntry{
-
-			token: entry.Token,
-			expiresAt: entry.ExpiresAt,
-
-		}
-
-	}
+	return result.(string), nil
 
 }
 
@@ -506,96 +407,6 @@ func proxyTokenKey(targetURL, referer string) string {
 	sum := sha256.Sum256([]byte(targetURL + "\x00" + referer))
 
 	return hex.EncodeToString(sum[:])
-
-}
-
-func (s *ProxyService) AttachProxyURLs(ctx context.Context, stream *StreamDTO, referer, baseProxyURL string, force bool) error {
-
-	if stream == nil || stream.URL == "" {
-
-		return errors.New("empty stream")
-
-	}
-
-	if !force && !shouldProxyStream(stream.URL, stream.IsHLS) {
-
-		return nil
-
-	}
-
-	session, err := s.CreateSession(ctx, stream.URL, referer, stream.IsHLS)
-
-	if err != nil {
-
-		return err
-
-	}
-
-	stream.ProxyURL = baseProxyURL + session.ProxyPath
-
-	for i := range stream.Qualities {
-
-		quality := &stream.Qualities[i]
-
-		if quality.URL == stream.URL {
-
-			quality.ProxyURL = stream.ProxyURL
-
-		}
-
-	}
-
-	return nil
-
-}
-
-func shouldProxyStream(rawURL string, isHLS bool) bool {
-
-	if isHLS || IsPlaylist("", rawURL) {
-
-		return true
-
-	}
-
-	lower := strings.ToLower(strings.Split(rawURL, "?")[0])
-
-	return strings.HasSuffix(lower, ".mkv") ||
-		strings.HasSuffix(lower, ".avi") ||
-		strings.HasSuffix(lower, ".wmv") ||
-		strings.HasSuffix(lower, ".flv")
-
-}
-
-func (s *ProxyService) StreamQualities(qualities []QualityDTO, bestURL, referer string, isHLS bool, baseProxyURL string) (*StreamDTO, error) {
-
-	if !shouldProxyStream(bestURL, isHLS) {
-
-		return &StreamDTO{
-
-			Qualities: qualities,
-			URL: bestURL,
-			IsHLS: isHLS,
-
-		}, nil
-
-	}
-
-	session, err := s.CreateSession(context.Background(), bestURL, referer, isHLS)
-
-	if err != nil {
-
-		return nil, err
-
-	}
-
-	return &StreamDTO{
-
-		Qualities: qualities,
-		ProxyURL: baseProxyURL + session.ProxyPath,
-
-		IsHLS: isHLS,
-
-	}, nil
 
 }
 
@@ -748,17 +559,5 @@ func IsM3U8Body(body []byte) bool {
 	trimmed := strings.TrimSpace(string(body))
 
 	return strings.HasPrefix(trimmed, "#EXTM3U")
-
-}
-
-func ProxyError(err error) error {
-
-	if errors.Is(err, mongo.ErrNoDocuments) {
-
-		return fmt.Errorf("stream session expired")
-
-	}
-
-	return err
 
 }
