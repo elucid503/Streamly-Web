@@ -57,7 +57,7 @@ type Cache struct {
 	mu sync.RWMutex
 	group singleflight.Group
 
-	seasons map[int]cacheEntry[[]SeasonDTO]
+	seasons  map[int]cacheEntry[[]SeasonDTO]
 	episodes map[string]cacheEntry[[]EpisodeDTO]
 
 }
@@ -237,11 +237,42 @@ func (c *Cache) fetchSeasonEpisodes(showID, season int) ([]EpisodeDTO, error) {
 
 	show := c.client.Show(showID)
 
-	eps, err := show.Season(season).Episodes()
+	var eps []*mediakit.Episode
+	var epsErr error
 
-	if err != nil {
+	var wg sync.WaitGroup
+	wg.Add(2)
 
-		return nil, err
+	go func() {
+
+		defer wg.Done()
+
+		eps, epsErr = show.Season(season).Episodes()
+
+	}()
+
+	// Pre-warm TMDB season cache concurrently with the Febbox file listing.
+	go func() {
+
+		defer wg.Done()
+
+		details, err := show.Details()
+
+		if err != nil || details.IMDBId == "" {
+
+			return
+
+		}
+
+		c.client.GetSeasonEpisodes(details.IMDBId, season)
+
+	}()
+
+	wg.Wait()
+
+	if epsErr != nil {
+
+		return nil, epsErr
 
 	}
 
@@ -253,6 +284,7 @@ func (c *Cache) fetchSeasonEpisodes(showID, season int) ([]EpisodeDTO, error) {
 
 	}
 
+	// Details and TMDB season are now cached, so EpisodeListInfo returns immediately.
 	metaByEpisode := show.EpisodeListInfo(season, numbers)
 
 	out := make([]EpisodeDTO, len(eps))
@@ -263,14 +295,13 @@ func (c *Cache) fetchSeasonEpisodes(showID, season int) ([]EpisodeDTO, error) {
 
 		out[i] = EpisodeDTO{
 
-			Season: ep.SeasonNumber(),
+			Season:  ep.SeasonNumber(),
 			Episode: ep.Number(),
 
-			Title: info.Title,
+			Title:       info.Title,
 			Description: info.Description,
 
 			Poster: info.Poster,
-
 		}
 
 	}

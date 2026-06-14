@@ -70,6 +70,7 @@ export function showEpisodeHistory(history: WatchHistoryItem[], mediaId: number,
 
 }
 
+
 export function episodeProgressPercent(item?: WatchHistoryItem): number {
 
   if (!item) return 0;

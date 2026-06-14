@@ -24,10 +24,8 @@ type Option = client.Option
 type MediaKind = meta.MediaKind
 
 const (
-
 	MediaMovie = meta.MediaMovie
-	MediaShow = meta.MediaShow
-
+	MediaShow  = meta.MediaShow
 )
 
 // SearchHit is a single catalogue result from Showbox search.
@@ -109,6 +107,13 @@ func WithFebboxCookie(cookie string) Option {
 func WithIntroDBKey(key string) Option {
 
 	return client.WithIntroDBKey(key)
+
+}
+
+// WithTMDBAPIKey sets the TMDB v3 API key for episode and title metadata.
+func WithTMDBAPIKey(key string) Option {
+
+	return client.WithTMDBAPIKey(key)
 
 }
 

@@ -11,29 +11,35 @@ import (
 
 type Config struct {
 
-	Port                string
-	MongoURI            string
-	JWTSecret           string
-	JWTExpiry           time.Duration
+	Port string
 
-	CookieSecure        bool
-	CookieDomain        string
-	FrontendOrigin      string
+	MongoURI  string
 
-	FebboxCookie        string
-	IntroDBKey          string
-	SubDLAPIKey         string
-	TVBaseURL           string
+	JWTSecret string
+	JWTExpiry time.Duration
 
-	ChildMode           string
-	BootstrapCode       string
-	DefaultQuality      int
+	CookieSecure bool
+	CookieDomain string
+	FrontendOrigin string
 
-	ProxyTokenTTL       time.Duration
-	CatalogCacheTTL     time.Duration
-	CatalogCacheFile    string
-	SubtitleCacheTTL    time.Duration
+	FebboxCookie string
+	IntroDBKey string
+	TMDBAPIKey string
+	SubDLAPIKey  string
+	TVBaseURL string
+
+	ChildMode string
+
+	BootstrapCode  string
+	DefaultQuality int
+
+	ProxyTokenTTL time.Duration
+	CatalogCacheTTL time.Duration
+	CatalogCacheFile string
+	SubtitleCacheTTL time.Duration
+
 	UpstreamMinInterval time.Duration
+	VODMinInterval time.Duration
 
 }
 
@@ -43,29 +49,33 @@ func Load() (*Config, error) {
 
 	cfg := &Config{
 
-		Port:                envOr("PORT", "8080"),
-		MongoURI:            os.Getenv("MONGO_URI"),
-		JWTSecret:           envOr("JWT_SECRET", "change-me-in-production"),
-		JWTExpiry:           durationOr("JWT_EXPIRY", 7*24*time.Hour),
+		Port: envOr("PORT", "8080"),
+		MongoURI: os.Getenv("MONGO_URI"),
+		JWTSecret: envOr("JWT_SECRET", "change-me-in-production"),
+		JWTExpiry: durationOr("JWT_EXPIRY", 7*24*time.Hour),
 
-		CookieSecure:        boolOr("COOKIE_SECURE", false),
-		CookieDomain:        os.Getenv("COOKIE_DOMAIN"),
-		FrontendOrigin:      envOr("FRONTEND_ORIGIN", "http://localhost:5173"),
+		CookieSecure: boolOr("COOKIE_SECURE", false),
+		CookieDomain: os.Getenv("COOKIE_DOMAIN"),
+		FrontendOrigin: envOr("FRONTEND_ORIGIN", "http://localhost:5173"),
 
-		FebboxCookie:        os.Getenv("FEBBOX_UI_COOKIE"),
-		IntroDBKey:          os.Getenv("INTRODB_API_KEY"),
-		SubDLAPIKey:         os.Getenv("SUBDL_API_KEY"),
-		TVBaseURL:           os.Getenv("TV_BASE_URL"),
+		FebboxCookie: os.Getenv("FEBBOX_UI_COOKIE"),
+		IntroDBKey: os.Getenv("INTRODB_API_KEY"),
+		TMDBAPIKey: os.Getenv("TMDB_API_KEY"),
+		SubDLAPIKey: os.Getenv("SUBDL_API_KEY"),
+		TVBaseURL: os.Getenv("TV_BASE_URL"),
 
-		ChildMode:           envOr("CHILD_MODE", "0"),
-		BootstrapCode:       os.Getenv("BOOTSTRAP_ACCESS_CODE"),
-		DefaultQuality:      intOr("DEFAULT_QUALITY", 1080),
+		ChildMode: envOr("CHILD_MODE", "0"),
 
-		ProxyTokenTTL:       durationOr("PROXY_TOKEN_TTL", 4*time.Hour),
-		CatalogCacheTTL:     durationOr("CATALOG_CACHE_TTL", time.Hour),
-		CatalogCacheFile:    envOr("CATALOG_CACHE_FILE", "data/catalog.cache.json"),
-		SubtitleCacheTTL:    durationOr("SUBTITLE_CACHE_TTL", 15*time.Minute),
+		BootstrapCode: os.Getenv("BOOTSTRAP_ACCESS_CODE"),
+		DefaultQuality: intOr("DEFAULT_QUALITY", 1080),
+
+		ProxyTokenTTL: durationOr("PROXY_TOKEN_TTL", 4*time.Hour),
+		CatalogCacheTTL: durationOr("CATALOG_CACHE_TTL", time.Hour),
+		CatalogCacheFile: envOr("CATALOG_CACHE_FILE", "data/catalog.cache.json"),
+		SubtitleCacheTTL: durationOr("SUBTITLE_CACHE_TTL", 15*time.Minute),
+
 		UpstreamMinInterval: durationOr("UPSTREAM_MIN_INTERVAL", 1500*time.Millisecond),
+		VODMinInterval: durationOr("VOD_MIN_INTERVAL", 250*time.Millisecond),
 
 	}
 

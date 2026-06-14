@@ -16,11 +16,10 @@ import (
 
 // Movie is a chainable handle for a film.
 type Movie struct {
-
 	deps Deps
-	id int
+	id   int
 
-	mu sync.Mutex
+	mu      sync.Mutex
 	details *meta.TitleDetails
 
 	shareKey string
@@ -28,7 +27,6 @@ type Movie struct {
 	shareSet bool
 
 	file *febbox.File
-
 }
 
 // NewMovie creates a Movie handle for the given Showbox id.
@@ -117,10 +115,9 @@ func (m *Movie) File() (*MediaFile, error) {
 
 	return &MediaFile{
 
-		ID: file.FID,
-		Name: file.FileName,
+		ID:       file.FID,
+		Name:     file.FileName,
 		shareKey: shareKey,
-
 	}, nil
 
 }
@@ -158,7 +155,19 @@ func (m *Movie) Qualities() ([]quality.Quality, error) {
 
 	}
 
-	return quality.ToQualities(items), nil
+	qualities := quality.ToQualities(items)
+
+	if quality.NeedsOriginalFallback(qualities) {
+
+		if originalURL, err := m.deps.GetDownloadURL(shareKey, file.FID, ""); err == nil {
+
+			qualities = quality.WithOriginalFallback(qualities, originalURL, file.FileName)
+
+		}
+
+	}
+
+	return qualities, nil
 
 }
 

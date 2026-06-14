@@ -2,7 +2,10 @@ module mediakit
 
 go 1.24.0
 
-require github.com/imroc/req/v3 v3.57.0
+require (
+	github.com/imroc/req/v3 v3.57.0
+	golang.org/x/sync v0.19.0
+)
 
 require (
 	github.com/andybalholm/brotli v1.2.0 // indirect

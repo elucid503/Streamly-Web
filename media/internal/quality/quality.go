@@ -10,28 +10,24 @@ import (
 )
 
 var (
-
-	quality4KRE = regexp.MustCompile(`(?i)2160|4k`)
-	qualityPRe = regexp.MustCompile(`(\d{3,4})\s*p`)
+	quality4KRE  = regexp.MustCompile(`(?i)2160|4k`)
+	qualityPRe   = regexp.MustCompile(`(\d{3,4})\s*p`)
 	qualityOrgRE = regexp.MustCompile(`(?i)org|origin`)
-
 )
 
 // Quality is one downloadable rendition of a video file.
 type Quality struct {
-
 	URL string
 
 	Label string
-	Name string
+	Name  string
 
 	Speed string
 
-	Size string
+	Size   string
 	Height int
 
 	IsHLS bool
-
 }
 
 // IsHLSURL reports whether a URL points at an HLS playlist.
@@ -63,13 +59,13 @@ func IsWebPlayableURL(raw string) bool {
 
 	switch {
 
-		case strings.HasSuffix(path, ".mkv"), strings.HasSuffix(path, ".avi"), strings.HasSuffix(path, ".wmv"), strings.HasSuffix(path, ".flv"):
+	case strings.HasSuffix(path, ".mkv"), strings.HasSuffix(path, ".avi"), strings.HasSuffix(path, ".wmv"), strings.HasSuffix(path, ".flv"):
 
-			return false
+		return false
 
-		default:
+	default:
 
-			return path != ""
+		return path != ""
 
 	}
 
@@ -83,26 +79,71 @@ func ToQualities(items []febbox.Quality) []Quality {
 	for _, item := range items {
 
 		label := item.Quality + " " + item.Name
+		height := qualityHeight(label)
 
 		out = append(out, Quality{
 
 			URL: item.URL,
 
-			Label: strings.TrimSpace(label),
-			Name: item.Name,
+			Label: displayLabel(label, height),
+			Name:  item.Name,
 
 			Speed: item.Speed,
 
-			Size: item.Size,
-			Height: qualityHeight(label),
+			Size:   item.Size,
+			Height: height,
 
 			IsHLS: IsHLSURL(item.URL),
-
 		})
 
 	}
 
 	return out
+
+}
+
+// WithOriginalFallback appends the direct source file when Febbox only exposes
+// a low-resolution transcode but the original file URL is still available.
+func WithOriginalFallback(qualities []Quality, originalURL, fileName string) []Quality {
+
+	originalURL = strings.TrimSpace(originalURL)
+
+	if originalURL == "" || maxHeight(qualities) > 360 {
+
+		return qualities
+
+	}
+
+	label := strings.TrimSpace("Original " + fileName)
+	original := Quality{
+
+		URL: originalURL,
+
+		Label: "Highest Available",
+		Name:  fileName,
+
+		Height: qualityHeight(label),
+		IsHLS:  IsHLSURL(originalURL),
+	}
+
+	if original.Height <= maxHeight(qualities) {
+
+		return qualities
+
+	}
+
+	out := append([]Quality(nil), qualities...)
+	out = append(out, original)
+
+	return out
+
+}
+
+// NeedsOriginalFallback reports whether a direct source file lookup could add
+// a useful higher-quality option to the current Febbox transcode list.
+func NeedsOriginalFallback(qualities []Quality) bool {
+
+	return maxHeight(qualities) <= 360
 
 }
 
@@ -193,6 +234,44 @@ func PickNextLowerQuality(qualities []Quality, belowHeight int) *Quality {
 	}
 
 	return nil
+
+}
+
+func maxHeight(qualities []Quality) int {
+
+	max := 0
+
+	for _, q := range qualities {
+
+		if q.Height > max {
+
+			max = q.Height
+
+		}
+
+	}
+
+	return max
+
+}
+
+func displayLabel(raw string, height int) string {
+
+	if height == 360 {
+
+		return "Faster Streaming"
+
+	}
+
+	label := strings.TrimSpace(raw)
+
+	if label == "" {
+
+		return "Unknown Quality"
+
+	}
+
+	return label
 
 }
 

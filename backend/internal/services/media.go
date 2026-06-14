@@ -33,100 +33,127 @@ type EpisodeDTO = vod.EpisodeDTO
 
 // MediaService is the central media orchestrator.
 type MediaService struct {
+
 	client *mediakit.Client
-	cfg    *config.Config
+	cfg *config.Config
 
 	upstream *upstream.Throttle
-	catalog  *catalog.Cache
-	search   *search.Cache
-	stream   *stream.Cache
-	vod      *vod.Cache
+	catalog *catalog.Cache
+
+	search *search.Cache
+	stream *stream.Cache
+
+	vod *vod.Cache
 
 	detailsMu    sync.RWMutex
 	detailsGroup singleflight.Group
+
 	movieDetails map[int]titleDetailsCacheEntry
 	showDetails  map[int]titleDetailsCacheEntry
+
 }
 
 // TitleDetailsDTO is user-facing metadata for a movie or show.
 type TitleDetailsDTO struct {
-	ID   int    `json:"id"`
+
+	ID int `json:"id"`
 	Kind string `json:"kind"`
 
 	Title string `json:"title"`
-	Year  string `json:"year"`
+	Year string `json:"year"`
 
 	Poster string `json:"poster"`
 	Banner string `json:"banner,omitempty"`
 
 	Description string `json:"description"`
-	Rating      string `json:"rating"`
+	Rating string `json:"rating"`
+
 }
 
 type titleDetailsCacheEntry struct {
-	details   *TitleDetailsDTO
+
+	details *TitleDetailsDTO
 	fetchedAt time.Time
+
 }
 
 // QualityDTO is one downloadable rendition of a video file.
 type QualityDTO struct {
-	Label  string `json:"label"`
-	Height int    `json:"height"`
-	IsHLS  bool   `json:"isHls"`
 
-	URL      string `json:"url"`
+	Label string `json:"label"`
+	Height int `json:"height"`
+
+	IsHLS bool `json:"isHls"`
+
+	URL string `json:"url"`
 	ProxyURL string `json:"proxyUrl,omitempty"`
+
 }
 
 // StreamDTO is the resolved streaming payload returned to clients.
 type StreamDTO struct {
+
 	Qualities []QualityDTO `json:"qualities"`
 
-	URL      string `json:"url"`
+	URL string `json:"url"`
 	ProxyURL string `json:"proxyUrl,omitempty"`
 
-	IsHLS          bool `json:"isHls"`
+	IsHLS bool `json:"isHls"`
 	SelectedHeight int  `json:"selectedHeight"`
+
 }
 
 // SubtitleDTO describes an external subtitle track.
 type SubtitleDTO struct {
-	ID       string `json:"id"`
-	Label    string `json:"label"`
+
+	ID string `json:"id"`
+	Label string `json:"label"`
+
 	Language string `json:"language"`
 	Format   string `json:"format"`
 
 	ProxyURL string `json:"proxyUrl"`
-	Source   string `json:"source,omitempty"`
+	Source string `json:"source,omitempty"`
+
 }
 
 // IntroDTO carries skip-intro timing offsets.
 type IntroDTO struct {
-	IntroStartMs   *int64 `json:"introStartMs,omitempty"`
-	IntroEndMs     *int64 `json:"introEndMs,omitempty"`
+
+	IntroStartMs *int64 `json:"introStartMs,omitempty"`
+	IntroEndMs *int64 `json:"introEndMs,omitempty"`
+
 	CreditsStartMs *int64 `json:"creditsStartMs,omitempty"`
+
 }
 
 // NextEpisodeDTO identifies the episode after the current one.
 type NextEpisodeDTO struct {
-	Season  int    `json:"season"`
-	Episode int    `json:"episode"`
-	Title   string `json:"title"`
+
+	Season  int `json:"season"`
+	Episode int `json:"episode"`
+
+	Title string `json:"title"`
+
 }
 
 func NewMediaService(cfg *config.Config) *MediaService {
 
 	client := mediakit.New(
+
 		mediakit.WithFebboxCookie(cfg.FebboxCookie),
 		mediakit.WithIntroDBKey(cfg.IntroDBKey),
+		mediakit.WithTMDBAPIKey(cfg.TMDBAPIKey),
 		mediakit.WithTVBaseURL(cfg.TVBaseURL),
 		mediakit.WithChildMode(cfg.ChildMode),
 		mediakit.WithIntroCache(true),
+
 	)
 
 	client.Warmup()
 
 	throttle := upstream.New(cfg.UpstreamMinInterval)
+	vodThrottle := upstream.New(cfg.VODMinInterval)
 
 	cat := catalog.New(client, throttle, cfg.CatalogCacheTTL, cfg.CatalogCacheFile)
 
@@ -139,10 +166,11 @@ func NewMediaService(cfg *config.Config) *MediaService {
 		catalog:  cat,
 		search:   search.New(client, throttle, cat.Snapshot, cfg.CatalogCacheTTL),
 		stream:   stream.New(client),
-		vod:      vod.New(client, throttle),
+		vod:      vod.New(client, vodThrottle),
 
 		movieDetails: make(map[int]titleDetailsCacheEntry),
 		showDetails:  make(map[int]titleDetailsCacheEntry),
+
 	}
 
 }

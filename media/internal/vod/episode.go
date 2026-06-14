@@ -15,14 +15,12 @@ import (
 
 // Episode is a chainable handle for one episode of a TV show.
 type Episode struct {
-
 	show *Show
 
-	season int
+	season  int
 	episode int
 
 	file *febbox.File
-
 }
 
 // SeasonNumber returns the season number.
@@ -150,14 +148,13 @@ func (e *Episode) File() (*MediaFile, error) {
 
 	return &MediaFile{
 
-		ID: file.FID,
+		ID:   file.FID,
 		Name: file.FileName,
 
-		Season: e.season,
+		Season:  e.season,
 		Episode: e.episode,
 
 		shareKey: shareKey,
-
 	}, nil
 
 }
@@ -195,7 +192,19 @@ func (e *Episode) Qualities() ([]quality.Quality, error) {
 
 	}
 
-	return quality.ToQualities(items), nil
+	qualities := quality.ToQualities(items)
+
+	if quality.NeedsOriginalFallback(qualities) {
+
+		if originalURL, err := e.show.deps.GetDownloadURL(shareKey, file.FID, ""); err == nil {
+
+			qualities = quality.WithOriginalFallback(qualities, originalURL, file.FileName)
+
+		}
+
+	}
+
+	return qualities, nil
 
 }
 

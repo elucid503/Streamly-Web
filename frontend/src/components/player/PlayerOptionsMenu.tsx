@@ -2,7 +2,7 @@ import { cn } from "@/lib/utils";
 import type { StreamQuality, SubtitleTrack } from "@/lib/types";
 
 import { Component, createRef, type ReactNode } from "react";
-import { Check, Settings2, SlidersHorizontal, Subtitles, X } from "lucide-react";
+import { Check, Gauge, Settings2, SlidersHorizontal, Subtitles, X } from "lucide-react";
 
 type OptionsPanel = "quality" | "subtitles";
 
@@ -278,7 +278,7 @@ export class PlayerOptionsMenu extends Component<PlayerOptionsMenuProps, PlayerO
 
               <div className="flex gap-1">
 
-                {qualityEnabled && this.renderTab("quality", "Quality")}
+                {qualityEnabled && this.renderTab("quality", "Quality", <Gauge size={13} className="opacity-80" />)}
 
                 {this.renderTab("subtitles", "Subtitles", <Subtitles size={13} className="opacity-80" />)}
 

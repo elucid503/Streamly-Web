@@ -200,11 +200,13 @@ export const api = {
 
   },
 
+
   showDetails(id: number) {
 
     return request<TitleDetails>(`/api/shows/${id}`);
 
   },
+
 
   showSeasons(id: number) {
 

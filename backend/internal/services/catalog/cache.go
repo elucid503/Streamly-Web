@@ -13,22 +13,27 @@ import (
 )
 
 const (
+
 	titlesPerCategory = 24
-	trendingLimit     = 10
+
+	trendingLimit = 10
 	livePopularLimit  = 24
+
 )
 
 // Cache maintains a periodically refreshed in-memory catalog snapshot.
 type Cache struct {
-	client   *mediakit.Client
+
+	client *mediakit.Client
 	throttle *upstream.Throttle
 
 	cacheTTL  time.Duration
 	cacheFile string
 
-	mu     sync.RWMutex
-	snap   Snapshot
+	mu sync.RWMutex
+	snap Snapshot
 	cancel context.CancelFunc
+
 }
 
 // New builds a Cache. cacheTTL controls the refresh interval; cacheFile is the
@@ -166,6 +171,7 @@ func (c *Cache) CategoryTitles(kind mediakit.MediaKind, categoryID string, page,
 	return slicePage(titles, page, limit)
 
 }
+
 
 // LiveChannels returns all cached live TV channels.
 func (c *Cache) LiveChannels() []LiveChannelDTO {

@@ -3,6 +3,8 @@ package client
 import (
 	"fmt"
 	"os"
+	"sync"
+	"time"
 
 	"mediakit/internal/discover"
 	"mediakit/internal/febbox"
@@ -13,22 +15,23 @@ import (
 	"mediakit/internal/showbox"
 	"mediakit/internal/tv"
 	"mediakit/internal/vod"
+
+	"golang.org/x/sync/singleflight"
 )
 
 // Option configures a Client.
 type Option func(*config)
 
 type config struct {
-
 	childMode string
 
 	febboxCookie string
-	introDBKey string
+	introDBKey   string
+	tmdbAPIKey   string
 
 	tvBaseURL string
 
 	cacheIntro bool
-
 }
 
 // WithChildMode sets the Showbox child-mode flag.
@@ -49,6 +52,13 @@ func WithFebboxCookie(cookie string) Option {
 func WithIntroDBKey(key string) Option {
 
 	return func(c *config) { c.introDBKey = key }
+
+}
+
+// WithTMDBAPIKey sets the TMDB v3 API key for episode and title metadata.
+func WithTMDBAPIKey(key string) Option {
+
+	return func(c *config) { c.tmdbAPIKey = key }
 
 }
 
@@ -92,6 +102,12 @@ func applyDefaults(c *config) {
 
 	}
 
+	if c.tmdbAPIKey == "" {
+
+		c.tmdbAPIKey = os.Getenv("TMDB_API_KEY")
+
+	}
+
 	if c.tvBaseURL == "" {
 
 		c.tvBaseURL = os.Getenv("TV_BASE_URL")
@@ -110,15 +126,37 @@ type introFetcher interface {
 	GetMedia(query introdb.MediaQuery) (*introdb.MediaRecord, error)
 }
 
+const (
+	titleDetailsTTL = 2 * time.Hour
+	shareKeyTTL     = 6 * time.Hour
+)
+
+type titleCacheEntry struct {
+	details meta.TitleDetails
+	expiry  time.Time
+}
+
+type shareKeyCacheEntry struct {
+	key    string
+	expiry time.Time
+}
+
 // Client is the entry point for catalogue search, VOD browsing, and live TV.
 type Client struct {
-
 	showbox *showbox.Client
-	febbox febboxBrowser
-	tv *tv.Client
-	imdb *imdb.Client
-	intro introFetcher
+	febbox  febboxBrowser
+	tv      *tv.Client
+	imdb    *imdb.Client
+	intro   introFetcher
 
+	titleMu     sync.Mutex
+	titleGroup  singleflight.Group
+	showTitles  map[int]titleCacheEntry
+	movieTitles map[int]titleCacheEntry
+
+	shareKeyMu    sync.Mutex
+	shareKeyGroup singleflight.Group
+	shareKeys     map[string]shareKeyCacheEntry
 }
 
 // New builds a Client with optional configuration.
@@ -149,11 +187,14 @@ func New(opts ...Option) *Client {
 	return &Client{
 
 		showbox: showbox.New(showbox.Options{ChildMode: cfg.childMode}),
-		febbox: febbox.NewCached(febboxClient),
-		tv: tv.New(tv.Options{BaseURL: cfg.tvBaseURL}),
-		imdb: imdb.New(),
-		intro: intro,
+		febbox:  febbox.NewCached(febboxClient),
+		tv:      tv.New(tv.Options{BaseURL: cfg.tvBaseURL}),
+		imdb:    imdb.New(cfg.tmdbAPIKey),
+		intro:   intro,
 
+		showTitles:  make(map[int]titleCacheEntry),
+		movieTitles: make(map[int]titleCacheEntry),
+		shareKeys:   make(map[string]shareKeyCacheEntry),
 	}
 
 }
@@ -273,9 +314,73 @@ func (c *Client) FebboxDownloadURL(shareKey string, fid int) (string, error) {
 
 // --- vod.Deps implementation ---
 
+func (c *Client) cachedTitleDetails(items map[int]titleCacheEntry, id int) (meta.TitleDetails, bool) {
+
+	c.titleMu.Lock()
+	defer c.titleMu.Unlock()
+
+	entry, ok := items[id]
+
+	if !ok || time.Now().After(entry.expiry) {
+
+		return meta.TitleDetails{}, false
+
+	}
+
+	return entry.details, true
+
+}
+
+func (c *Client) storeTitleDetails(items map[int]titleCacheEntry, id int, details meta.TitleDetails) {
+
+	c.titleMu.Lock()
+	defer c.titleMu.Unlock()
+
+	items[id] = titleCacheEntry{details: details, expiry: time.Now().Add(titleDetailsTTL)}
+
+}
+
 func (c *Client) GetMovieDetails(id int) (meta.TitleDetails, error) {
 
-	raw, err := c.showbox.GetMovie(id)
+	if details, ok := c.cachedTitleDetails(c.movieTitles, id); ok {
+
+		return details, nil
+
+	}
+
+	result, err, _ := c.titleGroup.Do(fmt.Sprintf("movie:%d", id), func() (any, error) {
+
+		if details, ok := c.cachedTitleDetails(c.movieTitles, id); ok {
+
+			return details, nil
+
+		}
+
+		raw, err := c.showbox.GetMovie(id)
+
+		if err != nil {
+
+			return meta.TitleDetails{}, err
+
+		}
+
+		details := meta.ParseTitleDetails(raw)
+
+		if details.IMDBId != "" {
+
+			if m, err := c.imdb.Movie(details.IMDBId); err == nil {
+
+				meta.EnrichTitleDetails(&details, m)
+
+			}
+
+		}
+
+		c.storeTitleDetails(c.movieTitles, id, details)
+
+		return details, nil
+
+	})
 
 	if err != nil {
 
@@ -283,25 +388,51 @@ func (c *Client) GetMovieDetails(id int) (meta.TitleDetails, error) {
 
 	}
 
-	details := meta.ParseTitleDetails(raw)
-
-	if details.IMDBId != "" {
-
-		if m, err := c.imdb.Movie(details.IMDBId); err == nil {
-
-			meta.EnrichTitleDetails(&details, m)
-
-		}
-
-	}
-
-	return details, nil
+	return result.(meta.TitleDetails), nil
 
 }
 
 func (c *Client) GetShowDetails(id int) (meta.TitleDetails, error) {
 
-	raw, err := c.showbox.GetShow(id)
+	if details, ok := c.cachedTitleDetails(c.showTitles, id); ok {
+
+		return details, nil
+
+	}
+
+	result, err, _ := c.titleGroup.Do(fmt.Sprintf("show:%d", id), func() (any, error) {
+
+		if details, ok := c.cachedTitleDetails(c.showTitles, id); ok {
+
+			return details, nil
+
+		}
+
+		raw, err := c.showbox.GetShow(id)
+
+		if err != nil {
+
+			return meta.TitleDetails{}, err
+
+		}
+
+		details := meta.ParseTitleDetails(raw)
+
+		if details.IMDBId != "" {
+
+			if m, err := c.imdb.Series(details.IMDBId); err == nil {
+
+				meta.EnrichTitleDetails(&details, m)
+
+			}
+
+		}
+
+		c.storeTitleDetails(c.showTitles, id, details)
+
+		return details, nil
+
+	})
 
 	if err != nil {
 
@@ -309,19 +440,7 @@ func (c *Client) GetShowDetails(id int) (meta.TitleDetails, error) {
 
 	}
 
-	details := meta.ParseTitleDetails(raw)
-
-	if details.IMDBId != "" {
-
-		if m, err := c.imdb.Series(details.IMDBId); err == nil {
-
-			meta.EnrichTitleDetails(&details, m)
-
-		}
-
-	}
-
-	return details, nil
+	return result.(meta.TitleDetails), nil
 
 }
 
@@ -337,11 +456,10 @@ func (c *Client) GetEpisodeMeta(imdbID string, season, episode int) (vod.Episode
 
 	return vod.EpisodeInfo{
 
-		Title: m.Title,
+		Title:       m.Title,
 		Description: m.Description,
 
 		Poster: m.Poster,
-
 	}, true
 
 }
@@ -355,11 +473,10 @@ func (c *Client) GetSeasonEpisodes(imdbID string, season int) map[int]vod.Episod
 
 		out[number] = vod.EpisodeInfo{
 
-			Title: m.Title,
+			Title:       m.Title,
 			Description: m.Description,
 
 			Poster: m.Poster,
-
 		}
 
 	}
@@ -370,7 +487,57 @@ func (c *Client) GetSeasonEpisodes(imdbID string, season int) map[int]vod.Episod
 
 func (c *Client) GetFebBoxID(id, boxType int) (string, error) {
 
-	return c.showbox.GetFebBoxID(id, showbox.BoxType(boxType))
+	key := fmt.Sprintf("%d:%d", boxType, id)
+
+	c.shareKeyMu.Lock()
+
+	if entry, ok := c.shareKeys[key]; ok && time.Now().Before(entry.expiry) {
+
+		shareKey := entry.key
+		c.shareKeyMu.Unlock()
+		return shareKey, nil
+
+	}
+
+	c.shareKeyMu.Unlock()
+
+	result, err, _ := c.shareKeyGroup.Do(key, func() (any, error) {
+
+		c.shareKeyMu.Lock()
+
+		if entry, ok := c.shareKeys[key]; ok && time.Now().Before(entry.expiry) {
+
+			shareKey := entry.key
+			c.shareKeyMu.Unlock()
+			return shareKey, nil
+
+		}
+
+		c.shareKeyMu.Unlock()
+
+		shareKey, err := c.showbox.GetFebBoxID(id, showbox.BoxType(boxType))
+
+		if err != nil {
+
+			return "", err
+
+		}
+
+		c.shareKeyMu.Lock()
+		c.shareKeys[key] = shareKeyCacheEntry{key: shareKey, expiry: time.Now().Add(shareKeyTTL)}
+		c.shareKeyMu.Unlock()
+
+		return shareKey, nil
+
+	})
+
+	if err != nil {
+
+		return "", err
+
+	}
+
+	return result.(string), nil
 
 }
 

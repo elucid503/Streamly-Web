@@ -5,30 +5,16 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os"
 	"strings"
 	"sync"
 	"time"
-
-	"mediakit/internal/textutil"
 )
 
-var (
-	baseURL = envOr("CINEMETA_BASE_URL", "https://v3-cinemeta.strem.io/meta")
-	metahubBaseURL = envOr("METAHUB_BASE_URL", "https://episodes.metahub.space")
+const (
+	tmdbBaseURL   = "https://api.themoviedb.org/3"
+	tmdbImageBase = "https://image.tmdb.org/t/p"
+	cacheTTL      = 24 * time.Hour
 )
-
-func envOr(key, fallback string) string {
-
-	if v := os.Getenv(key); v != "" {
-
-		return v
-
-	}
-
-	return fallback
-
-}
 
 // TitleMeta is display metadata keyed by an IMDb id.
 type TitleMeta struct {
@@ -55,57 +41,67 @@ type EpisodeMeta struct {
 
 }
 
-// Client fetches IMDb-indexed metadata from the public Cinemeta catalog.
+// Client fetches metadata from the TMDB API using an IMDb ID as the lookup key.
 type Client struct {
 
-	http *http.Client
+	apiKey string
+	http   *http.Client
+
 	mu sync.Mutex
 
-	series map[string]seriesEntry
-	movies map[string]movieEntry
+	idMap  map[string]int         // imdbID → tmdbID
+	series map[string]seriesEntry // imdbID → series metadata
+	movies map[string]movieEntry  // imdbID → movie metadata
+	seasons map[string]seasonEntry // "imdbID:season" → episodes
 
 }
 
 type seriesEntry struct {
-
-	meta TitleMeta
-	episodes map[string]EpisodeMeta
-
+	meta   TitleMeta
 	expiry time.Time
-
 }
 
 type movieEntry struct {
-
-	meta TitleMeta
+	meta   TitleMeta
 	expiry time.Time
-
 }
 
-const cacheTTL = 24 * time.Hour
+type seasonEntry struct {
+	episodes map[int]EpisodeMeta
+	expiry   time.Time
+}
 
-// New builds an IMDb metadata client.
-func New() *Client {
+// New builds a TMDB metadata client. apiKey is the TMDB API read access token
+// (v3 auth key). If empty, all enrichment calls are skipped gracefully.
+func New(apiKey string) *Client {
 
 	return &Client{
 
-		http: &http.Client{Timeout: 10 * time.Second},
-
-		series: make(map[string]seriesEntry),
-		movies: make(map[string]movieEntry),
+		apiKey:  apiKey,
+		http:    &http.Client{Timeout: 8 * time.Second},
+		idMap:   make(map[string]int),
+		series:  make(map[string]seriesEntry),
+		movies:  make(map[string]movieEntry),
+		seasons: make(map[string]seasonEntry),
 
 	}
 
 }
 
-// Series returns metadata for a TV series, caching all episode entries in one request.
+// Series returns metadata for a TV series by IMDb ID.
 func (c *Client) Series(imdbID string) (TitleMeta, error) {
+
+	if c.apiKey == "" {
+
+		return TitleMeta{}, fmt.Errorf("tmdb: no api key")
+
+	}
 
 	id := normalizeID(imdbID)
 
 	if id == "" {
 
-		return TitleMeta{}, fmt.Errorf("imdb: missing id")
+		return TitleMeta{}, fmt.Errorf("tmdb: missing id")
 
 	}
 
@@ -115,14 +111,13 @@ func (c *Client) Series(imdbID string) (TitleMeta, error) {
 
 		meta := entry.meta
 		c.mu.Unlock()
-
 		return meta, nil
 
 	}
 
 	c.mu.Unlock()
 
-	entry, err := c.fetchSeries(id)
+	tmdbID, err := c.tmdbID(id, "tv")
 
 	if err != nil {
 
@@ -130,22 +125,38 @@ func (c *Client) Series(imdbID string) (TitleMeta, error) {
 
 	}
 
+	var raw tmdbTV
+
+	if err := c.getJSON(fmt.Sprintf("%s/tv/%d", tmdbBaseURL, tmdbID), &raw); err != nil {
+
+		return TitleMeta{}, err
+
+	}
+
+	meta := metaFromTV(raw)
+
 	c.mu.Lock()
-	c.series[id] = entry
+	c.series[id] = seriesEntry{meta: meta, expiry: time.Now().Add(cacheTTL)}
 	c.mu.Unlock()
 
-	return entry.meta, nil
+	return meta, nil
 
 }
 
-// Movie returns metadata for a film.
+// Movie returns metadata for a film by IMDb ID.
 func (c *Client) Movie(imdbID string) (TitleMeta, error) {
+
+	if c.apiKey == "" {
+
+		return TitleMeta{}, fmt.Errorf("tmdb: no api key")
+
+	}
 
 	id := normalizeID(imdbID)
 
 	if id == "" {
 
-		return TitleMeta{}, fmt.Errorf("imdb: missing id")
+		return TitleMeta{}, fmt.Errorf("tmdb: missing id")
 
 	}
 
@@ -155,20 +166,29 @@ func (c *Client) Movie(imdbID string) (TitleMeta, error) {
 
 		meta := entry.meta
 		c.mu.Unlock()
-
 		return meta, nil
 
 	}
 
 	c.mu.Unlock()
 
-	meta, err := c.fetchMovie(id)
+	tmdbID, err := c.tmdbID(id, "movie")
 
 	if err != nil {
 
 		return TitleMeta{}, err
 
 	}
+
+	var raw tmdbMovie
+
+	if err := c.getJSON(fmt.Sprintf("%s/movie/%d", tmdbBaseURL, tmdbID), &raw); err != nil {
+
+		return TitleMeta{}, err
+
+	}
+
+	meta := metaFromMovie(raw)
 
 	c.mu.Lock()
 	c.movies[id] = movieEntry{meta: meta, expiry: time.Now().Add(cacheTTL)}
@@ -178,222 +198,182 @@ func (c *Client) Movie(imdbID string) (TitleMeta, error) {
 
 }
 
-// Episode looks up one episode from the cached series payload.
+// Episode returns metadata for a single episode by IMDb ID, season, and episode number.
 func (c *Client) Episode(imdbID string, season, episode int) (EpisodeMeta, bool) {
 
-	id := normalizeID(imdbID)
+	eps := c.SeasonEpisodes(imdbID, season)
 
-	if id == "" || season < 0 || episode <= 0 {
+	ep, ok := eps[episode]
 
-		return EpisodeMeta{}, false
-
-	}
-
-	key := episodeKey(season, episode)
-
-	c.mu.Lock()
-
-	entry, ok := c.series[id]
-
-	if ok && time.Now().Before(entry.expiry) {
-
-		if ep, found := entry.episodes[key]; found {
-
-			c.mu.Unlock()
-			return ep, true
-
-		}
-
-	}
-
-	c.mu.Unlock()
-
-	if _, err := c.Series(id); err != nil {
-
-		return EpisodeMeta{}, false
-
-	}
-
-	c.mu.Lock()
-	ep, found := c.series[id].episodes[key]
-	c.mu.Unlock()
-
-	return ep, found
+	return ep, ok
 
 }
 
-// SeasonEpisodes returns episode metadata for one season.
+// SeasonEpisodes returns all episode metadata for one season, keyed by episode number.
 func (c *Client) SeasonEpisodes(imdbID string, season int) map[int]EpisodeMeta {
 
-	id := normalizeID(imdbID)
-
-	if id == "" || season < 0 {
+	if c.apiKey == "" || season < 0 {
 
 		return nil
 
 	}
 
-	if _, err := c.Series(id); err != nil {
+	id := normalizeID(imdbID)
+
+	if id == "" {
 
 		return nil
+
+	}
+
+	cacheKey := fmt.Sprintf("%s:%d", id, season)
+
+	c.mu.Lock()
+
+	if entry, ok := c.seasons[cacheKey]; ok && time.Now().Before(entry.expiry) {
+
+		out := make(map[int]EpisodeMeta, len(entry.episodes))
+		for k, v := range entry.episodes {
+			out[k] = v
+		}
+		c.mu.Unlock()
+		return out
+
+	}
+
+	c.mu.Unlock()
+
+	tmdbID, err := c.tmdbID(id, "tv")
+
+	if err != nil {
+
+		return nil
+
+	}
+
+	var raw tmdbSeason
+
+	if err := c.getJSON(fmt.Sprintf("%s/tv/%d/season/%d", tmdbBaseURL, tmdbID, season), &raw); err != nil {
+
+		return nil
+
+	}
+
+	eps := make(map[int]EpisodeMeta, len(raw.Episodes))
+
+	for _, ep := range raw.Episodes {
+
+		if ep.EpisodeNumber <= 0 {
+
+			continue
+
+		}
+
+		eps[ep.EpisodeNumber] = EpisodeMeta{
+
+			Title:       strings.TrimSpace(ep.Name),
+			Description: strings.TrimSpace(ep.Overview),
+			Poster:      imagePath(ep.StillPath, "w300"),
+
+		}
 
 	}
 
 	c.mu.Lock()
-	entry := c.series[id]
+	c.seasons[cacheKey] = seasonEntry{episodes: eps, expiry: time.Now().Add(cacheTTL)}
 	c.mu.Unlock()
 
-	out := make(map[int]EpisodeMeta)
-	prefix := fmt.Sprintf("%d:", season)
-
-	for key, ep := range entry.episodes {
-
-		if !strings.HasPrefix(key, prefix) {
-
-			continue
-
-		}
-
-		var number int
-
-		if _, err := fmt.Sscanf(key, prefix+"%d", &number); err == nil && number > 0 {
-
-			out[number] = ep
-
-		}
-
-	}
-
-	return out
+	return eps
 
 }
 
-func (c *Client) fetchSeries(imdbID string) (seriesEntry, error) {
+// tmdbID resolves the TMDB integer ID for an IMDb ID, caching the result.
+// mediaType is "tv" or "movie".
+func (c *Client) tmdbID(imdbID, mediaType string) (int, error) {
 
-	var payload struct {
-		Meta cinemetaTitle `json:"meta"`
-	}
+	c.mu.Lock()
 
-	if err := c.getJSON(fmt.Sprintf("%s/series/%s.json", baseURL, imdbID), &payload); err != nil {
+	if id, ok := c.idMap[imdbID]; ok {
 
-		return seriesEntry{}, err
-
-	}
-
-	meta := titleFromCinemeta(payload.Meta)
-	episodes := make(map[string]EpisodeMeta)
-
-	for _, video := range payload.Meta.Videos {
-
-		if video.Season <= 0 || video.Episode <= 0 {
-
-			continue
-
-		}
-
-		episodes[episodeKey(video.Season, video.Episode)] = EpisodeMeta{
-
-			Title: textutil.DecodeHTML(strings.TrimSpace(video.Name)),
-			Description: textutil.DecodeHTML(strings.TrimSpace(firstNonEmpty(video.Description, video.Overview))),
-			Poster: firstNonEmpty(video.Thumbnail, episodeStill(imdbID, video.Season, video.Episode)),
-
-		}
+		c.mu.Unlock()
+		return id, nil
 
 	}
 
-	return seriesEntry{
+	c.mu.Unlock()
 
-		meta: meta,
-		episodes: episodes,
-		expiry: time.Now().Add(cacheTTL),
+	var result tmdbFindResponse
 
-	}, nil
+	url := fmt.Sprintf("%s/find/%s?external_source=imdb_id", tmdbBaseURL, imdbID)
 
-}
+	if err := c.getJSON(url, &result); err != nil {
 
-func (c *Client) fetchMovie(imdbID string) (TitleMeta, error) {
-
-	var payload struct {
-		Meta cinemetaTitle `json:"meta"`
-	}
-
-	if err := c.getJSON(fmt.Sprintf("%s/movie/%s.json", baseURL, imdbID), &payload); err != nil {
-
-		return TitleMeta{}, err
+		return 0, err
 
 	}
 
-	return titleFromCinemeta(payload.Meta), nil
+	var tmdbID int
 
-}
+	if mediaType == "tv" && len(result.TVResults) > 0 {
 
-type cinemetaTitle struct {
+		tmdbID = result.TVResults[0].ID
 
-	Name string `json:"name"`
-	Year string `json:"year"`
+	} else if mediaType == "movie" && len(result.MovieResults) > 0 {
 
-	ReleaseInfo string `json:"releaseInfo"`
-	Poster string `json:"poster"`
-	Background string `json:"background"`
-
-	Description string `json:"description"`
-
-	IMDBRating string `json:"imdbRating"`
-	Videos []cinemetaVideo `json:"videos"`
-
-}
-
-type cinemetaVideo struct {
-
-	Season int `json:"season"`
-	Episode int `json:"episode"`
-	Number int `json:"number"`
-
-	Name string `json:"name"`
-	Description string `json:"description"`
-	Overview string `json:"overview"`
-
-	Thumbnail string `json:"thumbnail"`
-
-}
-
-func titleFromCinemeta(raw cinemetaTitle) TitleMeta {
-
-	poster := posterLarge(raw.Poster)
-
-	if poster == "" && raw.Poster != "" {
-
-		poster = raw.Poster
+		tmdbID = result.MovieResults[0].ID
 
 	}
 
-	banner := bannerLarge(raw.Background)
+	if tmdbID == 0 {
 
-	if banner == "" {
-
-		banner = strings.TrimSpace(raw.Background)
+		return 0, fmt.Errorf("tmdb: no %s result for %s", mediaType, imdbID)
 
 	}
 
-	return TitleMeta{
+	c.mu.Lock()
+	c.idMap[imdbID] = tmdbID
+	c.mu.Unlock()
 
-		Title: textutil.DecodeHTML(strings.TrimSpace(raw.Name)),
-
-		Year: firstNonEmpty(raw.ReleaseInfo, raw.Year),
-		Poster: poster,
-		Banner: banner,
-
-		Description: textutil.DecodeHTML(strings.TrimSpace(raw.Description)),
-
-		Rating: strings.TrimSpace(raw.IMDBRating),
-
-	}
+	return tmdbID, nil
 
 }
 
 func (c *Client) getJSON(url string, dest any) error {
 
-	resp, err := c.http.Get(url)
+	reqURL := url
+
+	// TMDB v3 hex keys use ?api_key=; JWT Read Access Tokens use Authorization: Bearer.
+	if !strings.HasPrefix(c.apiKey, "eyJ") {
+
+		sep := "?"
+
+		if strings.Contains(url, "?") {
+
+			sep = "&"
+
+		}
+
+		reqURL = url + sep + "api_key=" + c.apiKey
+
+	}
+
+	req, err := http.NewRequest(http.MethodGet, reqURL, nil)
+
+	if err != nil {
+
+		return err
+
+	}
+
+	if strings.HasPrefix(c.apiKey, "eyJ") {
+
+		req.Header.Set("Authorization", "Bearer "+c.apiKey)
+
+	}
+
+	req.Header.Set("Accept", "application/json")
+
+	resp, err := c.http.Do(req)
 
 	if err != nil {
 
@@ -413,11 +393,134 @@ func (c *Client) getJSON(url string, dest any) error {
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 
-		return fmt.Errorf("imdb: %s → %s", url, resp.Status)
+		return fmt.Errorf("tmdb: %s → %s", url, resp.Status)
 
 	}
 
 	return json.Unmarshal(body, dest)
+
+}
+
+// --- TMDB response types ---
+
+type tmdbFindResponse struct {
+
+	TVResults []struct {
+		ID int `json:"id"`
+	} `json:"tv_results"`
+
+	MovieResults []struct {
+		ID int `json:"id"`
+	} `json:"movie_results"`
+
+}
+
+type tmdbTV struct {
+
+	Name         string  `json:"name"`
+	FirstAirDate string  `json:"first_air_date"`
+	PosterPath   string  `json:"poster_path"`
+	BackdropPath string  `json:"backdrop_path"`
+	Overview     string  `json:"overview"`
+	VoteAverage  float64 `json:"vote_average"`
+
+}
+
+type tmdbMovie struct {
+
+	Title        string  `json:"title"`
+	ReleaseDate  string  `json:"release_date"`
+	PosterPath   string  `json:"poster_path"`
+	BackdropPath string  `json:"backdrop_path"`
+	Overview     string  `json:"overview"`
+	VoteAverage  float64 `json:"vote_average"`
+
+}
+
+type tmdbSeason struct {
+
+	Episodes []tmdbEpisode `json:"episodes"`
+
+}
+
+type tmdbEpisode struct {
+
+	EpisodeNumber int    `json:"episode_number"`
+	Name          string `json:"name"`
+	Overview      string `json:"overview"`
+	StillPath     string `json:"still_path"`
+
+}
+
+// --- helpers ---
+
+func metaFromTV(raw tmdbTV) TitleMeta {
+
+	year := ""
+
+	if len(raw.FirstAirDate) >= 4 {
+
+		year = raw.FirstAirDate[:4]
+
+	}
+
+	return TitleMeta{
+
+		Title:       strings.TrimSpace(raw.Name),
+		Year:        year,
+		Poster:      imagePath(raw.PosterPath, "w500"),
+		Banner:      imagePath(raw.BackdropPath, "original"),
+		Description: strings.TrimSpace(raw.Overview),
+		Rating:      formatRating(raw.VoteAverage),
+
+	}
+
+}
+
+func metaFromMovie(raw tmdbMovie) TitleMeta {
+
+	year := ""
+
+	if len(raw.ReleaseDate) >= 4 {
+
+		year = raw.ReleaseDate[:4]
+
+	}
+
+	return TitleMeta{
+
+		Title:       strings.TrimSpace(raw.Title),
+		Year:        year,
+		Poster:      imagePath(raw.PosterPath, "w500"),
+		Banner:      imagePath(raw.BackdropPath, "original"),
+		Description: strings.TrimSpace(raw.Overview),
+		Rating:      formatRating(raw.VoteAverage),
+
+	}
+
+}
+
+func imagePath(path, size string) string {
+
+	if strings.TrimSpace(path) == "" {
+
+		return ""
+
+	}
+
+	return fmt.Sprintf("%s/%s%s", tmdbImageBase, size, path)
+
+}
+
+func formatRating(v float64) string {
+
+	if v == 0 {
+
+		return ""
+
+	}
+
+	return fmt.Sprintf("%.1f", v)
 
 }
 
@@ -438,91 +541,5 @@ func normalizeID(id string) string {
 	}
 
 	return "tt" + id
-
-}
-
-func episodeKey(season, episode int) string {
-
-	return fmt.Sprintf("%d:%d", season, episode)
-
-}
-
-func episodeStill(imdbID string, season, episode int) string {
-
-	if imdbID == "" || season < 0 || episode <= 0 {
-
-		return ""
-
-	}
-
-	return fmt.Sprintf("%s/%s/%d/%d/w780.jpg", strings.TrimRight(metahubBaseURL, "/"), imdbID, season, episode)
-
-}
-
-func bannerLarge(url string) string {
-
-	url = strings.TrimSpace(url)
-
-	if url == "" {
-
-		return ""
-
-	}
-
-	if strings.Contains(url, "/background/medium/") {
-
-		return strings.Replace(url, "/background/medium/", "/background/large/", 1)
-
-	}
-
-	if strings.Contains(url, "/background/small/") {
-
-		return strings.Replace(url, "/background/small/", "/background/large/", 1)
-
-	}
-
-	return url
-
-}
-
-func posterLarge(url string) string {
-
-	url = strings.TrimSpace(url)
-
-	if url == "" {
-
-		return ""
-
-	}
-
-	if strings.Contains(url, "/poster/small/") {
-
-		return strings.Replace(url, "/poster/small/", "/poster/large/", 1)
-
-	}
-
-	if strings.Contains(url, "/poster/medium/") {
-
-		return strings.Replace(url, "/poster/medium/", "/poster/large/", 1)
-
-	}
-
-	return url
-
-}
-
-func firstNonEmpty(values ...string) string {
-
-	for _, value := range values {
-
-		if strings.TrimSpace(value) != "" {
-
-			return strings.TrimSpace(value)
-
-		}
-
-	}
-
-	return ""
 
 }

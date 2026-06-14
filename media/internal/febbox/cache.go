@@ -2,69 +2,62 @@ package febbox
 
 import (
 	"fmt"
+	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 )
 
 const (
-
-	listCacheTTL = 45 * time.Minute
+	listCacheTTL  = 45 * time.Minute
 	linksCacheTTL = 30 * time.Minute
 	staleCacheTTL = 24 * time.Hour
 
-	minRequestGap = 2 * time.Second
-
+	listRequestGap = 250 * time.Millisecond
+	linkRequestGap = 2 * time.Second
 )
 
+var qualityHeightRe = regexp.MustCompile(`(?i)(\d{3,4})\s*p|2160|4k`)
+
 type listCacheEntry struct {
-
-	files []File
+	files     []File
 	fetchedAt time.Time
-
 }
 
 type linksCacheEntry struct {
-
 	qualities []Quality
 	fetchedAt time.Time
-
 }
 
 type inflightList struct {
-
 	files []File
 
-	err error
+	err  error
 	done chan struct{}
-
 }
 
 type inflightLinks struct {
-
 	qualities []Quality
 
 	done chan struct{}
-	err error
-
+	err  error
 }
 
 // CachedClient wraps a Client with in-memory caching, request throttling, in-flight deduplication, and stale fallback on rate limits.
 type CachedClient struct {
-
 	inner *Client
 
-	mu sync.RWMutex
+	mu    sync.RWMutex
 	lists map[string]listCacheEntry
 	links map[string]linksCacheEntry
 
 	throttleMu sync.Mutex
-	lastFetch time.Time
+	lastFetch  time.Time
 
-	listInflight map[string]*inflightList
+	listInflight  map[string]*inflightList
 	linksInflight map[string]*inflightLinks
-	inflightMu sync.Mutex
-
+	inflightMu    sync.Mutex
 }
 
 // NewCached wraps client with defensive caching defaults.
@@ -77,9 +70,8 @@ func NewCached(client *Client) *CachedClient {
 		lists: make(map[string]listCacheEntry),
 		links: make(map[string]linksCacheEntry),
 
-		listInflight: make(map[string]*inflightList),
+		listInflight:  make(map[string]*inflightList),
 		linksInflight: make(map[string]*inflightLinks),
-
 	}
 
 }
@@ -117,7 +109,7 @@ func (c *CachedClient) ListFiles(shareKey string, parentID any, cookie string) (
 
 	}
 
-	c.throttle()
+	c.throttle(listRequestGap)
 
 	files, err := c.inner.ListFiles(shareKey, parentID, cookie)
 
@@ -174,7 +166,7 @@ func (c *CachedClient) GetLinks(shareKey string, fid any, cookie string) ([]Qual
 
 	}
 
-	c.throttle()
+	c.throttle(linkRequestGap)
 
 	qualities, err := c.inner.GetLinks(shareKey, fid, cookie)
 
@@ -192,6 +184,12 @@ func (c *CachedClient) GetLinks(shareKey string, fid any, cookie string) ([]Qual
 
 	}
 
+	if stale, ok := c.staleLinks(key); ok && isDegradedQualityRefresh(stale, qualities) {
+
+		return cloneQualities(stale), nil
+
+	}
+
 	c.storeLinks(key, qualities)
 
 	return cloneQualities(qualities), nil
@@ -201,7 +199,7 @@ func (c *CachedClient) GetLinks(shareKey string, fid any, cookie string) ([]Qual
 // GetDownloadURL resolves a direct download link for a shared file.
 func (c *CachedClient) GetDownloadURL(shareKey string, fid any, cookie string) (string, error) {
 
-	c.throttle()
+	c.throttle(linkRequestGap)
 	return c.inner.GetDownloadURL(shareKey, fid, cookie)
 
 }
@@ -370,12 +368,12 @@ func (c *CachedClient) storeLinks(key string, qualities []Quality) {
 
 }
 
-func (c *CachedClient) throttle() {
+func (c *CachedClient) throttle(minGap time.Duration) {
 
 	c.throttleMu.Lock()
 	defer c.throttleMu.Unlock()
 
-	if wait := minRequestGap - time.Since(c.lastFetch); wait > 0 {
+	if wait := minGap - time.Since(c.lastFetch); wait > 0 {
 
 		time.Sleep(wait)
 
@@ -418,6 +416,59 @@ func cloneQualities(qualities []Quality) []Quality {
 	}
 
 	return append([]Quality(nil), qualities...)
+
+}
+
+func isDegradedQualityRefresh(previous, next []Quality) bool {
+
+	if len(previous) == 0 || len(next) != 1 {
+
+		return false
+
+	}
+
+	return maxQualityHeight(previous) > 360 && maxQualityHeight(next) <= 360
+
+}
+
+func maxQualityHeight(qualities []Quality) int {
+
+	maxHeight := 0
+
+	for _, q := range qualities {
+
+		if height := parsedQualityHeight(q); height > maxHeight {
+
+			maxHeight = height
+
+		}
+
+	}
+
+	return maxHeight
+
+}
+
+func parsedQualityHeight(q Quality) int {
+
+	label := strings.TrimSpace(q.Quality + " " + q.Name)
+
+	if strings.Contains(strings.ToLower(label), "4k") || strings.Contains(label, "2160") {
+
+		return 2160
+
+	}
+
+	match := qualityHeightRe.FindStringSubmatch(label)
+
+	if len(match) > 1 && match[1] != "" {
+
+		height, _ := strconv.Atoi(match[1])
+		return height
+
+	}
+
+	return 0
 
 }
 
