@@ -2,6 +2,8 @@ package services
 
 import (
 	"context"
+	"fmt"
+	"sync"
 	"time"
 
 	mediakit "mediakit"
@@ -11,6 +13,15 @@ import (
 	"streamly/internal/services/stream"
 	"streamly/internal/services/upstream"
 	"streamly/internal/services/vod"
+
+	"golang.org/x/sync/singleflight"
+)
+
+const (
+
+	titleDetailsTTL = 6 * time.Hour
+	titleDetailsMaxEntries = 1024
+
 )
 
 // Type aliases so callers (handlers, subtitles, proxy) need not import sub-packages.
@@ -34,6 +45,11 @@ type MediaService struct {
 	stream *stream.Cache
 	vod *vod.Cache
 
+	detailsMu sync.RWMutex
+	detailsGroup singleflight.Group
+	movieDetails map[int]titleDetailsCacheEntry
+	showDetails map[int]titleDetailsCacheEntry
+
 }
 
 // TitleDetailsDTO is user-facing metadata for a movie or show.
@@ -50,6 +66,13 @@ type TitleDetailsDTO struct {
 
 	Description string `json:"description"`
 	Rating string `json:"rating"`
+
+}
+
+type titleDetailsCacheEntry struct {
+
+	details *TitleDetailsDTO
+	fetchedAt time.Time
 
 }
 
@@ -136,6 +159,9 @@ func NewMediaService(cfg *config.Config) *MediaService {
 		stream: stream.New(client),
 		vod: vod.New(client, throttle),
 
+		movieDetails: make(map[int]titleDetailsCacheEntry),
+		showDetails: make(map[int]titleDetailsCacheEntry),
+
 	}
 
 }
@@ -196,7 +222,29 @@ func (s *MediaService) Search(query string) ([]SearchResultDTO, error) {
 
 func (s *MediaService) MovieDetails(id int) (*TitleDetailsDTO, error) {
 
-	details, err := s.client.Movie(id).Details()
+	if details, ok := s.cachedTitleDetails(s.movieDetails, id); ok {
+
+		return details, nil
+
+	}
+
+	result, err, _ := s.detailsGroup.Do(fmt.Sprintf("movie:%d", id), func() (any, error) {
+
+		details, err := s.client.Movie(id).Details()
+
+		if err != nil {
+
+			return nil, err
+
+		}
+
+		dto := titleDetailsToDTO(id, "movie", details)
+
+		s.setTitleDetails(true, id, dto)
+
+		return dto, nil
+
+	})
 
 	if err != nil {
 
@@ -204,13 +252,35 @@ func (s *MediaService) MovieDetails(id int) (*TitleDetailsDTO, error) {
 
 	}
 
-	return titleDetailsToDTO(id, "movie", details), nil
+	return cloneTitleDetails(result.(*TitleDetailsDTO)), nil
 
 }
 
 func (s *MediaService) ShowDetails(id int) (*TitleDetailsDTO, error) {
 
-	details, err := s.client.Show(id).Details()
+	if details, ok := s.cachedTitleDetails(s.showDetails, id); ok {
+
+		return details, nil
+
+	}
+
+	result, err, _ := s.detailsGroup.Do(fmt.Sprintf("show:%d", id), func() (any, error) {
+
+		details, err := s.client.Show(id).Details()
+
+		if err != nil {
+
+			return nil, err
+
+		}
+
+		dto := titleDetailsToDTO(id, "show", details)
+
+		s.setTitleDetails(false, id, dto)
+
+		return dto, nil
+
+	})
 
 	if err != nil {
 
@@ -218,7 +288,7 @@ func (s *MediaService) ShowDetails(id int) (*TitleDetailsDTO, error) {
 
 	}
 
-	return titleDetailsToDTO(id, "show", details), nil
+	return cloneTitleDetails(result.(*TitleDetailsDTO)), nil
 
 }
 
@@ -488,6 +558,91 @@ func titleDetailsToDTO(id int, kind string, details mediakit.TitleDetails) *Titl
 		Rating: details.IMDBRating,
 
 	}
+
+}
+
+func (s *MediaService) cachedTitleDetails(items map[int]titleDetailsCacheEntry, id int) (*TitleDetailsDTO, bool) {
+
+	s.detailsMu.RLock()
+
+	entry, ok := items[id]
+
+	s.detailsMu.RUnlock()
+
+	if !ok || time.Since(entry.fetchedAt) >= titleDetailsTTL {
+
+		return nil, false
+
+	}
+
+	return cloneTitleDetails(entry.details), true
+
+}
+
+func (s *MediaService) setTitleDetails(movie bool, id int, details *TitleDetailsDTO) {
+
+	s.detailsMu.Lock()
+
+	defer s.detailsMu.Unlock()
+
+	s.pruneTitleDetailsLocked()
+
+	entry := titleDetailsCacheEntry{
+
+		details: cloneTitleDetails(details),
+		fetchedAt: time.Now(),
+
+	}
+
+	if movie {
+
+		s.movieDetails[id] = entry
+
+	} else {
+
+		s.showDetails[id] = entry
+
+	}
+
+}
+
+func (s *MediaService) pruneTitleDetailsLocked() {
+
+	now := time.Now()
+
+	for id, entry := range s.movieDetails {
+
+		if now.Sub(entry.fetchedAt) >= titleDetailsTTL || len(s.movieDetails) > titleDetailsMaxEntries {
+
+			delete(s.movieDetails, id)
+
+		}
+
+	}
+
+	for id, entry := range s.showDetails {
+
+		if now.Sub(entry.fetchedAt) >= titleDetailsTTL || len(s.showDetails) > titleDetailsMaxEntries {
+
+			delete(s.showDetails, id)
+
+		}
+
+	}
+
+}
+
+func cloneTitleDetails(details *TitleDetailsDTO) *TitleDetailsDTO {
+
+	if details == nil {
+
+		return nil
+
+	}
+
+	cp := *details
+
+	return &cp
 
 }
 

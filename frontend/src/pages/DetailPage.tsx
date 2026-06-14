@@ -151,28 +151,29 @@ export class DetailPage extends Component<DetailPageProps, DetailPageState> {
 
         const selectedSeason = seasons[0]?.number ?? 1;
 
-        let episodes: Episode[] = [];
+        if (gen !== this.loadGen) return;
+
+        const loadingSeason = seasons.length > 0 ? selectedSeason : null;
+
+        this.setState({
+
+          details,
+          seasons,
+          episodes: [],
+          episodeCache: {},
+          selectedSeason,
+          loadingSeason,
+          seasonsError,
+          history,
+          loading: false,
+
+        });
 
         if (seasons.length > 0) {
 
-          try {
-
-            episodes = await api.seasonEpisodes(id, selectedSeason);
-
-          } catch {
-
-            /* episodes may load on season select */
-
-          }
+          void this.loadInitialSeason(id, seasons, selectedSeason, gen);
 
         }
-
-        if (gen !== this.loadGen) return;
-
-        const episodeCache = episodes.length > 0 ? { [selectedSeason]: episodes } : {};
-
-        this.setState({ details, seasons, episodes, episodeCache, selectedSeason, loadingSeason: null, seasonsError, history, loading: false });
-        this.prefetchSeasons(id, seasons, selectedSeason, episodeCache); // saves loading time later
 
       }
 
@@ -186,6 +187,36 @@ export class DetailPage extends Component<DetailPageProps, DetailPageState> {
         loading: false,
 
       });
+
+    }
+
+  };
+
+  loadInitialSeason = async (showId: number, seasons: Season[], selectedSeason: number, gen: number) => {
+
+    try {
+
+      const episodes = await api.seasonEpisodes(showId, selectedSeason);
+
+      if (gen !== this.loadGen) return;
+
+      const episodeCache = episodes.length > 0 ? { [selectedSeason]: episodes } : {};
+
+      this.setState({
+
+        episodes,
+        episodeCache,
+        loadingSeason: null,
+
+      });
+
+      this.prefetchSeasons(showId, seasons, selectedSeason, episodeCache); // saves loading time later
+
+    } catch {
+
+      if (gen !== this.loadGen) return;
+
+      this.setState({ episodes: [], loadingSeason: null });
 
     }
 
@@ -574,6 +605,16 @@ export class DetailPage extends Component<DetailPageProps, DetailPageState> {
                     );
 
                   })}
+
+                  {loadingSeason !== null && episodes.length === 0 && (
+
+                    <p className="px-3 py-6 text-center text-sm text-foreground-muted">
+
+                      Loading episodes
+
+                    </p>
+
+                  )}
 
                   {loadingSeason === null && episodes.length === 0 && (
 

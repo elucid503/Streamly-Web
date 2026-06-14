@@ -445,6 +445,8 @@ export class WatchPage extends Component<WatchPageProps, WatchPageState> {
 
     const preferredHeight = this.preferredHeight();
 
+    const menuPromise = this.loadMenuData(showId, season);
+
     const [stream, historyItems] = await Promise.all([
 
       api.episodeStream(showId, season, episode, preferredHeight),
@@ -497,6 +499,8 @@ export class WatchPage extends Component<WatchPageProps, WatchPageState> {
     void this.loadEpisodeSubtitles(showId, season, episode, gen);
 
     void this.loadNextEpisode(showId, season, episode, gen);
+
+    void this.applyMenuData(showId, season, menuPromise);
 
   };
 
@@ -587,33 +591,71 @@ export class WatchPage extends Component<WatchPageProps, WatchPageState> {
 
     this.setState({ menuEpisodesLoading: true, menuSeason: season });
 
+    const data = await this.loadMenuData(mediaId, season);
+
+    if (!data) {
+
+      this.setState({ menuEpisodes: [], menuEpisodesLoading: false });
+      return;
+
+    }
+
+    if (this.state.mediaId !== mediaId) return;
+
+    this.setState((prev) => ({
+
+      seasons: prev.seasons.length > 0 ? prev.seasons : data.seasons,
+
+      menuEpisodes: data.episodes,
+      menuEpisodesLoading: false,
+
+      episodeCache: { ...prev.episodeCache, [season]: data.episodes },
+
+    }));
+
+  };
+
+  loadMenuData = async (showId: number, season: number): Promise<{ seasons: Season[]; episodes: Episode[] } | null> => {
+
     try {
 
       const [seasons, episodes] = await Promise.all([
 
-        this.state.seasons.length > 0 ? Promise.resolve(this.state.seasons) : api.showSeasons(mediaId).catch(() => []),
-        api.seasonEpisodes(mediaId, season),
+        this.state.seasons.length > 0 ? Promise.resolve(this.state.seasons) : api.showSeasons(showId).catch(() => []),
+        api.seasonEpisodes(showId, season),
 
       ]);
 
-      if (this.state.mediaId !== mediaId) return;
-
-      this.setState((prev) => ({
-
-        seasons: prev.seasons.length > 0 ? prev.seasons : seasons,
-
-        menuEpisodes: episodes,
-        menuEpisodesLoading: false,
-
-        episodeCache: { ...prev.episodeCache, [season]: episodes },
-
-      }));
+      return { seasons, episodes };
 
     } catch {
 
-      this.setState({ menuEpisodes: [], menuEpisodesLoading: false });
+      return null;
 
     }
+
+  };
+
+  applyMenuData = async (showId: number, season: number, dataPromise: Promise<{ seasons: Season[]; episodes: Episode[] } | null>) => {
+
+    const data = await dataPromise;
+
+    if (!data || this.state.mediaId !== showId || this.state.kind !== "show") return;
+
+    this.setState((prev) => {
+
+      if (prev.episodeCache[season]) return null;
+
+      return {
+
+        seasons: prev.seasons.length > 0 ? prev.seasons : data.seasons,
+        menuEpisodes: prev.menuSeason === season ? data.episodes : prev.menuEpisodes,
+        menuEpisodesLoading: prev.menuSeason === season ? false : prev.menuEpisodesLoading,
+        episodeCache: { ...prev.episodeCache, [season]: data.episodes },
+
+      };
+
+    });
 
   };
 
