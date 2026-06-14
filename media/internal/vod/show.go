@@ -1,25 +1,34 @@
-package mediakit
+package vod
 
 import (
 	"fmt"
 	"sync"
 
-	"mediakit/internal/showbox"
+	"mediakit/internal/febbox"
+	"mediakit/internal/fileparser"
+	"mediakit/internal/meta"
 )
 
 // Show is a chainable handle for a TV series.
 type Show struct {
 
-	client *Client
+	deps Deps
 	id int
 
 	mu sync.Mutex
-	details *TitleDetails
+	details *meta.TitleDetails
 
 	shareKey string
 	shareErr error
 
 	shareSet bool
+
+}
+
+// NewShow creates a Show handle for the given Showbox id.
+func NewShow(deps Deps, id int) *Show {
+
+	return &Show{deps: deps, id: id}
 
 }
 
@@ -31,7 +40,7 @@ func (s *Show) ID() int {
 }
 
 // Details fetches and caches show metadata.
-func (s *Show) Details() (TitleDetails, error) {
+func (s *Show) Details() (meta.TitleDetails, error) {
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -42,23 +51,11 @@ func (s *Show) Details() (TitleDetails, error) {
 
 	}
 
-	raw, err := s.client.showbox.GetShow(s.id)
+	details, err := s.deps.GetShowDetails(s.id)
 
 	if err != nil {
 
-		return TitleDetails{}, err
-
-	}
-
-	details := parseTitleDetails(raw)
-
-	if details.IMDBId != "" {
-
-		if meta, err := s.client.imdb.Series(details.IMDBId); err == nil {
-
-			enrichTitleDetails(&details, meta)
-
-		}
+		return meta.TitleDetails{}, err
 
 	}
 
@@ -84,16 +81,9 @@ func (s *Show) EpisodeListInfo(season int, episodeNumbers []int) map[int]Episode
 
 	if details.IMDBId != "" {
 
-		for number, meta := range s.client.imdb.SeasonEpisodes(details.IMDBId, season) {
+		for number, ep := range s.deps.GetSeasonEpisodes(details.IMDBId, season) {
 
-			imdbEpisodes[number] = EpisodeInfo{
-
-				Title: meta.Title,
-				Description: meta.Description,
-
-				Poster: meta.Poster,
-
-			}
+			imdbEpisodes[number] = ep
 
 		}
 
@@ -141,7 +131,7 @@ func (s *Show) ShareKey() (string, error) {
 
 	}
 
-	s.shareKey, s.shareErr = s.client.showbox.GetFebBoxID(s.id, showbox.BoxSeries)
+	s.shareKey, s.shareErr = s.deps.GetFebBoxID(s.id, 2) // 2 = showbox.BoxSeries
 	s.shareSet = true
 
 	return s.shareKey, s.shareErr
@@ -165,7 +155,7 @@ func (s *Show) Seasons() ([]*Season, error) {
 
 	}
 
-	root, err := s.client.febbox.ListFiles(shareKey, 0, "")
+	root, err := s.deps.ListFiles(shareKey, 0, "")
 
 	if err != nil {
 
@@ -173,7 +163,7 @@ func (s *Show) Seasons() ([]*Season, error) {
 
 	}
 
-	parsed := parseSeasons(root)
+	parsed := fileparser.ParseSeasons(root)
 	seasons := make([]*Season, len(parsed))
 
 	for i, item := range parsed {
@@ -298,7 +288,7 @@ func (s *Show) nextFromFlatListing(currentEpisode int) (*Episode, error) {
 
 	}
 
-	root, err := s.client.febbox.ListFiles(shareKey, 0, "")
+	root, err := s.deps.ListFiles(shareKey, 0, "")
 
 	if err != nil {
 
@@ -306,11 +296,11 @@ func (s *Show) nextFromFlatListing(currentEpisode int) (*Episode, error) {
 
 	}
 
-	eps := parseEpisodes(filesOnly(root), 1)
+	eps := fileparser.ParseEpisodes(fileparser.FilesOnly(root), 1)
 
 	for _, ep := range eps {
 
-		if ep.Number == currentEpisode + 1 {
+		if ep.Number == currentEpisode+1 {
 
 			return &Episode{
 
@@ -328,5 +318,12 @@ func (s *Show) nextFromFlatListing(currentEpisode int) (*Episode, error) {
 	}
 
 	return nil, nil
+
+}
+
+// listFiles is a shared helper used by Season and Episode within the show.
+func (s *Show) listFiles(shareKey string, parentID any) ([]febbox.File, error) {
+
+	return s.deps.ListFiles(shareKey, parentID, "")
 
 }

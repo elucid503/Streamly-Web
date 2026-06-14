@@ -13,12 +13,27 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 	"sync"
 	"time"
 
 	"mediakit/internal/textutil"
 )
+
+func envOr(key, fallback string) string {
+
+	if v := os.Getenv(key); v != "" {
+
+		return v
+
+	}
+
+	return fallback
+
+}
+
+var showboxWebURL = envOr("SHOWBOX_WEB_URL", "https://www.showbox.media")
 
 var showbox = struct {
 
@@ -30,7 +45,7 @@ var showbox = struct {
 
 }{
 
-	baseURL: "https://mbpapi.shegu.net/api/api_client/index/",
+	baseURL: envOr("SHOWBOX_API_URL", "https://mbpapi.shegu.net/api/api_client/index/"),
 	appKey: "moviebox",
 
 	iv: "wEiphTn!",
@@ -376,7 +391,7 @@ func (c *Client) GetEpisodeList(showID, season int) (map[int]string, error) {
 // GetFebBoxID resolves the Febbox share key for a title.
 func (c *Client) GetFebBoxID(id int, boxType BoxType) (string, error) {
 
-	endpoint := fmt.Sprintf("https://www.showbox.media/index/share_link?id=%d&type=%d", id, boxType)
+	endpoint := fmt.Sprintf("%s/index/share_link?id=%d&type=%d", strings.TrimRight(showboxWebURL, "/"), id, boxType)
 
 	response, err := c.client.Get(endpoint)
 

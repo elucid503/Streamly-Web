@@ -3,6 +3,7 @@ package introdb
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -10,12 +11,21 @@ import (
 	"github.com/imroc/req/v3"
 )
 
-const (
+const userAgent = "mediakit/1.0"
 
-	defaultBaseURL = "https://api.theintrodb.org/v3"
-	userAgent = "mediakit/1.0"
+var defaultBaseURL = envOr("INTRODB_BASE_URL", "https://api.theintrodb.org/v3")
 
-)
+func envOr(key, fallback string) string {
+
+	if v := os.Getenv(key); v != "" {
+
+		return v
+
+	}
+
+	return fallback
+
+}
 
 // Options tunes a Client instance.
 type Options struct {

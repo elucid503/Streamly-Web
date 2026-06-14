@@ -5,13 +5,26 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"sync"
 	"time"
 
 	"mediakit/internal/textutil"
 )
 
-var baseURL = "https://api.tvmaze.com"
+var baseURL = envOr("TVMAZE_BASE_URL", "https://api.tvmaze.com")
+
+func envOr(key, fallback string) string {
+
+	if v := os.Getenv(key); v != "" {
+
+		return v
+
+	}
+
+	return fallback
+
+}
 
 // Client fetches episode metadata from the TVmaze public API.
 type Client struct {

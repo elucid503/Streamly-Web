@@ -1,9 +1,10 @@
-package mediakit
+package vod
 
 import (
 	"fmt"
 
 	"mediakit/internal/febbox"
+	"mediakit/internal/fileparser"
 )
 
 // Season is a chainable handle for one season of a TV show.
@@ -57,7 +58,7 @@ func (s *Season) Episodes() ([]*Episode, error) {
 
 	}
 
-	children, err := s.show.client.febbox.ListFiles(shareKey, folder.FID, "")
+	children, err := s.show.listFiles(shareKey, folder.FID)
 
 	if err != nil {
 
@@ -65,7 +66,7 @@ func (s *Season) Episodes() ([]*Episode, error) {
 
 	}
 
-	parsed := parseEpisodes(filesOnly(children), s.number)
+	parsed := fileparser.ParseEpisodes(fileparser.FilesOnly(children), s.number)
 	episodes := make([]*Episode, len(parsed))
 
 	for i, item := range parsed {
@@ -110,7 +111,7 @@ func (s *Season) resolveFolder(shareKey string) (febbox.File, error) {
 
 	}
 
-	root, err := s.show.client.febbox.ListFiles(shareKey, 0, "")
+	root, err := s.show.listFiles(shareKey, 0)
 
 	if err != nil {
 
@@ -118,7 +119,7 @@ func (s *Season) resolveFolder(shareKey string) (febbox.File, error) {
 
 	}
 
-	for _, item := range parseSeasons(root) {
+	for _, item := range fileparser.ParseSeasons(root) {
 
 		if item.Number == s.number {
 

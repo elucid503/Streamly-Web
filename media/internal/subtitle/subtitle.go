@@ -1,4 +1,4 @@
-package mediakit
+package subtitle
 
 import (
 	"path/filepath"
@@ -9,10 +9,12 @@ import (
 )
 
 var subtitleExt = map[string]string{
+
 	".vtt": "vtt",
 	".srt": "srt",
 	".ass": "ass",
 	".ssa": "ssa",
+
 }
 
 var langToken = regexp.MustCompile(`(?i)(english|en\.us|en\.gb|\ben\b|spanish|es\b|french|fr\b|german|de\b|italian|it\b|portuguese|pt\b)`)
@@ -137,7 +139,8 @@ func subtitleFromFile(shareKey string, file febbox.File, format string) Subtitle
 
 }
 
-func collectSubtitles(shareKey string, siblings []febbox.File, video *febbox.File) []Subtitle {
+// CollectSubtitles gathers subtitle files from the siblings of a video file.
+func CollectSubtitles(shareKey string, siblings []febbox.File, video *febbox.File) []Subtitle {
 
 	if video == nil {
 

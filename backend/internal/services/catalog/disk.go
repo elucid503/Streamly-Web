@@ -1,4 +1,4 @@
-package services
+package catalog
 
 import (
 	"encoding/json"
@@ -8,33 +8,41 @@ import (
 	"time"
 )
 
-type catalogSnapshotFile struct {
+type snapshotFile struct {
 
 	MovieTrending []SearchResultDTO `json:"movieTrending"`
 	ShowTrending []SearchResultDTO `json:"showTrending"`
+
 	MovieCategories []CategoryDTO `json:"movieCategories"`
 	ShowCategories []CategoryDTO `json:"showCategories"`
+
 	MovieCategoryTitles map[string][]SearchResultDTO `json:"movieCategoryTitles"`
 	ShowCategoryTitles map[string][]SearchResultDTO `json:"showCategoryTitles"`
+
 	LiveChannels []LiveChannelDTO `json:"liveChannels"`
 	LivePopular []LiveChannelDTO `json:"livePopular"`
+
 	SearchIndex []SearchResultDTO `json:"searchIndex"`
 	RefreshedAt time.Time `json:"refreshedAt"`
 
 }
 
-func snapshotToFile(snap catalogSnapshot) catalogSnapshotFile {
+func snapshotToFile(snap Snapshot) snapshotFile {
 
-	return catalogSnapshotFile{
+	return snapshotFile{
 
 		MovieTrending: snap.movieTrending,
 		ShowTrending: snap.showTrending,
+
 		MovieCategories: snap.movieCategories,
 		ShowCategories: snap.showCategories,
+
 		MovieCategoryTitles: snap.movieCategoryTitles,
 		ShowCategoryTitles: snap.showCategoryTitles,
+
 		LiveChannels: snap.liveChannels,
 		LivePopular: snap.livePopular,
+
 		SearchIndex: snap.searchIndex,
 		RefreshedAt: snap.refreshedAt,
 
@@ -42,7 +50,7 @@ func snapshotToFile(snap catalogSnapshot) catalogSnapshotFile {
 
 }
 
-func snapshotFromFile(file catalogSnapshotFile) catalogSnapshot {
+func snapshotFromFile(file snapshotFile) Snapshot {
 
 	movieTitles := file.MovieCategoryTitles
 
@@ -60,16 +68,20 @@ func snapshotFromFile(file catalogSnapshotFile) catalogSnapshot {
 
 	}
 
-	return catalogSnapshot{
+	return Snapshot{
 
 		movieTrending: file.MovieTrending,
 		showTrending: file.ShowTrending,
+
 		movieCategories: file.MovieCategories,
 		showCategories: file.ShowCategories,
+
 		movieCategoryTitles: movieTitles,
 		showCategoryTitles: showTitles,
+
 		liveChannels: file.LiveChannels,
 		livePopular: file.LivePopular,
+
 		searchIndex: file.SearchIndex,
 		refreshedAt: file.RefreshedAt,
 
@@ -77,9 +89,9 @@ func snapshotFromFile(file catalogSnapshotFile) catalogSnapshot {
 
 }
 
-func (s *MediaService) loadCatalogFromDisk() bool {
+func (c *Cache) loadFromDisk() bool {
 
-	path := s.cfg.CatalogCacheFile
+	path := c.cacheFile
 
 	if path == "" {
 
@@ -101,7 +113,7 @@ func (s *MediaService) loadCatalogFromDisk() bool {
 
 	}
 
-	var file catalogSnapshotFile
+	var file snapshotFile
 
 	if err := json.Unmarshal(data, &file); err != nil {
 
@@ -125,23 +137,22 @@ func (s *MediaService) loadCatalogFromDisk() bool {
 
 	}
 
-	s.catalogMu.Lock()
+	c.mu.Lock()
 
-	s.catalog = snap
+	c.snap = snap
 
-	s.catalogMu.Unlock()
+	c.mu.Unlock()
 
 	log.Printf("[catalog-cache] loaded disk cache from %s (%d search index entries, refreshed %s)",
-
 		path, len(snap.searchIndex), snap.refreshedAt.Format(time.RFC3339))
 
 	return true
 
 }
 
-func (s *MediaService) saveCatalogToDisk(snap catalogSnapshot) {
+func (c *Cache) saveToDisk(snap Snapshot) {
 
-	path := s.cfg.CatalogCacheFile
+	path := c.cacheFile
 
 	if path == "" {
 

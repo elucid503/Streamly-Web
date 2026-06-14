@@ -1,4 +1,4 @@
-package mediakit
+package vod
 
 import (
 	"fmt"
@@ -6,24 +6,35 @@ import (
 	"time"
 
 	"mediakit/internal/febbox"
+	"mediakit/internal/fileparser"
+	"mediakit/internal/intro"
 	"mediakit/internal/introdb"
-	"mediakit/internal/showbox"
+	"mediakit/internal/meta"
+	"mediakit/internal/quality"
+	"mediakit/internal/subtitle"
 )
 
 // Movie is a chainable handle for a film.
 type Movie struct {
 
-	client *Client
+	deps Deps
 	id int
 
 	mu sync.Mutex
-	details *TitleDetails
+	details *meta.TitleDetails
 
 	shareKey string
 	shareErr error
 	shareSet bool
 
 	file *febbox.File
+
+}
+
+// NewMovie creates a Movie handle for the given Showbox id.
+func NewMovie(deps Deps, id int) *Movie {
+
+	return &Movie{deps: deps, id: id}
 
 }
 
@@ -35,7 +46,7 @@ func (m *Movie) ID() int {
 }
 
 // Details fetches and caches movie metadata.
-func (m *Movie) Details() (TitleDetails, error) {
+func (m *Movie) Details() (meta.TitleDetails, error) {
 
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -46,23 +57,11 @@ func (m *Movie) Details() (TitleDetails, error) {
 
 	}
 
-	raw, err := m.client.showbox.GetMovie(m.id)
+	details, err := m.deps.GetMovieDetails(m.id)
 
 	if err != nil {
 
-		return TitleDetails{}, err
-
-	}
-
-	details := parseTitleDetails(raw)
-
-	if details.IMDBId != "" {
-
-		if meta, err := m.client.imdb.Movie(details.IMDBId); err == nil {
-
-			enrichTitleDetails(&details, meta)
-
-		}
+		return meta.TitleDetails{}, err
 
 	}
 
@@ -84,7 +83,7 @@ func (m *Movie) ShareKey() (string, error) {
 
 	}
 
-	m.shareKey, m.shareErr = m.client.showbox.GetFebBoxID(m.id, showbox.BoxMovie)
+	m.shareKey, m.shareErr = m.deps.GetFebBoxID(m.id, 1) // 1 = showbox.BoxMovie
 	m.shareSet = true
 
 	return m.shareKey, m.shareErr
@@ -127,7 +126,7 @@ func (m *Movie) File() (*MediaFile, error) {
 }
 
 // Qualities lists available download renditions for this movie.
-func (m *Movie) Qualities() ([]Quality, error) {
+func (m *Movie) Qualities() ([]quality.Quality, error) {
 
 	file, err := m.resolveFile()
 
@@ -151,7 +150,7 @@ func (m *Movie) Qualities() ([]Quality, error) {
 
 	}
 
-	items, err := m.client.febbox.GetLinks(shareKey, file.FID, "")
+	items, err := m.deps.GetLinks(shareKey, file.FID, "")
 
 	if err != nil {
 
@@ -159,12 +158,12 @@ func (m *Movie) Qualities() ([]Quality, error) {
 
 	}
 
-	return toQualities(items), nil
+	return quality.ToQualities(items), nil
 
 }
 
 // Subtitles lists external subtitle files found alongside the movie video.
-func (m *Movie) Subtitles() ([]Subtitle, error) {
+func (m *Movie) Subtitles() ([]subtitle.Subtitle, error) {
 
 	shareKey, err := m.ShareKey()
 
@@ -182,7 +181,7 @@ func (m *Movie) Subtitles() ([]Subtitle, error) {
 
 	}
 
-	return collectSubtitles(shareKey, siblings, video), nil
+	return subtitle.CollectSubtitles(shareKey, siblings, video), nil
 
 }
 
@@ -210,7 +209,7 @@ func (m *Movie) listSiblingFiles() ([]febbox.File, *febbox.File, error) {
 
 	}
 
-	root, err := m.client.febbox.ListFiles(shareKey, 0, "")
+	root, err := m.deps.ListFiles(shareKey, 0, "")
 
 	if err != nil {
 
@@ -218,7 +217,7 @@ func (m *Movie) listSiblingFiles() ([]febbox.File, *febbox.File, error) {
 
 	}
 
-	direct := filesOnly(root)
+	direct := fileparser.FilesOnly(root)
 
 	if len(direct) > 0 {
 
@@ -226,7 +225,7 @@ func (m *Movie) listSiblingFiles() ([]febbox.File, *febbox.File, error) {
 
 	}
 
-	seasons := seasonsOnly(root)
+	seasons := fileparser.SeasonsOnly(root)
 
 	if len(seasons) == 0 {
 
@@ -234,7 +233,7 @@ func (m *Movie) listSiblingFiles() ([]febbox.File, *febbox.File, error) {
 
 	}
 
-	children, err := m.client.febbox.ListFiles(shareKey, seasons[0].FID, "")
+	children, err := m.deps.ListFiles(shareKey, seasons[0].FID, "")
 
 	if err != nil {
 
@@ -242,12 +241,12 @@ func (m *Movie) listSiblingFiles() ([]febbox.File, *febbox.File, error) {
 
 	}
 
-	return filesOnly(children), video, nil
+	return fileparser.FilesOnly(children), video, nil
 
 }
 
 // BestQuality picks the rendition closest to targetHeight pixels.
-func (m *Movie) BestQuality(targetHeight int) (*Quality, error) {
+func (m *Movie) BestQuality(targetHeight int) (*quality.Quality, error) {
 
 	qualities, err := m.Qualities()
 
@@ -257,7 +256,7 @@ func (m *Movie) BestQuality(targetHeight int) (*Quality, error) {
 
 	}
 
-	picked := PickQuality(qualities, targetHeight)
+	picked := quality.PickQuality(qualities, targetHeight)
 
 	if picked == nil {
 
@@ -272,7 +271,7 @@ func (m *Movie) BestQuality(targetHeight int) (*Quality, error) {
 // StreamURL returns the best progressive or HLS URL at the target resolution.
 func (m *Movie) StreamURL(targetHeight int) (string, error) {
 
-	quality, err := m.BestQuality(targetHeight)
+	q, err := m.BestQuality(targetHeight)
 
 	if err != nil {
 
@@ -280,12 +279,12 @@ func (m *Movie) StreamURL(targetHeight int) (string, error) {
 
 	}
 
-	return quality.URL, nil
+	return q.URL, nil
 
 }
 
 // Intro fetches intro timing from TheIntroDB for this movie.
-func (m *Movie) Intro(opts ...IntroOption) (*IntroData, error) {
+func (m *Movie) Intro(opts ...intro.Option) (*intro.Data, error) {
 
 	details, err := m.Details()
 
@@ -295,15 +294,9 @@ func (m *Movie) Intro(opts ...IntroOption) (*IntroData, error) {
 
 	}
 
-	cfg := introConfig{}
+	cfg := intro.ApplyOptions(opts)
 
-	for _, opt := range opts {
-
-		opt(&cfg)
-
-	}
-
-	query, err := introdb.QueryForTitle(details.TMDBId, details.IMDBId, 0, 0, cfg.durationMs)
+	query, err := intro.BuildQuery(details.TMDBId, details.IMDBId, 0, 0, intro.DurationMs(cfg))
 
 	if err != nil {
 
@@ -311,7 +304,7 @@ func (m *Movie) Intro(opts ...IntroOption) (*IntroData, error) {
 
 	}
 
-	record, err := m.client.intro.GetMedia(query)
+	record, err := m.deps.GetIntro(query)
 
 	if err != nil {
 
@@ -319,7 +312,7 @@ func (m *Movie) Intro(opts ...IntroOption) (*IntroData, error) {
 
 	}
 
-	return toIntroData(record), nil
+	return intro.FromRecord(record), nil
 
 }
 
@@ -334,9 +327,7 @@ func (m *Movie) SkipIntroFrom(position time.Duration) (time.Duration, error) {
 
 	}
 
-	record := toMediaRecord(data)
-
-	return introdb.IntroSkipTarget(record, position)
+	return introdb.IntroSkipTarget(intro.ToRecord(data), position)
 
 }
 
@@ -351,9 +342,7 @@ func (m *Movie) CreditsStart(duration time.Duration) (time.Duration, bool) {
 
 	}
 
-	record := toMediaRecord(data)
-
-	return introdb.CreditsStart(record, duration.Milliseconds())
+	return introdb.CreditsStart(intro.ToRecord(data), duration.Milliseconds())
 
 }
 
@@ -379,7 +368,7 @@ func (m *Movie) resolveFile() (*febbox.File, error) {
 
 	}
 
-	root, err := m.client.febbox.ListFiles(shareKey, 0, "")
+	root, err := m.deps.ListFiles(shareKey, 0, "")
 
 	if err != nil {
 
@@ -387,7 +376,7 @@ func (m *Movie) resolveFile() (*febbox.File, error) {
 
 	}
 
-	direct := filesOnly(root)
+	direct := fileparser.FilesOnly(root)
 
 	if len(direct) > 0 {
 
@@ -396,7 +385,7 @@ func (m *Movie) resolveFile() (*febbox.File, error) {
 
 	}
 
-	seasons := seasonsOnly(root)
+	seasons := fileparser.SeasonsOnly(root)
 
 	if len(seasons) == 0 {
 
@@ -404,7 +393,7 @@ func (m *Movie) resolveFile() (*febbox.File, error) {
 
 	}
 
-	children, err := m.client.febbox.ListFiles(shareKey, seasons[0].FID, "")
+	children, err := m.deps.ListFiles(shareKey, seasons[0].FID, "")
 
 	if err != nil {
 
@@ -412,7 +401,7 @@ func (m *Movie) resolveFile() (*febbox.File, error) {
 
 	}
 
-	files := filesOnly(children)
+	files := fileparser.FilesOnly(children)
 
 	if len(files) == 0 {
 

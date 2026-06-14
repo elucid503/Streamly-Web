@@ -7,17 +7,31 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"os"
 	"regexp"
 	"strconv"
 	"strings"
 	"time"
 )
 
-const (
-	subDLBaseURL = "https://api.subdl.com/api/v1"
-	subDLDownload = "https://dl.subdl.com"
-	subDLUserAgent = "Streamly-Web/1.0"
+const subDLUserAgent = "Streamly-Web/1.0"
+
+var (
+	subDLBaseURL = envOr("SUBDL_BASE_URL", "https://api.subdl.com/api/v1")
+	subDLDownload = envOr("SUBDL_DOWNLOAD_URL", "https://dl.subdl.com")
 )
+
+func envOr(key, fallback string) string {
+
+	if v := os.Getenv(key); v != "" {
+
+		return v
+
+	}
+
+	return fallback
+
+}
 
 var (
 	episodeTagRE = regexp.MustCompile(`(?i)(?:^|[.\s_-])s(\d{1,2})e(\d{1,2})(?:[.\s_-]|$)`)

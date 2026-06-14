@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -12,7 +13,22 @@ import (
 	"mediakit/internal/textutil"
 )
 
-const baseURL = "https://v3-cinemeta.strem.io/meta"
+var (
+	baseURL = envOr("CINEMETA_BASE_URL", "https://v3-cinemeta.strem.io/meta")
+	metahubBaseURL = envOr("METAHUB_BASE_URL", "https://episodes.metahub.space")
+)
+
+func envOr(key, fallback string) string {
+
+	if v := os.Getenv(key); v != "" {
+
+		return v
+
+	}
+
+	return fallback
+
+}
 
 // TitleMeta is display metadata keyed by an IMDb id.
 type TitleMeta struct {
@@ -439,7 +455,7 @@ func episodeStill(imdbID string, season, episode int) string {
 
 	}
 
-	return fmt.Sprintf("https://episodes.metahub.space/%s/%d/%d/w780.jpg", imdbID, season, episode)
+	return fmt.Sprintf("%s/%s/%d/%d/w780.jpg", strings.TrimRight(metahubBaseURL, "/"), imdbID, season, episode)
 
 }
 

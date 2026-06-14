@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -228,7 +229,15 @@ func (r *SubtitleResolver) proxyFebboxTracks(ctx context.Context, baseURL string
 
 		}
 
-		referer := "https://www.febbox.com/share/" + item.ShareKey()
+		febboxOrigin := os.Getenv("FEBBOX_BASE_URL")
+
+		if febboxOrigin == "" {
+
+			febboxOrigin = "https://www.febbox.com"
+
+		}
+
+		referer := febboxOrigin + "/share/" + item.ShareKey()
 
 		session, err := r.proxy.CreateSession(ctx, url, referer, false)
 

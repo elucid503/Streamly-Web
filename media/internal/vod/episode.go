@@ -1,11 +1,16 @@
-package mediakit
+package vod
 
 import (
 	"fmt"
 	"time"
 
 	"mediakit/internal/febbox"
+	"mediakit/internal/fileparser"
+	"mediakit/internal/intro"
 	"mediakit/internal/introdb"
+	"mediakit/internal/meta"
+	"mediakit/internal/quality"
+	"mediakit/internal/subtitle"
 )
 
 // Episode is a chainable handle for one episode of a TV show.
@@ -34,16 +39,6 @@ func (e *Episode) Number() int {
 
 }
 
-// EpisodeInfo is display metadata for one episode.
-type EpisodeInfo struct {
-
-	Title string
-	Description string
-
-	Poster string
-
-}
-
 // Info returns episode metadata from IMDb, falling back to Showbox fields.
 func (e *Episode) Info() (EpisodeInfo, error) {
 
@@ -59,16 +54,9 @@ func (e *Episode) Info() (EpisodeInfo, error) {
 
 	if details.IMDBId != "" {
 
-		if meta, ok := e.show.client.imdb.Episode(details.IMDBId, e.season, e.episode); ok {
+		if epMeta, ok := e.show.deps.GetEpisodeMeta(details.IMDBId, e.season, e.episode); ok {
 
-			info = EpisodeInfo{
-
-				Title: meta.Title,
-				Description: meta.Description,
-
-				Poster: meta.Poster,
-
-			}
+			info = epMeta
 
 		}
 
@@ -117,7 +105,7 @@ func (e *Episode) Title() (string, error) {
 
 }
 
-func (e *Episode) titleFallback(details TitleDetails) (string, error) {
+func (e *Episode) titleFallback(details meta.TitleDetails) (string, error) {
 
 	if details.EpisodeTitles != nil {
 
@@ -175,7 +163,7 @@ func (e *Episode) File() (*MediaFile, error) {
 }
 
 // Qualities lists available download renditions for this episode.
-func (e *Episode) Qualities() ([]Quality, error) {
+func (e *Episode) Qualities() ([]quality.Quality, error) {
 
 	file, err := e.resolveFile()
 
@@ -199,7 +187,7 @@ func (e *Episode) Qualities() ([]Quality, error) {
 
 	}
 
-	items, err := e.show.client.febbox.GetLinks(shareKey, file.FID, "")
+	items, err := e.show.deps.GetLinks(shareKey, file.FID, "")
 
 	if err != nil {
 
@@ -207,12 +195,12 @@ func (e *Episode) Qualities() ([]Quality, error) {
 
 	}
 
-	return toQualities(items), nil
+	return quality.ToQualities(items), nil
 
 }
 
 // Subtitles lists external subtitle files found alongside the episode video.
-func (e *Episode) Subtitles() ([]Subtitle, error) {
+func (e *Episode) Subtitles() ([]subtitle.Subtitle, error) {
 
 	shareKey, err := e.show.ShareKey()
 
@@ -230,7 +218,7 @@ func (e *Episode) Subtitles() ([]Subtitle, error) {
 
 	}
 
-	return collectSubtitles(shareKey, siblings, video), nil
+	return subtitle.CollectSubtitles(shareKey, siblings, video), nil
 
 }
 
@@ -258,7 +246,7 @@ func (e *Episode) listSiblingFiles() ([]febbox.File, *febbox.File, error) {
 
 	if err != nil {
 
-		root, listErr := e.show.client.febbox.ListFiles(shareKey, 0, "")
+		root, listErr := e.show.listFiles(shareKey, 0)
 
 		if listErr != nil {
 
@@ -266,11 +254,11 @@ func (e *Episode) listSiblingFiles() ([]febbox.File, *febbox.File, error) {
 
 		}
 
-		return filesOnly(root), video, nil
+		return fileparser.FilesOnly(root), video, nil
 
 	}
 
-	children, err := e.show.client.febbox.ListFiles(shareKey, folder.FID, "")
+	children, err := e.show.listFiles(shareKey, folder.FID)
 
 	if err != nil {
 
@@ -278,12 +266,12 @@ func (e *Episode) listSiblingFiles() ([]febbox.File, *febbox.File, error) {
 
 	}
 
-	return filesOnly(children), video, nil
+	return fileparser.FilesOnly(children), video, nil
 
 }
 
 // BestQuality picks the rendition closest to targetHeight pixels.
-func (e *Episode) BestQuality(targetHeight int) (*Quality, error) {
+func (e *Episode) BestQuality(targetHeight int) (*quality.Quality, error) {
 
 	qualities, err := e.Qualities()
 
@@ -293,7 +281,7 @@ func (e *Episode) BestQuality(targetHeight int) (*Quality, error) {
 
 	}
 
-	picked := PickQuality(qualities, targetHeight)
+	picked := quality.PickQuality(qualities, targetHeight)
 
 	if picked == nil {
 
@@ -308,7 +296,7 @@ func (e *Episode) BestQuality(targetHeight int) (*Quality, error) {
 // StreamURL returns the best progressive or HLS URL at the target resolution.
 func (e *Episode) StreamURL(targetHeight int) (string, error) {
 
-	quality, err := e.BestQuality(targetHeight)
+	q, err := e.BestQuality(targetHeight)
 
 	if err != nil {
 
@@ -316,12 +304,12 @@ func (e *Episode) StreamURL(targetHeight int) (string, error) {
 
 	}
 
-	return quality.URL, nil
+	return q.URL, nil
 
 }
 
 // Intro fetches intro timing from TheIntroDB for this episode.
-func (e *Episode) Intro(opts ...IntroOption) (*IntroData, error) {
+func (e *Episode) Intro(opts ...intro.Option) (*intro.Data, error) {
 
 	details, err := e.show.Details()
 
@@ -331,15 +319,9 @@ func (e *Episode) Intro(opts ...IntroOption) (*IntroData, error) {
 
 	}
 
-	cfg := introConfig{}
+	cfg := intro.ApplyOptions(opts)
 
-	for _, opt := range opts {
-
-		opt(&cfg)
-
-	}
-
-	query, err := introdb.QueryForTitle(details.TMDBId, details.IMDBId, e.season, e.episode, cfg.durationMs)
+	query, err := intro.BuildQuery(details.TMDBId, details.IMDBId, e.season, e.episode, intro.DurationMs(cfg))
 
 	if err != nil {
 
@@ -347,7 +329,7 @@ func (e *Episode) Intro(opts ...IntroOption) (*IntroData, error) {
 
 	}
 
-	record, err := e.show.client.intro.GetMedia(query)
+	record, err := e.show.deps.GetIntro(query)
 
 	if err != nil {
 
@@ -355,7 +337,7 @@ func (e *Episode) Intro(opts ...IntroOption) (*IntroData, error) {
 
 	}
 
-	return toIntroData(record), nil
+	return intro.FromRecord(record), nil
 
 }
 
@@ -370,9 +352,7 @@ func (e *Episode) SkipIntroFrom(position time.Duration) (time.Duration, error) {
 
 	}
 
-	record := toMediaRecord(data)
-
-	return introdb.IntroSkipTarget(record, position)
+	return introdb.IntroSkipTarget(intro.ToRecord(data), position)
 
 }
 
@@ -387,9 +367,7 @@ func (e *Episode) CreditsStart(duration time.Duration) (time.Duration, bool) {
 
 	}
 
-	record := toMediaRecord(data)
-
-	return introdb.CreditsStart(record, duration.Milliseconds())
+	return introdb.CreditsStart(intro.ToRecord(data), duration.Milliseconds())
 
 }
 
@@ -416,7 +394,7 @@ func (e *Episode) resolveFile() (*febbox.File, error) {
 	if err != nil {
 
 		// Flat listing fallback when no season folders exist.
-		root, listErr := e.show.client.febbox.ListFiles(shareKey, 0, "")
+		root, listErr := e.show.listFiles(shareKey, 0)
 
 		if listErr != nil {
 
@@ -424,7 +402,7 @@ func (e *Episode) resolveFile() (*febbox.File, error) {
 
 		}
 
-		for _, item := range parseEpisodes(filesOnly(root), e.season) {
+		for _, item := range fileparser.ParseEpisodes(fileparser.FilesOnly(root), e.season) {
 
 			if item.Number == e.episode {
 
@@ -439,7 +417,7 @@ func (e *Episode) resolveFile() (*febbox.File, error) {
 
 	}
 
-	children, err := e.show.client.febbox.ListFiles(shareKey, folder.FID, "")
+	children, err := e.show.listFiles(shareKey, folder.FID)
 
 	if err != nil {
 
@@ -447,7 +425,7 @@ func (e *Episode) resolveFile() (*febbox.File, error) {
 
 	}
 
-	for _, item := range parseEpisodes(filesOnly(children), e.season) {
+	for _, item := range fileparser.ParseEpisodes(fileparser.FilesOnly(children), e.season) {
 
 		if item.Number == e.episode {
 

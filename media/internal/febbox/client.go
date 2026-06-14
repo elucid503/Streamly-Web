@@ -5,12 +5,25 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"regexp"
 	"strings"
 	"time"
 )
 
-const baseURL = "https://www.febbox.com"
+var baseURL = envOr("FEBBOX_BASE_URL", "https://www.febbox.com")
+
+func envOr(key, fallback string) string {
+
+	if v := os.Getenv(key); v != "" {
+
+		return v
+
+	}
+
+	return fallback
+
+}
 
 const browserUA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 " + "(KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36"
 
