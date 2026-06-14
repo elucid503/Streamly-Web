@@ -10,11 +10,9 @@ import (
 )
 
 type StreamHandler struct {
-
-	media *services.MediaService
-	proxy *services.ProxyService
+	media     *services.MediaService
+	proxy     *services.ProxyService
 	subtitles *services.SubtitleResolver
-
 }
 
 func NewStreamHandler(media *services.MediaService, proxy *services.ProxyService, subtitles *services.SubtitleResolver) *StreamHandler {
@@ -332,12 +330,26 @@ func (h *StreamHandler) LiveStream(c *gin.Context) {
 
 	}
 
+	channel := stream.Channel
+
+	if cached, ok := h.media.LiveChannel(daddyID); ok {
+
+		c.JSON(http.StatusOK, gin.H{
+
+			"proxyUrl": baseURL(c) + session.ProxyPath,
+			"isHls":    true,
+			"channel":  cached,
+		})
+
+		return
+
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 
 		"proxyUrl": baseURL(c) + session.ProxyPath,
 		"isHls":    true,
-		"channel":  stream.Channel,
-
+		"channel":  channel,
 	})
 
 }

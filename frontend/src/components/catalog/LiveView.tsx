@@ -4,17 +4,19 @@ import { ContentRow } from "@/components/catalog/ContentRow";
 import { CachedImage } from "@/components/ui/CachedImage";
 
 import { cn } from "@/lib/utils";
-import type { LiveChannel } from "@/lib/types";
+import type { FavoriteItem, LiveChannel } from "@/lib/types";
 
 import { Component } from "react";
 import { motion } from "framer-motion";
-import { Radio } from "lucide-react";
+import { Radio, Star } from "lucide-react";
 
 interface LiveViewProps {
 
   onSelect: (channel: LiveChannel) => void;
+  onFavoriteToggle: (channel: LiveChannel | FavoriteItem) => void;
 
   searchQuery: string;
+  favorites: FavoriteItem[];
 
 }
 
@@ -96,46 +98,145 @@ export class LiveView extends Component<LiveViewProps, LiveViewState> {
 
   };
 
+  isFavorite = (daddyId: string) => {
+
+    return this.props.favorites.some((item) => item.kind === "live" && item.channelId === daddyId);
+
+  };
+
+  favoriteAsChannel = (item: FavoriteItem): LiveChannel => ({
+
+    id: item.channelId ?? item.id,
+    daddyId: item.channelId ?? item.id,
+    name: item.title,
+    slug: "",
+    logo: item.poster,
+    country: "",
+    category: item.category ?? "",
+
+  });
+
   renderChannel = (channel: LiveChannel) => {
 
-    const { onSelect } = this.props;
+    const { onSelect, onFavoriteToggle } = this.props;
+
+    const favorite = this.isFavorite(channel.daddyId);
 
     return (
 
-      <motion.button className="group flex w-[140px] flex-shrink-0 flex-col items-center gap-2 sm:w-[160px]"
+      <motion.div className="group relative flex w-[140px] flex-shrink-0 flex-col items-center gap-2 sm:w-[160px]"
 
         key={channel.daddyId}
-        type="button"
-
-        onClick={() => onSelect(channel)}
         whileHover={{ y: -2 }}
 
       >
-        <CachedImage className="h-20 w-20 border border-border-subtle bg-surface-raised transition-colors group-hover:border-border sm:h-24 sm:w-24"
 
-          src={channel.logo}
-          alt={channel.name}
+        <button className="flex w-full flex-col items-center gap-2" type="button" onClick={() => onSelect(channel)}>
 
-          imgClassName="object-contain p-3"
+          <CachedImage className="h-20 w-20 border border-border-subtle bg-surface-raised transition-colors group-hover:border-border sm:h-24 sm:w-24"
 
-          rounded="rounded-full"
-          fallback={<Radio size={24} className="text-foreground-faint" />}
+            src={channel.logo}
+            alt={channel.name}
 
-        />
+            imgClassName="object-contain p-3"
 
-        <p className="line-clamp-2 text-center text-xs font-medium text-foreground group-hover:text-accent">
+            rounded="rounded-full"
+            fallback={<Radio size={24} className="text-foreground-faint" />}
 
-          {channel.name}
+          />
 
-        </p>
+          <p className="line-clamp-2 text-center text-xs font-medium text-foreground group-hover:text-accent">
 
-        {channel.category && (
+            {channel.name}
 
-          <p className="text-[10px] text-foreground-faint">{channel.category}</p>
+          </p>
 
-        )}
+          {channel.category && (
 
-      </motion.button>
+            <p className="text-[10px] text-foreground-faint">{channel.category}</p>
+
+          )}
+
+        </button>
+
+        <button className={cn(
+
+            "absolute right-6 top-0 flex h-7 w-7 items-center justify-center rounded-full border border-white/15 bg-black/55 text-white shadow-sm backdrop-blur transition-colors hover:bg-black/75",
+            favorite && "text-accent"
+
+          )}
+
+          type="button"
+          title={favorite ? "Remove from favorites" : "Add to favorites"}
+          onClick={() => onFavoriteToggle(channel)}
+
+        >
+
+          <Star size={14} fill={favorite ? "currentColor" : "none"} />
+
+        </button>
+
+      </motion.div>
+
+    );
+
+  };
+
+  renderGridChannel = (channel: LiveChannel) => {
+
+    const favorite = this.isFavorite(channel.daddyId);
+
+    return (
+
+      <div key={channel.daddyId} className="relative">
+
+        <button onClick={() => this.props.onSelect(channel)}
+          className={cn(
+            "flex h-full w-full items-center gap-3 rounded-md border border-border-subtle bg-surface-raised p-3 pr-10 text-left transition-colors hover:border-border hover:bg-surface-overlay"
+          )}
+        >
+          <CachedImage className="h-10 w-10 flex-shrink-0 bg-surface-overlay"
+
+            src={channel.logo}
+            alt={channel.name}
+
+            imgClassName="object-contain p-1.5"
+            rounded="rounded-full"
+
+            fallback={<Radio size={14} className="text-foreground-faint" />}
+
+          />
+
+          <div className="min-w-0">
+
+            <p className="truncate text-xs font-medium">{channel.name}</p>
+
+            <p className="truncate text-[10px] text-foreground-faint">
+              {channel.country}
+            </p>
+
+          </div>
+
+        </button>
+
+        <button className={cn(
+
+            "absolute right-2 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full text-foreground-muted transition-colors hover:bg-surface-overlay hover:text-foreground",
+            favorite && "text-accent"
+
+          )}
+
+          type="button"
+          title={favorite ? "Remove from favorites" : "Add to favorites"}
+          onClick={() => this.props.onFavoriteToggle(channel)}
+
+        >
+
+          <Star size={14} fill={favorite ? "currentColor" : "none"} />
+
+        </button>
+
+      </div>
 
     );
 
@@ -143,10 +244,11 @@ export class LiveView extends Component<LiveViewProps, LiveViewState> {
 
   render() {
 
-    const { searchQuery } = this.props;
+    const { searchQuery, favorites } = this.props;
 
     const { popular, all, searchResults, loading } = this.state;
 
+    const favoriteChannels = favorites.filter((item) => item.kind === "live");
     const showing = searchQuery.trim() ? searchResults : null;
 
     return (
@@ -165,6 +267,16 @@ export class LiveView extends Component<LiveViewProps, LiveViewState> {
 
             <>
 
+            {favoriteChannels.length > 0 && (
+
+              <ContentRow title="Favorites">
+
+                {favoriteChannels.map((item) => this.renderChannel(this.favoriteAsChannel(item)))}
+
+              </ContentRow>
+
+            )}
+
             <ContentRow title="Popular Channels" loading={loading}>
 
               {popular.map((ch) => this.renderChannel(ch))}
@@ -181,40 +293,9 @@ export class LiveView extends Component<LiveViewProps, LiveViewState> {
 
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
 
-                {all.map((channel) => (
+                {all.map((channel) => this.renderGridChannel(channel))}
 
-                  <button key={channel.daddyId} onClick={() => this.props.onSelect(channel)}
-                    className={cn(
-                      "flex items-center gap-3 rounded-md border border-border-subtle bg-surface-raised p-3 text-left transition-colors hover:border-border hover:bg-surface-overlay"
-                    )}
-                  >
-                    <CachedImage className="h-10 w-10 flex-shrink-0 bg-surface-overlay"
-
-                      src={channel.logo}
-                      alt={channel.name}
-
-                      imgClassName="object-contain p-1.5"
-                      rounded="rounded-full"
-
-                      fallback={<Radio size={14} className="text-foreground-faint" />}
-
-                    />
-
-                    <div className="min-w-0">
-
-                      <p className="truncate text-xs font-medium">{channel.name}</p>
-
-                      <p className="truncate text-[10px] text-foreground-faint">
-                        {channel.country}
-                      </p>
-
-                    </div>
-
-                  </button>
-
-                ))}
-
-                </div>
+              </div>
 
             </section>
 

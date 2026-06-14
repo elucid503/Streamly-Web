@@ -10,10 +10,8 @@ import (
 )
 
 type DB struct {
-
 	client *mongo.Client
-	db *mongo.Database
-
+	db     *mongo.Database
 }
 
 func Connect(uri string) (*DB, error) {
@@ -80,6 +78,12 @@ func (d *DB) History() *mongo.Collection {
 
 }
 
+func (d *DB) Favorites() *mongo.Collection {
+
+	return d.db.Collection("favorites")
+
+}
+
 func (d *DB) ProxyTokens() *mongo.Collection {
 
 	return d.db.Collection("proxy_tokens")
@@ -89,13 +93,11 @@ func (d *DB) ProxyTokens() *mongo.Collection {
 func (d *DB) ensureIndexes(ctx context.Context) error {
 
 	indexes := []struct {
-
 		coll *mongo.Collection
 
 		keys bson.D
 
 		uniq bool
-
 	}{
 
 		{d.Users(), bson.D{{Key: "email", Value: 1}}, true},
@@ -108,10 +110,13 @@ func (d *DB) ensureIndexes(ctx context.Context) error {
 
 		{d.History(), bson.D{{Key: "userId", Value: 1}, {Key: "updatedAt", Value: -1}}, false},
 
+		{d.Favorites(), bson.D{{Key: "userId", Value: 1}, {Key: "kind", Value: 1}, {Key: "mediaId", Value: 1}, {Key: "channelId", Value: 1}}, true},
+
+		{d.Favorites(), bson.D{{Key: "userId", Value: 1}, {Key: "createdAt", Value: -1}}, false},
+
 		{d.ProxyTokens(), bson.D{{Key: "token", Value: 1}}, true},
 
 		{d.ProxyTokens(), bson.D{{Key: "expiresAt", Value: 1}}, false},
-
 	}
 
 	for _, idx := range indexes {
@@ -134,10 +139,9 @@ func (d *DB) ensureIndexes(ctx context.Context) error {
 
 	_, _ = d.ProxyTokens().Indexes().CreateOne(ctx, mongo.IndexModel{
 
-		Keys:    bson.D{{Key: "expiresAt", Value: 1}},
+		Keys: bson.D{{Key: "expiresAt", Value: 1}},
 
 		Options: options.Index().SetExpireAfterSeconds(0),
-
 	})
 
 	return nil

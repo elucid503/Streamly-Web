@@ -33,6 +33,10 @@ func handleServiceError(c *gin.Context, err error) {
 
 		writeError(c, http.StatusForbidden, "invalid or expired access code")
 
+	case errors.Is(err, services.ErrInvalidFavorite):
+
+		writeError(c, http.StatusBadRequest, "invalid favorite")
+
 	case errors.Is(err, services.ErrAccessCodeExhausted):
 
 		writeError(c, http.StatusForbidden, "access code has reached its usage limit")

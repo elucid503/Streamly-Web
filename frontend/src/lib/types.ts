@@ -151,6 +151,23 @@ export interface WatchHistoryItem {
 
 }
 
+export interface FavoriteItem {
+
+  id: string;
+  kind: "movie" | "show" | "live";
+  mediaId: number;
+  channelId?: string;
+
+  title: string;
+  poster: string;
+  year?: number;
+  rating?: string;
+  category?: string;
+
+  createdAt: string;
+
+}
+
 export interface AccessCode {
 
   id: string;

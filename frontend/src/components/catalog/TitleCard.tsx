@@ -4,6 +4,7 @@ import { cn, progressPercent } from "@/lib/utils";
 
 import { Component } from "react";
 import { motion } from "framer-motion";
+import { Star } from "lucide-react";
 
 interface TitleCardProps {
 
@@ -15,8 +16,10 @@ interface TitleCardProps {
   year?: number | string;
 
   onClick: () => void;
+  onFavoriteToggle?: () => void;
 
   compact?: boolean;
+  favorite?: boolean;
 
   progressMs?: number;
   durationMs?: number;
@@ -28,73 +31,99 @@ export class TitleCard extends Component<TitleCardProps> {
 
   render() {
 
-    const { title, poster, year, onClick, compact, progressMs, durationMs, progressLabel } =
+    const { title, poster, year, onClick, onFavoriteToggle, compact, favorite, progressMs, durationMs, progressLabel } =
       this.props;
 
     const progress = progressPercent(progressMs, durationMs);
 
     return (
 
-      <motion.button className={cn(
+      <motion.div className={cn(
 
-          "group flex-shrink-0 text-left",
+          "group relative flex-shrink-0 text-left",
           compact ? "w-[120px] sm:w-[140px]" : "w-[140px] sm:w-[160px]"
 
         )}
-
-        type="button"
-
-        onClick={onClick}
         whileHover={{ y: -4 }}
         transition={{ type: "spring", stiffness: 400, damping: 25 }}
 
       >
 
-        <div className="relative overflow-hidden rounded-md border border-border-subtle bg-surface-raised transition-colors group-hover:border-border">
+        <button className="block w-full text-left" type="button" onClick={onClick}>
 
-          <PosterImage
+          <div className="relative overflow-hidden rounded-md border border-border-subtle bg-surface-raised transition-colors group-hover:border-border">
 
-            src={poster}
-            alt={title}
-            className={cn("w-full", compact ? "aspect-[2/3] h-auto" : "aspect-[2/3]")}
+            <PosterImage
 
-          />
+              src={poster}
+              alt={title}
+              className={cn("w-full", compact ? "aspect-[2/3] h-auto" : "aspect-[2/3]")}
 
-          {progress > 2 && (
+            />
 
-            <div className="absolute inset-x-2 bottom-2 h-1 overflow-hidden rounded-full bg-black/45 backdrop-blur-sm">
+            {progress > 2 && (
 
-              <motion.div className="h-full rounded-full bg-foreground"
+              <div className="absolute inset-x-2 bottom-2 h-1 overflow-hidden rounded-full bg-black/45 backdrop-blur-sm">
 
-                initial={{ width: 0 }}
-                animate={{ width: `${progress}%` }}
-                transition={{ duration: 0.35, ease: "easeOut" }}
+                <motion.div className="h-full rounded-full bg-foreground"
 
-              />
+                  initial={{ width: 0 }}
+                  animate={{ width: `${progress}%` }}
+                  transition={{ duration: 0.35, ease: "easeOut" }}
 
-            </div>
+                />
 
-          )}
+              </div>
 
-        </div>
+            )}
 
-        <p className="mt-2 line-clamp-2 text-xs font-medium text-foreground transition-colors group-hover:text-accent">
+          </div>
 
-          {title}
+          <p className="mt-2 line-clamp-2 text-xs font-medium text-foreground transition-colors group-hover:text-accent">
 
-        </p>
+            {title}
 
-        {progressLabel ? (
+          </p>
 
-          <p className="text-xs text-foreground-muted">{progressLabel}</p>
+          {progressLabel ? (
 
-        ) : year ? (
+            <p className="text-xs text-foreground-muted">{progressLabel}</p>
 
-          <p className="text-xs text-foreground-muted">{year}</p>
+          ) : year ? (
 
-        ) : null}
+            <p className="text-xs text-foreground-muted">{year}</p>
 
-      </motion.button>
+          ) : null}
+
+        </button>
+
+        {onFavoriteToggle && (
+
+          <button className={cn(
+
+              "absolute right-2 top-2 z-10 flex h-8 w-8 items-center justify-center rounded-full border border-white/15 bg-black/55 text-white shadow-sm backdrop-blur transition-colors hover:bg-black/75",
+              favorite && "text-accent"
+
+            )}
+
+            type="button"
+            title={favorite ? "Remove from favorites" : "Add to favorites"}
+            onClick={(event) => {
+
+              event.stopPropagation();
+              onFavoriteToggle();
+
+            }}
+
+          >
+
+            <Star size={15} fill={favorite ? "currentColor" : "none"} />
+
+          </button>
+
+        )}
+
+      </motion.div>
 
     );
 

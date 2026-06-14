@@ -18,10 +18,8 @@ import (
 )
 
 const (
-
-	titleDetailsTTL = 6 * time.Hour
+	titleDetailsTTL        = 6 * time.Hour
 	titleDetailsMaxEntries = 1024
-
 )
 
 // Type aliases so callers (handlers, subtitles, proxy) need not import sub-packages.
@@ -35,101 +33,85 @@ type EpisodeDTO = vod.EpisodeDTO
 
 // MediaService is the central media orchestrator.
 type MediaService struct {
-
 	client *mediakit.Client
-	cfg *config.Config
+	cfg    *config.Config
 
 	upstream *upstream.Throttle
-	catalog *catalog.Cache
-	search *search.Cache
-	stream *stream.Cache
-	vod *vod.Cache
+	catalog  *catalog.Cache
+	search   *search.Cache
+	stream   *stream.Cache
+	vod      *vod.Cache
 
-	detailsMu sync.RWMutex
+	detailsMu    sync.RWMutex
 	detailsGroup singleflight.Group
 	movieDetails map[int]titleDetailsCacheEntry
-	showDetails map[int]titleDetailsCacheEntry
-
+	showDetails  map[int]titleDetailsCacheEntry
 }
 
 // TitleDetailsDTO is user-facing metadata for a movie or show.
 type TitleDetailsDTO struct {
-
-	ID int `json:"id"`
+	ID   int    `json:"id"`
 	Kind string `json:"kind"`
 
 	Title string `json:"title"`
-	Year string `json:"year"`
+	Year  string `json:"year"`
 
 	Poster string `json:"poster"`
 	Banner string `json:"banner,omitempty"`
 
 	Description string `json:"description"`
-	Rating string `json:"rating"`
-
+	Rating      string `json:"rating"`
 }
 
 type titleDetailsCacheEntry struct {
-
-	details *TitleDetailsDTO
+	details   *TitleDetailsDTO
 	fetchedAt time.Time
-
 }
 
 // QualityDTO is one downloadable rendition of a video file.
 type QualityDTO struct {
+	Label  string `json:"label"`
+	Height int    `json:"height"`
+	IsHLS  bool   `json:"isHls"`
 
-	Label string `json:"label"`
-	Height int `json:"height"`
-	IsHLS bool `json:"isHls"`
-
-	URL string `json:"url"`
+	URL      string `json:"url"`
 	ProxyURL string `json:"proxyUrl,omitempty"`
-
 }
 
 // StreamDTO is the resolved streaming payload returned to clients.
 type StreamDTO struct {
-
 	Qualities []QualityDTO `json:"qualities"`
 
-	URL string `json:"url"`
+	URL      string `json:"url"`
 	ProxyURL string `json:"proxyUrl,omitempty"`
 
-	IsHLS bool `json:"isHls"`
-	SelectedHeight int `json:"selectedHeight"`
-
+	IsHLS          bool `json:"isHls"`
+	SelectedHeight int  `json:"selectedHeight"`
 }
 
 // SubtitleDTO describes an external subtitle track.
 type SubtitleDTO struct {
-
-	ID string `json:"id"`
-	Label string `json:"label"`
+	ID       string `json:"id"`
+	Label    string `json:"label"`
 	Language string `json:"language"`
-	Format string `json:"format"`
+	Format   string `json:"format"`
 
 	ProxyURL string `json:"proxyUrl"`
-	Source string `json:"source,omitempty"`
-
+	Source   string `json:"source,omitempty"`
 }
 
 // IntroDTO carries skip-intro timing offsets.
 type IntroDTO struct {
-
-	IntroStartMs *int64 `json:"introStartMs,omitempty"`
-	IntroEndMs *int64 `json:"introEndMs,omitempty"`
+	IntroStartMs   *int64 `json:"introStartMs,omitempty"`
+	IntroEndMs     *int64 `json:"introEndMs,omitempty"`
 	CreditsStartMs *int64 `json:"creditsStartMs,omitempty"`
-
 }
 
 // NextEpisodeDTO identifies the episode after the current one.
 type NextEpisodeDTO struct {
-
-	Season int `json:"season"`
-	Episode int `json:"episode"`
-	Title string `json:"title"`
-
+	Season  int    `json:"season"`
+	Episode int    `json:"episode"`
+	Title   string `json:"title"`
 }
 
 func NewMediaService(cfg *config.Config) *MediaService {
@@ -151,17 +133,16 @@ func NewMediaService(cfg *config.Config) *MediaService {
 	return &MediaService{
 
 		client: client,
-		cfg: cfg,
+		cfg:    cfg,
 
 		upstream: throttle,
-		catalog: cat,
-		search: search.New(client, throttle, cat.Snapshot, cfg.CatalogCacheTTL),
-		stream: stream.New(client),
-		vod: vod.New(client, throttle),
+		catalog:  cat,
+		search:   search.New(client, throttle, cat.Snapshot, cfg.CatalogCacheTTL),
+		stream:   stream.New(client),
+		vod:      vod.New(client, throttle),
 
 		movieDetails: make(map[int]titleDetailsCacheEntry),
-		showDetails: make(map[int]titleDetailsCacheEntry),
-
+		showDetails:  make(map[int]titleDetailsCacheEntry),
 	}
 
 }
@@ -318,13 +299,12 @@ func (s *MediaService) EpisodeDetails(showID, season, episode int) (*EpisodeDTO,
 
 	return &EpisodeDTO{
 
-		Season: season,
+		Season:  season,
 		Episode: episode,
 
-		Title: info.Title,
+		Title:       info.Title,
 		Description: info.Description,
-		Poster: info.Poster,
-
+		Poster:      info.Poster,
 	}, nil
 
 }
@@ -467,10 +447,9 @@ func (s *MediaService) NextEpisode(showID, season, episode int) (*NextEpisodeDTO
 
 	return &NextEpisodeDTO{
 
-		Season: next.SeasonNumber(),
+		Season:  next.SeasonNumber(),
 		Episode: next.Number(),
-		Title: title,
-
+		Title:   title,
 	}, nil
 
 }
@@ -493,6 +472,12 @@ func (s *MediaService) LiveSearch(query string, limit int) ([]LiveChannelDTO, er
 
 }
 
+func (s *MediaService) LiveChannel(daddyID string) (LiveChannelDTO, bool) {
+
+	return s.catalog.LiveChannel(daddyID)
+
+}
+
 func (s *MediaService) ResolveLiveStream(daddyID string) (*mediakit.LiveStream, error) {
 
 	return s.client.Channel(daddyID).Resolve()
@@ -508,11 +493,10 @@ func QualitiesToDTO(items []mediakit.Quality) []QualityDTO {
 
 		out = append(out, QualityDTO{
 
-			Label: q.Label,
+			Label:  q.Label,
 			Height: q.Height,
-			IsHLS: q.IsHLS,
-			URL: q.URL,
-
+			IsHLS:  q.IsHLS,
+			URL:    q.URL,
 		})
 
 	}
@@ -532,11 +516,10 @@ func BuildStreamDTO(qualities []mediakit.Quality, best *mediakit.Quality) *Strea
 
 	return &StreamDTO{
 
-		Qualities: QualitiesToDTO(qualities),
-		URL: best.URL,
-		IsHLS: best.IsHLS || mediakit.IsHLSURL(best.URL),
+		Qualities:      QualitiesToDTO(qualities),
+		URL:            best.URL,
+		IsHLS:          best.IsHLS || mediakit.IsHLSURL(best.URL),
 		SelectedHeight: best.Height,
-
 	}
 
 }
@@ -545,18 +528,17 @@ func titleDetailsToDTO(id int, kind string, details mediakit.TitleDetails) *Titl
 
 	return &TitleDetailsDTO{
 
-		ID: id,
+		ID:   id,
 		Kind: kind,
 
 		Title: details.Title,
-		Year: details.Year,
+		Year:  details.Year,
 
 		Poster: details.Poster,
 		Banner: details.Banner,
 
 		Description: details.Description,
-		Rating: details.IMDBRating,
-
+		Rating:      details.IMDBRating,
 	}
 
 }
@@ -589,9 +571,8 @@ func (s *MediaService) setTitleDetails(movie bool, id int, details *TitleDetails
 
 	entry := titleDetailsCacheEntry{
 
-		details: cloneTitleDetails(details),
+		details:   cloneTitleDetails(details),
 		fetchedAt: time.Now(),
-
 	}
 
 	if movie {

@@ -14,23 +14,21 @@ import (
 
 const (
 	titlesPerCategory = 24
-	trendingLimit = 10
-	livePopularLimit = 24
+	trendingLimit     = 10
+	livePopularLimit  = 24
 )
 
 // Cache maintains a periodically refreshed in-memory catalog snapshot.
 type Cache struct {
-
-	client *mediakit.Client
+	client   *mediakit.Client
 	throttle *upstream.Throttle
 
-	cacheTTL time.Duration
+	cacheTTL  time.Duration
 	cacheFile string
 
-	mu sync.RWMutex
-	snap Snapshot
+	mu     sync.RWMutex
+	snap   Snapshot
 	cancel context.CancelFunc
-
 }
 
 // New builds a Cache. cacheTTL controls the refresh interval; cacheFile is the
@@ -39,19 +37,17 @@ func New(client *mediakit.Client, throttle *upstream.Throttle, cacheTTL time.Dur
 
 	return &Cache{
 
-		client: client,
+		client:   client,
 		throttle: throttle,
 
-		cacheTTL: cacheTTL,
+		cacheTTL:  cacheTTL,
 		cacheFile: cacheFile,
 
 		snap: Snapshot{
 
 			movieCategoryTitles: make(map[string][]SearchResultDTO),
-			showCategoryTitles: make(map[string][]SearchResultDTO),
-
+			showCategoryTitles:  make(map[string][]SearchResultDTO),
 		},
-
 	}
 
 }
@@ -198,6 +194,24 @@ func (c *Cache) LiveSearch(query string, limit int) []LiveChannelDTO {
 
 }
 
+func (c *Cache) LiveChannel(daddyID string) (LiveChannelDTO, bool) {
+
+	snap := c.Snapshot()
+
+	for _, channel := range snap.liveChannels {
+
+		if channel.DaddyID == daddyID || channel.ID == daddyID {
+
+			return channel, true
+
+		}
+
+	}
+
+	return LiveChannelDTO{}, false
+
+}
+
 func (c *Cache) refresh() {
 
 	start := time.Now()
@@ -211,8 +225,7 @@ func (c *Cache) refresh() {
 	next := Snapshot{
 
 		movieCategoryTitles: make(map[string][]SearchResultDTO),
-		showCategoryTitles: make(map[string][]SearchResultDTO),
-
+		showCategoryTitles:  make(map[string][]SearchResultDTO),
 	}
 
 	var errs []string

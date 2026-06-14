@@ -1,4 +1,4 @@
-import type { AccessCode, Category, Episode, IntroInfo, LiveChannel, NextEpisode, SearchHit, Season, StreamInfo, SubtitleTrack, TitleDetails, User, UserSettings, WatchHistoryItem, } from "@/lib/types";
+import type { AccessCode, Category, Episode, FavoriteItem, IntroInfo, LiveChannel, NextEpisode, SearchHit, Season, StreamInfo, SubtitleTrack, TitleDetails, User, UserSettings, WatchHistoryItem, } from "@/lib/types";
 
 export class ApiError extends Error {
 
@@ -126,6 +126,29 @@ export const api = {
   deleteHistory(id: string) {
 
     return request<void>(`/api/history/${id}`, { method: "DELETE" });
+
+  },
+
+  getFavorites() {
+
+    return request<FavoriteItem[]>("/api/favorites");
+
+  },
+
+  upsertFavorite(item: Partial<FavoriteItem> & { kind: string; mediaId: number; title: string }) {
+
+    return request<FavoriteItem>("/api/favorites", {
+
+      method: "POST",
+      body: JSON.stringify(item),
+
+    });
+
+  },
+
+  deleteFavorite(kind: FavoriteItem["kind"], key: number | string) {
+
+    return request<void>(`/api/favorites/${kind}/${encodeURIComponent(String(key))}`, { method: "DELETE" });
 
   },
 

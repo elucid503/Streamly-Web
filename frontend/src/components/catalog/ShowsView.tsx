@@ -4,15 +4,17 @@ import { ContentRow } from "@/components/catalog/ContentRow";
 import { TitleCard } from "@/components/catalog/TitleCard";
 
 import { continueWatching, latestTitleProgress, progressLabel } from "@/lib/history";
-import type { Category, SearchHit, WatchHistoryItem } from "@/lib/types";
+import type { Category, FavoriteItem, SearchHit, WatchHistoryItem } from "@/lib/types";
 
 import { Component } from "react";
 
 interface ShowsViewProps {
 
   onSelect: (id: number, kind: "movie" | "show") => void;
+  onFavoriteToggle: (item: FavoriteItem | SearchHit) => void;
 
   history: WatchHistoryItem[];
+  favorites: FavoriteItem[];
 
 }
 
@@ -141,11 +143,13 @@ export class ShowsView extends Component<ShowsViewProps, ShowsViewState> {
 
   render() {
 
-    const { onSelect, history } = this.props;
+    const { onSelect, onFavoriteToggle, history, favorites } = this.props;
 
     const { categories, rows, trending, showPosters, loading } = this.state;
 
     const resumeItems = continueWatching(history, "show");
+    const favoriteShows = favorites.filter((item) => item.kind === "show");
+    const favoriteIds = new Set(favoriteShows.map((item) => item.mediaId));
 
     return (
 
@@ -180,6 +184,45 @@ export class ShowsView extends Component<ShowsViewProps, ShowsViewState> {
 
         )}
 
+        {favoriteShows.length > 0 && (
+
+          <ContentRow title="Favorites">
+
+            {favoriteShows.map((item) => {
+
+              const progress = latestTitleProgress(history, "show", item.mediaId);
+
+              return (
+
+                <TitleCard
+
+                  key={item.id}
+                  id={item.mediaId}
+                  kind="show"
+
+                  title={item.title}
+                  poster={item.poster}
+                  year={item.year}
+
+                  favorite
+                  onFavoriteToggle={() => onFavoriteToggle(item)}
+
+                  progressMs={progress?.positionMs}
+                  durationMs={progress?.durationMs}
+                  progressLabel={progressLabel(progress)}
+
+                  onClick={() => onSelect(item.mediaId, "show")}
+
+                />
+
+              );
+
+            })}
+
+          </ContentRow>
+
+        )}
+
         {trending.length > 0 && (
 
           <ContentRow title="Trending Now">
@@ -199,6 +242,9 @@ export class ShowsView extends Component<ShowsViewProps, ShowsViewState> {
                   title={hit.title}
                   poster={hit.poster}
                   year={hit.year}
+
+                  favorite={favoriteIds.has(hit.id)}
+                  onFavoriteToggle={() => onFavoriteToggle(hit)}
 
                   progressMs={progress?.positionMs}
                   durationMs={progress?.durationMs}
@@ -241,6 +287,9 @@ export class ShowsView extends Component<ShowsViewProps, ShowsViewState> {
                     title={hit.title}
                     poster={hit.poster}
                     year={hit.year}
+
+                    favorite={favoriteIds.has(hit.id)}
+                    onFavoriteToggle={() => onFavoriteToggle(hit)}
 
                     progressMs={progress?.positionMs}
                     durationMs={progress?.durationMs}

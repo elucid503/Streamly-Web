@@ -47,6 +47,7 @@ func main() {
 	authSvc := services.NewAuthService(db, cfg)
 	settingsSvc := services.NewSettingsService(db)
 	historySvc := services.NewHistoryService(db)
+	favoritesSvc := services.NewFavoritesService(db)
 	mediaSvc := services.NewMediaService(cfg)
 
 	cacheCtx, cacheCancel := context.WithCancel(context.Background())
@@ -63,6 +64,7 @@ func main() {
 	authHandler := handlers.NewAuthHandler(authSvc)
 	settingsHandler := handlers.NewSettingsHandler(settingsSvc)
 	historyHandler := handlers.NewHistoryHandler(historySvc)
+	favoritesHandler := handlers.NewFavoritesHandler(favoritesSvc)
 	catalogHandler := handlers.NewCatalogHandler(mediaSvc)
 	streamHandler := handlers.NewStreamHandler(mediaSvc, proxySvc, subtitleSvc)
 	proxyHandler := handlers.NewProxyHandler(proxySvc)
@@ -77,13 +79,12 @@ func main() {
 
 		AllowOrigins: []string{cfg.FrontendOrigin},
 
-		AllowMethods: []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-		AllowHeaders: []string{"Origin", "Content-Type", "Accept", "Authorization", "Range", "If-Range"},
+		AllowMethods:  []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowHeaders:  []string{"Origin", "Content-Type", "Accept", "Authorization", "Range", "If-Range"},
 		ExposeHeaders: []string{"Content-Length", "Content-Range", "Accept-Ranges"},
 
 		AllowCredentials: true,
-		MaxAge: 12 * time.Hour,
-
+		MaxAge:           12 * time.Hour,
 	}))
 
 	// Health
@@ -117,6 +118,10 @@ func main() {
 	protected.GET("/history", historyHandler.List)
 	protected.POST("/history", historyHandler.Upsert)
 	protected.DELETE("/history/:id", historyHandler.Delete)
+
+	protected.GET("/favorites", favoritesHandler.List)
+	protected.POST("/favorites", favoritesHandler.Upsert)
+	protected.DELETE("/favorites/:kind/:key", favoritesHandler.Delete)
 
 	// Catalog
 
@@ -170,9 +175,8 @@ func main() {
 
 	server := &http.Server{
 
-		Addr: ":" + cfg.Port,
+		Addr:    ":" + cfg.Port,
 		Handler: r,
-
 	}
 
 	go func() {
@@ -195,7 +199,7 @@ func main() {
 
 	log.Println("shutting down server...")
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10 * time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	_ = server.Shutdown(ctx)

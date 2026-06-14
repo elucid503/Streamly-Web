@@ -683,13 +683,15 @@ export class WatchPage extends Component<WatchPageProps, WatchPageState> {
 
     }
 
+    const channelTitle = stream.channel.name?.trim() || stream.channel.slug?.trim() || `Channel ${daddyId}`;
+
     this.setState({
 
       streamUrl: playbackUrl,
 
       isHls: true,
 
-      title: stream.channel.name,
+      title: channelTitle,
       subtitle: stream.channel.category,
 
       intro: null,
