@@ -8,9 +8,17 @@ export function isWebPlayableUrl(url: string): boolean {
 
 }
 
-export function streamPlaybackUrl(stream: { url?: string; proxyUrl?: string }): string {
+export function streamPlaybackUrl(stream: { url?: string; proxyUrl?: string; isHls?: boolean }): string {
 
-  return stream.proxyUrl?.trim() || stream.url?.trim() || "";
+  const direct = stream.url?.trim() || "";
+
+  if (direct && !stream.isHls && isWebPlayableUrl(direct)) {
+
+    return direct;
+
+  }
+
+  return stream.proxyUrl?.trim() || direct;
 
 }
 
@@ -22,7 +30,9 @@ export function isProxiedStream(url: string): boolean {
 
 export function qualityPlaybackUrl(quality: StreamQuality): string {
 
-  const url = quality.proxyUrl?.trim() || quality.url?.trim() || "";
+  const direct = quality.url?.trim() || "";
+
+  const url = direct && !quality.isHls && isWebPlayableUrl(direct) ? direct : quality.proxyUrl?.trim() || direct;
 
   if (!url || !isWebPlayableUrl(url)) return "";
 

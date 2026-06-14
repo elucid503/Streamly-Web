@@ -61,7 +61,9 @@ func (h *StreamHandler) MovieStream(c *gin.Context) {
 
 	}
 
-	if err := h.proxy.AttachProxyURLs(c.Request.Context(), stream, "", baseURL(c)); err != nil {
+	forceProxy := c.Query("proxy") == "1"
+
+	if err := h.proxy.AttachProxyURLs(c.Request.Context(), stream, "", baseURL(c), forceProxy); err != nil {
 
 		handleServiceError(c, err)
 		return
@@ -143,7 +145,9 @@ func (h *StreamHandler) EpisodeStream(c *gin.Context) {
 
 	}
 
-	if err := h.proxy.AttachProxyURLs(c.Request.Context(), stream, "", baseURL(c)); err != nil {
+	forceProxy := c.Query("proxy") == "1"
+
+	if err := h.proxy.AttachProxyURLs(c.Request.Context(), stream, "", baseURL(c), forceProxy); err != nil {
 
 		handleServiceError(c, err)
 		return

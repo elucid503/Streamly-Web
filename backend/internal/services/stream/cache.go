@@ -6,9 +6,16 @@ import (
 	"time"
 
 	mediakit "mediakit"
+
+	"golang.org/x/sync/singleflight"
 )
 
-const qualitiesTTL = 30 * time.Minute
+const (
+
+	qualitiesTTL = 30 * time.Minute
+	maxEntries = 512
+
+)
 
 type cacheEntry struct {
 
@@ -23,8 +30,11 @@ type Cache struct {
 	client *mediakit.Client
 
 	mu sync.RWMutex
+
 	movies map[int]cacheEntry
 	episodes map[string]cacheEntry
+
+	group singleflight.Group
 
 }
 
@@ -56,7 +66,11 @@ func (c *Cache) MovieQualities(id int) ([]mediakit.Quality, error) {
 
 	}
 
-	qualities, err := c.client.Movie(id).Qualities()
+	result, err, _ := c.group.Do(fmt.Sprintf("movie:%d", id), func() (any, error) {
+
+		return c.client.Movie(id).Qualities()
+
+	})
 
 	if err != nil {
 
@@ -70,7 +84,11 @@ func (c *Cache) MovieQualities(id int) ([]mediakit.Quality, error) {
 
 	}
 
+	qualities := result.([]mediakit.Quality)
+
 	c.mu.Lock()
+
+	c.pruneLocked()
 
 	c.movies[id] = cacheEntry{
 
@@ -102,7 +120,11 @@ func (c *Cache) EpisodeQualities(showID, season, episode int) ([]mediakit.Qualit
 
 	}
 
-	qualities, err := c.client.Show(showID).Episode(season, episode).Qualities()
+	result, err, _ := c.group.Do("episode:"+key, func() (any, error) {
+
+		return c.client.Show(showID).Episode(season, episode).Qualities()
+
+	})
 
 	if err != nil {
 
@@ -116,7 +138,11 @@ func (c *Cache) EpisodeQualities(showID, season, episode int) ([]mediakit.Qualit
 
 	}
 
+	qualities := result.([]mediakit.Quality)
+
 	c.mu.Lock()
+
+	c.pruneLocked()
 
 	c.episodes[key] = cacheEntry{
 
@@ -128,6 +154,32 @@ func (c *Cache) EpisodeQualities(showID, season, episode int) ([]mediakit.Qualit
 	c.mu.Unlock()
 
 	return qualities, nil
+
+}
+
+func (c *Cache) pruneLocked() {
+
+	now := time.Now()
+
+	for id, entry := range c.movies {
+
+		if now.Sub(entry.fetchedAt) >= qualitiesTTL || len(c.movies) > maxEntries {
+
+			delete(c.movies, id)
+
+		}
+
+	}
+
+	for key, entry := range c.episodes {
+
+		if now.Sub(entry.fetchedAt) >= qualitiesTTL || len(c.episodes) > maxEntries {
+
+			delete(c.episodes, key)
+
+		}
+
+	}
 
 }
 

@@ -14,7 +14,11 @@ import (
 	mediakit "mediakit"
 	"streamly/internal/captions"
 	"streamly/internal/config"
+
+	"golang.org/x/sync/singleflight"
 )
+
+const maxSubtitleCacheEntries = 512
 
 type subtitleCacheEntry struct {
 
@@ -31,8 +35,11 @@ type SubtitleResolver struct {
 	ttl time.Duration
 
 	cacheMu sync.RWMutex
+
 	movieCache map[int]subtitleCacheEntry
 	episodeCache map[string]subtitleCacheEntry
+
+	group singleflight.Group
 
 }
 
@@ -49,9 +56,12 @@ func NewSubtitleResolver(media *MediaService, proxy *ProxyService, subdl *captio
 	return &SubtitleResolver{
 
 		media: media,
+
 		proxy: proxy,
 		subdl: subdl,
+
 		ttl: ttl,
+
 		movieCache: make(map[int]subtitleCacheEntry),
 		episodeCache: make(map[string]subtitleCacheEntry),
 
@@ -67,11 +77,17 @@ func (r *SubtitleResolver) MovieTracks(ctx context.Context, baseURL string, id i
 
 	}
 
-	tracks := r.resolveMovieTracks(ctx, baseURL, id)
+	result, _, _ := r.group.Do(fmt.Sprintf("movie:%d", id), func() (any, error) {
 
-	r.setMovieCached(id, tracks)
+		tracks := r.resolveMovieTracks(ctx, baseURL, id)
 
-	return tracks
+		r.setMovieCached(id, tracks)
+
+		return tracks, nil
+
+	})
+
+	return cloneSubtitleTracks(result.([]SubtitleDTO))
 
 }
 
@@ -85,11 +101,17 @@ func (r *SubtitleResolver) EpisodeTracks(ctx context.Context, baseURL string, sh
 
 	}
 
-	tracks := r.resolveEpisodeTracks(ctx, baseURL, showID, season, episode)
+	result, _, _ := r.group.Do("episode:"+key, func() (any, error) {
 
-	r.setEpisodeCached(key, tracks)
+		tracks := r.resolveEpisodeTracks(ctx, baseURL, showID, season, episode)
 
-	return tracks
+		r.setEpisodeCached(key, tracks)
+
+		return tracks, nil
+
+	})
+
+	return cloneSubtitleTracks(result.([]SubtitleDTO))
 
 }
 
@@ -166,6 +188,8 @@ func (r *SubtitleResolver) setMovieCached(id int, tracks []SubtitleDTO) {
 
 	}
 
+	r.pruneLocked()
+
 }
 
 func (r *SubtitleResolver) getEpisodeCached(key string) ([]SubtitleDTO, bool) {
@@ -196,6 +220,34 @@ func (r *SubtitleResolver) setEpisodeCached(key string, tracks []SubtitleDTO) {
 
 		tracks: cloneSubtitleTracks(tracks),
 		expiry: time.Now().Add(r.ttl),
+
+	}
+
+	r.pruneLocked()
+
+}
+
+func (r *SubtitleResolver) pruneLocked() {
+
+	now := time.Now()
+
+	for id, entry := range r.movieCache {
+
+		if now.After(entry.expiry) || len(r.movieCache) > maxSubtitleCacheEntries {
+
+			delete(r.movieCache, id)
+
+		}
+
+	}
+
+	for key, entry := range r.episodeCache {
+
+		if now.After(entry.expiry) || len(r.episodeCache) > maxSubtitleCacheEntries {
+
+			delete(r.episodeCache, key)
+
+		}
 
 	}
 
@@ -535,7 +587,6 @@ func (s *MediaService) MovieCaptionQuery(id int) (captions.Query, error) {
 
 		IMDBId: details.IMDBId,
 		TMDBId: details.TMDBId,
-
 	}
 
 	if file, err := movie.File(); err == nil && file != nil {
@@ -570,6 +621,7 @@ func (s *MediaService) EpisodeCaptionQuery(showID, season, episode int) (caption
 
 		IMDBId: details.IMDBId,
 		TMDBId: details.TMDBId,
+
 		Season: season,
 		Episode: episode,
 

@@ -8,12 +8,16 @@ import (
 	mediakit "mediakit"
 
 	"streamly/internal/services/upstream"
+
+	"golang.org/x/sync/singleflight"
 )
 
 const (
 
 	cacheTTL = 45 * time.Minute
 	staleTTL = 24 * time.Hour
+
+	maxEntries = 512
 
 )
 
@@ -51,6 +55,8 @@ type Cache struct {
 	throttle *upstream.Throttle
 
 	mu sync.RWMutex
+	group singleflight.Group
+
 	seasons map[int]cacheEntry[[]SeasonDTO]
 	episodes map[string]cacheEntry[[]EpisodeDTO]
 
@@ -86,11 +92,15 @@ func (c *Cache) ShowSeasons(id int) ([]SeasonDTO, error) {
 
 	}
 
-	seasons, err := upstream.Retry(3, func() ([]SeasonDTO, error) {
+	result, err, _ := c.group.Do(fmt.Sprintf("seasons:%d", id), func() (any, error) {
 
-		c.throttle.Before()
+		return upstream.Retry(3, func() ([]SeasonDTO, error) {
 
-		return c.fetchShowSeasons(id)
+			c.throttle.Before()
+
+			return c.fetchShowSeasons(id)
+
+		})
 
 	})
 
@@ -106,7 +116,11 @@ func (c *Cache) ShowSeasons(id int) ([]SeasonDTO, error) {
 
 	}
 
+	seasons := result.([]SeasonDTO)
+
 	c.mu.Lock()
+
+	c.pruneLocked()
 
 	c.seasons[id] = cacheEntry[[]SeasonDTO]{data: seasons, fetchedAt: time.Now()}
 
@@ -133,11 +147,15 @@ func (c *Cache) SeasonEpisodes(showID, season int) ([]EpisodeDTO, error) {
 
 	}
 
-	episodes, err := upstream.Retry(3, func() ([]EpisodeDTO, error) {
+	result, err, _ := c.group.Do("episodes:"+key, func() (any, error) {
 
-		c.throttle.Before()
+		return upstream.Retry(3, func() ([]EpisodeDTO, error) {
 
-		return c.fetchSeasonEpisodes(showID, season)
+			c.throttle.Before()
+
+			return c.fetchSeasonEpisodes(showID, season)
+
+		})
 
 	})
 
@@ -153,13 +171,43 @@ func (c *Cache) SeasonEpisodes(showID, season int) ([]EpisodeDTO, error) {
 
 	}
 
+	episodes := result.([]EpisodeDTO)
+
 	c.mu.Lock()
+
+	c.pruneLocked()
 
 	c.episodes[key] = cacheEntry[[]EpisodeDTO]{data: episodes, fetchedAt: time.Now()}
 
 	c.mu.Unlock()
 
 	return append([]EpisodeDTO(nil), episodes...), nil
+
+}
+
+func (c *Cache) pruneLocked() {
+
+	now := time.Now()
+
+	for id, entry := range c.seasons {
+
+		if now.Sub(entry.fetchedAt) >= staleTTL || len(c.seasons) > maxEntries {
+
+			delete(c.seasons, id)
+
+		}
+
+	}
+
+	for key, entry := range c.episodes {
+
+		if now.Sub(entry.fetchedAt) >= staleTTL || len(c.episodes) > maxEntries {
+
+			delete(c.episodes, key)
+
+		}
+
+	}
 
 }
 
@@ -217,8 +265,10 @@ func (c *Cache) fetchSeasonEpisodes(showID, season int) ([]EpisodeDTO, error) {
 
 			Season: ep.SeasonNumber(),
 			Episode: ep.Number(),
+
 			Title: info.Title,
 			Description: info.Description,
+
 			Poster: info.Poster,
 
 		}

@@ -98,7 +98,7 @@ func (h *ProxyHandler) Serve(c *gin.Context) {
 
 		}
 
-		rewritten := h.proxy.RewritePlaylist(body, entry, baseURL(c))
+		rewritten := h.proxy.RewritePlaylist(ctx, body, entry, baseURL(c))
 		c.Data(http.StatusOK, "application/vnd.apple.mpegurl", rewritten)
 		return
 

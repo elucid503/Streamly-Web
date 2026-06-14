@@ -8,7 +8,7 @@ import { store } from "@/lib/store";
 
 import type { Episode, IntroInfo, NextEpisode, Season, StreamInfo, StreamQuality, SubtitleTrack, WatchHistoryItem, } from "@/lib/types";
 import { dedupeQualitiesByHeight, fetchStreamWithFallback, initialQualityAttempts, nextLowerQualityHeight, } from "@/lib/stream";
-import { pickQualityByHeight, qualityHasProxy, streamFromQuality, streamPlaybackUrl, } from "@/lib/streamClient";
+import { isProxiedStream, pickQualityByHeight, qualityHasProxy, qualityPlaybackUrl, streamFromQuality, streamPlaybackUrl, } from "@/lib/streamClient";
 
 import { parseWatchPath } from "@/lib/watchRoute";
 
@@ -127,6 +127,10 @@ export class WatchPage extends Component<WatchPageProps, WatchPageState> {
 
   private progressDebounce: ReturnType<typeof setTimeout> | null = null;
 
+  private lastProgressSave = 0;
+
+  private pendingProgress: { positionMs: number; durationMs: number } | null = null;
+
   private unsubscribe = () => {};
 
   private loadGen = 0;
@@ -167,6 +171,12 @@ export class WatchPage extends Component<WatchPageProps, WatchPageState> {
     this.unsubscribe();
 
     if (this.progressDebounce) clearTimeout(this.progressDebounce);
+
+    if (this.pendingProgress) {
+
+      void this.writeProgress(this.pendingProgress.positionMs, this.pendingProgress.durationMs);
+
+    }
 
   }
 
@@ -274,12 +284,12 @@ export class WatchPage extends Component<WatchPageProps, WatchPageState> {
 
   preferredHeight = (): number => store.settings?.preferredHeight ?? 1080;
 
-  requestStream = async (height: number): Promise<StreamInfo> => {
+  requestStream = async (height: number, forceProxy = false): Promise<StreamInfo> => {
 
     const { kind, mediaId, season, episode } = this.state;
 
-    if (kind === "movie") return api.movieStream(mediaId, height);
-    if (kind === "show") return api.episodeStream(mediaId, season, episode, height);
+    if (kind === "movie") return api.movieStream(mediaId, height, forceProxy);
+    if (kind === "show") return api.episodeStream(mediaId, season, episode, height, forceProxy);
 
     throw new Error("no stream available");
 
@@ -327,7 +337,7 @@ export class WatchPage extends Component<WatchPageProps, WatchPageState> {
 
     const localQuality = pickQualityByHeight(qualities, height);
 
-    if (localQuality && qualityHasProxy(localQuality)) {
+    if (localQuality && (qualityHasProxy(localQuality) || qualityPlaybackUrl(localQuality))) {
 
       this.applyStream(streamFromQuality(qualities, localQuality, height), height, positionMs);
 
@@ -663,43 +673,62 @@ export class WatchPage extends Component<WatchPageProps, WatchPageState> {
 
     if (this.progressDebounce) clearTimeout(this.progressDebounce);
 
-    this.progressDebounce = setTimeout(async () => {
+    this.pendingProgress = { positionMs, durationMs };
 
-      const { kind, mediaId, title, poster, historyPoster, season, episode, channelId, ready } = this.state;
+    const now = Date.now();
+    const elapsed = now - this.lastProgressSave;
+    const wait = Math.max(1000, 10000 - elapsed);
 
-      if (!ready) return;
+    this.progressDebounce = setTimeout(() => {
 
-      const completed = durationMs > 0 && positionMs / durationMs > 0.9;
+      const pending = this.pendingProgress;
 
-      try {
+      if (!pending) return;
 
-        await api.upsertHistory({
+      this.pendingProgress = null;
+      this.lastProgressSave = Date.now();
 
-          kind,
-          mediaId: kind === "live" ? 0 : mediaId,
+      void this.writeProgress(pending.positionMs, pending.durationMs);
 
-          title,
-          poster: kind === "show" ? historyPoster || poster : poster,
+    }, wait);
 
-          season,
-          episode,
+  };
 
-          channelId,
+  writeProgress = async (positionMs: number, durationMs: number) => {
 
-          positionMs: Math.floor(positionMs),
-          durationMs: Math.floor(durationMs),
+    const { kind, mediaId, title, poster, historyPoster, season, episode, channelId, ready } = this.state;
 
-          completed,
+    if (!ready) return;
 
-        });
+    const completed = durationMs > 0 && positionMs / durationMs > 0.9;
 
-      } catch {
+    try {
 
-        /* ignore */
+      await api.upsertHistory({
 
-      }
+        kind,
+        mediaId: kind === "live" ? 0 : mediaId,
 
-    }, 2000);
+        title,
+        poster: kind === "show" ? historyPoster || poster : poster,
+
+        season,
+        episode,
+
+        channelId,
+
+        positionMs: Math.floor(positionMs),
+        durationMs: Math.floor(durationMs),
+
+        completed,
+
+      });
+
+    } catch {
+
+      /* ignore */
+
+    }
 
   };
 
@@ -773,9 +802,27 @@ export class WatchPage extends Component<WatchPageProps, WatchPageState> {
 
   handlePlaybackError = async (positionMs: number) => {
 
-    const { ready, kind, selectedHeight, qualities } = this.state;
+    const { ready, kind, selectedHeight, qualities, streamUrl } = this.state;
 
     if (!ready || kind === "live") return;
+
+    if (streamUrl && !isProxiedStream(streamUrl)) {
+
+      try {
+
+        const stream = await this.requestStream(selectedHeight, true);
+
+        this.applyStream(stream, stream.selectedHeight ?? selectedHeight, positionMs);
+
+        return;
+
+      } catch {
+
+        /* fall through to lower-quality recovery */
+
+      }
+
+    }
 
     this.failedQualityHeights.add(selectedHeight);
 

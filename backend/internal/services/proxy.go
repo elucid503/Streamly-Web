@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -12,6 +13,7 @@ import (
 	"net/url"
 	"regexp"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -21,15 +23,30 @@ import (
 
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
+	"golang.org/x/sync/singleflight"
 )
 
 var hlsURIAttr = regexp.MustCompile(`URI="([^"]+)"`)
+
+const proxyTokenCacheMax = 4096
 
 type ProxyService struct {
 
 	db *database.DB
 	ttl time.Duration
 	client *http.Client
+
+	tokenMu sync.Mutex
+	tokenByKey map[string]proxyTokenCacheEntry
+	entryByToken map[string]models.ProxyToken
+	tokenGroup singleflight.Group
+
+}
+
+type proxyTokenCacheEntry struct {
+
+	token string
+	expiresAt time.Time
 
 }
 
@@ -38,8 +55,10 @@ func NewProxyService(db *database.DB, cfg *config.Config) *ProxyService {
 	transport := &http.Transport{
 
 		Proxy: http.ProxyFromEnvironment,
+
 		MaxIdleConns: 64,
 		MaxIdleConnsPerHost: 16,
+
 		IdleConnTimeout: 90 * time.Second,
 		ResponseHeaderTimeout: 30 * time.Second,
 
@@ -49,6 +68,10 @@ func NewProxyService(db *database.DB, cfg *config.Config) *ProxyService {
 
 		db: db,
 		ttl: cfg.ProxyTokenTTL,
+
+		tokenByKey: make(map[string]proxyTokenCacheEntry),
+		entryByToken: make(map[string]models.ProxyToken),
+
 		client: &http.Client{
 
 			Transport: transport,
@@ -75,6 +98,7 @@ type ProxySession struct {
 
 	Token string `json:"token"`
 	ProxyPath string `json:"proxyPath"`
+
 	IsHLS bool `json:"isHls"`
 
 }
@@ -135,24 +159,9 @@ func (s *ProxyService) CreateSession(ctx context.Context, targetURL, referer str
 
 	}
 
-	token, err := randomToken(24)
+	token, err := s.getOrCreateURLToken(ctx, targetURL, referer)
 
 	if err != nil {
-
-		return nil, err
-
-	}
-
-	entry := models.ProxyToken{
-
-		Token: token,
-		TargetURL: targetURL,
-		Referer: referer,
-		ExpiresAt: time.Now().Add(s.ttl),
-
-	}
-
-	if _, err := s.db.ProxyTokens().InsertOne(ctx, entry); err != nil {
 
 		return nil, err
 
@@ -170,6 +179,12 @@ func (s *ProxyService) CreateSession(ctx context.Context, targetURL, referer str
 
 func (s *ProxyService) ResolveToken(ctx context.Context, token string) (*models.ProxyToken, error) {
 
+	if entry, ok := s.cachedEntry(token); ok {
+
+		return entry, nil
+
+	}
+
 	var entry models.ProxyToken
 
 	err := s.db.ProxyTokens().FindOne(ctx, bson.M{"token": token, "expiresAt": bson.M{"$gt": time.Now()}}).Decode(&entry)
@@ -179,6 +194,8 @@ func (s *ProxyService) ResolveToken(ctx context.Context, token string) (*models.
 		return nil, err
 
 	}
+
+	s.cacheEntry(entry)
 
 	return &entry, nil
 
@@ -220,7 +237,7 @@ func (s *ProxyService) Fetch(ctx context.Context, entry *models.ProxyToken, inco
 
 }
 
-func (s *ProxyService) proxyMediaURL(base *url.URL, referer, baseProxyURL, raw string) (string, error) {
+func (s *ProxyService) proxyMediaURL(ctx context.Context, base *url.URL, referer, baseProxyURL, raw string) (string, error) {
 
 	trimmed := strings.TrimSpace(raw)
 
@@ -232,7 +249,7 @@ func (s *ProxyService) proxyMediaURL(base *url.URL, referer, baseProxyURL, raw s
 
 	resolved := resolveRelativeURL(base, trimmed)
 
-	token, err := s.createChildToken(context.Background(), resolved, referer)
+	token, err := s.getOrCreateURLToken(ctx, resolved, referer)
 
 	if err != nil {
 
@@ -244,7 +261,7 @@ func (s *ProxyService) proxyMediaURL(base *url.URL, referer, baseProxyURL, raw s
 
 }
 
-func (s *ProxyService) RewritePlaylist(body []byte, entry *models.ProxyToken, baseProxyURL string) []byte {
+func (s *ProxyService) RewritePlaylist(ctx context.Context, body []byte, entry *models.ProxyToken, baseProxyURL string) []byte {
 
 	text := strings.ReplaceAll(string(body), "\r\n", "\n")
 
@@ -280,7 +297,7 @@ func (s *ProxyService) RewritePlaylist(body []byte, entry *models.ProxyToken, ba
 
 				}
 
-				proxyURL, err := s.proxyMediaURL(base, entry.Referer, baseProxyURL, parts[1])
+				proxyURL, err := s.proxyMediaURL(ctx, base, entry.Referer, baseProxyURL, parts[1])
 
 				if err != nil {
 
@@ -298,7 +315,7 @@ func (s *ProxyService) RewritePlaylist(body []byte, entry *models.ProxyToken, ba
 
 		}
 
-		proxyURL, err := s.proxyMediaURL(base, entry.Referer, baseProxyURL, trimmed)
+		proxyURL, err := s.proxyMediaURL(ctx, base, entry.Referer, baseProxyURL, trimmed)
 
 		if err != nil {
 
@@ -316,9 +333,82 @@ func (s *ProxyService) RewritePlaylist(body []byte, entry *models.ProxyToken, ba
 
 }
 
-func (s *ProxyService) createChildToken(ctx context.Context, targetURL, referer string) (string, error) {
+func (s *ProxyService) getOrCreateURLToken(ctx context.Context, targetURL, referer string) (string, error) {
 
-	token, err := randomToken(24)
+	key := proxyTokenKey(targetURL, referer)
+	now := time.Now()
+
+	s.tokenMu.Lock()
+
+	if cached, ok := s.tokenByKey[key]; ok && now.Before(cached.expiresAt) {
+
+		token := cached.token
+
+		s.tokenMu.Unlock()
+
+		return token, nil
+
+	}
+
+	s.tokenMu.Unlock()
+
+	result, err, _ := s.tokenGroup.Do(key, func() (any, error) {
+
+		s.tokenMu.Lock()
+
+		if cached, ok := s.tokenByKey[key]; ok && time.Now().Before(cached.expiresAt) {
+
+			token := cached.token
+
+			s.tokenMu.Unlock()
+
+			return token, nil
+
+		}
+
+		s.tokenMu.Unlock()
+
+		token, err := randomToken(24)
+
+		if err != nil {
+
+			return "", err
+
+		}
+
+		entry := models.ProxyToken{
+
+			Token: token,
+			TargetURL: targetURL,
+			Referer: referer,
+			ExpiresAt: time.Now().Add(s.ttl),
+
+		}
+
+		if _, err := s.db.ProxyTokens().InsertOne(ctx, entry); err != nil {
+
+			return "", err
+
+		}
+
+		s.tokenMu.Lock()
+
+		s.pruneTokenCacheLocked(now)
+
+		s.tokenByKey[key] = proxyTokenCacheEntry{
+
+			token: token,
+			expiresAt: entry.ExpiresAt,
+
+		}
+
+		s.entryByToken[token] = entry
+
+		s.tokenMu.Unlock()
+
+		return token, nil
+
+	})
 
 	if err != nil {
 
@@ -326,30 +416,110 @@ func (s *ProxyService) createChildToken(ctx context.Context, targetURL, referer 
 
 	}
 
-	entry := models.ProxyToken{
-
-		Token: token,
-		TargetURL: targetURL,
-		Referer: referer,
-		ExpiresAt: time.Now().Add(s.ttl),
-
-	}
-
-	if _, err := s.db.ProxyTokens().InsertOne(ctx, entry); err != nil {
-
-		return "", err
-
-	}
+	token := result.(string)
 
 	return token, nil
 
 }
 
-func (s *ProxyService) AttachProxyURLs(ctx context.Context, stream *StreamDTO, referer, baseProxyURL string) error {
+func (s *ProxyService) cachedEntry(token string) (*models.ProxyToken, bool) {
+
+	now := time.Now()
+
+	s.tokenMu.Lock()
+
+	defer s.tokenMu.Unlock()
+
+	entry, ok := s.entryByToken[token]
+
+	if !ok || now.After(entry.ExpiresAt) {
+
+		if ok {
+
+			delete(s.entryByToken, token)
+
+		}
+
+		return nil, false
+
+	}
+
+	return &entry, true
+
+}
+
+func (s *ProxyService) cacheEntry(entry models.ProxyToken) {
+
+	s.tokenMu.Lock()
+
+	defer s.tokenMu.Unlock()
+
+	s.pruneTokenCacheLocked(time.Now())
+
+	s.entryByToken[entry.Token] = entry
+
+	if entry.TargetURL != "" {
+
+		s.tokenByKey[proxyTokenKey(entry.TargetURL, entry.Referer)] = proxyTokenCacheEntry{
+
+			token: entry.Token,
+			expiresAt: entry.ExpiresAt,
+
+		}
+
+	}
+
+}
+
+func (s *ProxyService) pruneTokenCacheLocked(now time.Time) {
+
+	if len(s.entryByToken) < proxyTokenCacheMax && len(s.tokenByKey) < proxyTokenCacheMax {
+
+		return
+
+	}
+
+	for token, entry := range s.entryByToken {
+
+		if now.After(entry.ExpiresAt) || len(s.entryByToken) > proxyTokenCacheMax {
+
+			delete(s.entryByToken, token)
+
+		}
+
+	}
+
+	for key, entry := range s.tokenByKey {
+
+		if now.After(entry.expiresAt) || len(s.tokenByKey) > proxyTokenCacheMax {
+
+			delete(s.tokenByKey, key)
+
+		}
+
+	}
+
+}
+
+func proxyTokenKey(targetURL, referer string) string {
+
+	sum := sha256.Sum256([]byte(targetURL + "\x00" + referer))
+
+	return hex.EncodeToString(sum[:])
+
+}
+
+func (s *ProxyService) AttachProxyURLs(ctx context.Context, stream *StreamDTO, referer, baseProxyURL string, force bool) error {
 
 	if stream == nil || stream.URL == "" {
 
 		return errors.New("empty stream")
+
+	}
+
+	if !force && !shouldProxyStream(stream.URL, stream.IsHLS) {
+
+		return nil
 
 	}
 
@@ -379,7 +549,36 @@ func (s *ProxyService) AttachProxyURLs(ctx context.Context, stream *StreamDTO, r
 
 }
 
+func shouldProxyStream(rawURL string, isHLS bool) bool {
+
+	if isHLS || IsPlaylist("", rawURL) {
+
+		return true
+
+	}
+
+	lower := strings.ToLower(strings.Split(rawURL, "?")[0])
+
+	return strings.HasSuffix(lower, ".mkv") ||
+		strings.HasSuffix(lower, ".avi") ||
+		strings.HasSuffix(lower, ".wmv") ||
+		strings.HasSuffix(lower, ".flv")
+
+}
+
 func (s *ProxyService) StreamQualities(qualities []QualityDTO, bestURL, referer string, isHLS bool, baseProxyURL string) (*StreamDTO, error) {
+
+	if !shouldProxyStream(bestURL, isHLS) {
+
+		return &StreamDTO{
+
+			Qualities: qualities,
+			URL: bestURL,
+			IsHLS: isHLS,
+
+		}, nil
+
+	}
 
 	session, err := s.CreateSession(context.Background(), bestURL, referer, isHLS)
 
@@ -393,6 +592,7 @@ func (s *ProxyService) StreamQualities(qualities []QualityDTO, bestURL, referer 
 
 		Qualities: qualities,
 		ProxyURL: baseProxyURL + session.ProxyPath,
+
 		IsHLS: isHLS,
 
 	}, nil
@@ -537,7 +737,7 @@ func IsPlaylist(contentType, urlStr string) bool {
 
 	}
 
-	lower := strings.ToLower(urlStr)
+	lower := strings.ToLower(strings.Split(urlStr, "?")[0])
 
 	return strings.HasSuffix(lower, ".m3u8") || strings.HasSuffix(lower, ".m3u")
 

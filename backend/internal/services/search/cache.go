@@ -9,7 +9,11 @@ import (
 
 	"streamly/internal/services/catalog"
 	"streamly/internal/services/upstream"
+
+	"golang.org/x/sync/singleflight"
 )
+
+const maxEntries = 256
 
 type cacheEntry struct {
 
@@ -28,6 +32,7 @@ type Cache struct {
 
 	mu sync.RWMutex
 	entries map[string]cacheEntry
+	group singleflight.Group
 
 }
 
@@ -65,15 +70,33 @@ func (c *Cache) Search(query string) ([]catalog.SearchResultDTO, error) {
 
 	}
 
-	seen := make(map[int]struct{})
+	result, err, _ := c.group.Do(key, func() (any, error) {
 
-	results := make([]catalog.SearchResultDTO, 0, 50)
+		seen := make(map[int]struct{})
 
-	hits, apiErr := c.throttle.Search(c.client, key)
+		results := make([]catalog.SearchResultDTO, 0, 50)
 
-	if apiErr == nil {
+		hits, apiErr := c.throttle.Search(c.client, key)
 
-		for _, hit := range hits {
+		if apiErr == nil {
+
+			for _, hit := range hits {
+
+				if _, ok := seen[hit.ID]; ok {
+
+					continue
+
+				}
+
+				seen[hit.ID] = struct{}{}
+
+				results = append(results, catalog.HitToDTO(hit))
+
+			}
+
+		}
+
+		for _, hit := range filterIndexWords(c.catalogSnap().SearchIndex(), key, 50) {
 
 			if _, ok := seen[hit.ID]; ok {
 
@@ -83,35 +106,29 @@ func (c *Cache) Search(query string) ([]catalog.SearchResultDTO, error) {
 
 			seen[hit.ID] = struct{}{}
 
-			results = append(results, catalog.HitToDTO(hit))
+			results = append(results, hit)
 
 		}
 
-	}
+		if apiErr != nil && len(results) == 0 {
 
-	for _, hit := range filterIndexWords(c.catalogSnap().SearchIndex(), key, 50) {
-
-		if _, ok := seen[hit.ID]; ok {
-
-			continue
+			return nil, apiErr
 
 		}
 
-		seen[hit.ID] = struct{}{}
+		c.set(key, results)
 
-		results = append(results, hit)
+		return results, nil
+
+	})
+
+	if err != nil {
+
+		return nil, err
 
 	}
 
-	if apiErr != nil && len(results) == 0 {
-
-		return nil, apiErr
-
-	}
-
-	c.set(key, results)
-
-	return results, nil
+	return result.([]catalog.SearchResultDTO), nil
 
 }
 
@@ -151,6 +168,24 @@ func (c *Cache) set(key string, results []catalog.SearchResultDTO) {
 
 		results: append([]catalog.SearchResultDTO(nil), results...),
 		expiresAt: time.Now().Add(ttl),
+
+	}
+
+	c.pruneLocked()
+
+}
+
+func (c *Cache) pruneLocked() {
+
+	now := time.Now()
+
+	for key, entry := range c.entries {
+
+		if now.After(entry.expiresAt) || len(c.entries) > maxEntries {
+
+			delete(c.entries, key)
+
+		}
 
 	}
 

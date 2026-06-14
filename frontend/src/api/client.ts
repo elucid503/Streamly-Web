@@ -201,9 +201,14 @@ export const api = {
 
   },
 
-  movieStream(id: number, height?: number) {
+  movieStream(id: number, height?: number, forceProxy = false) {
 
-    const q = height ? `?height=${height}` : "";
+    const params = new URLSearchParams();
+
+    if (height) params.set("height", String(height));
+    if (forceProxy) params.set("proxy", "1");
+
+    const q = params.toString() ? `?${params}` : "";
 
     return request<StreamInfo>(`/api/movies/${id}/stream${q}`);
 
@@ -215,9 +220,14 @@ export const api = {
 
   },
 
-  episodeStream(showId: number, season: number, episode: number, height?: number) {
+  episodeStream(showId: number, season: number, episode: number, height?: number, forceProxy = false) {
 
-    const q = height ? `?height=${height}` : "";
+    const params = new URLSearchParams();
+
+    if (height) params.set("height", String(height));
+    if (forceProxy) params.set("proxy", "1");
+
+    const q = params.toString() ? `?${params}` : "";
 
     return request<StreamInfo>(
       `/api/shows/${showId}/seasons/${season}/episodes/${episode}/stream${q}`
