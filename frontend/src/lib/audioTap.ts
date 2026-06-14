@@ -35,6 +35,7 @@ const resampleTo16k = (samples: Float32Array, rate: number): Float32Array => {
 export class AudioTap {
 
   private context: AudioContext | null = null;
+  private source: AudioNode | null = null;
   private processor: ScriptProcessorNode | null = null;
   private chunks: TapChunk[] = [];
   private startPromise: Promise<void> | null = null;
@@ -57,7 +58,6 @@ export class AudioTap {
 
     this.context = new Ctor();
 
-    const source = this.context.createMediaElementSource(this.video);
     this.processor = this.context.createScriptProcessor(BLOCK_SIZE, 2, 1);
 
     this.processor.onaudioprocess = (event) => {
@@ -96,9 +96,33 @@ export class AudioTap {
 
     };
 
-    source.connect(this.context.destination);
-    source.connect(this.processor);
-    this.processor.connect(this.context.destination);
+    const captureStream = this.video.captureStream?.() ?? this.video.mozCaptureStream?.();
+
+    if (captureStream) {
+
+      // captureStream() captures decoded audio output without a CORS error
+
+      this.source = this.context.createMediaStreamSource(captureStream);
+
+      // Route through the processor for capture
+
+      const mute = this.context.createGain();
+
+      mute.gain.value = 0;
+      mute.connect(this.context.destination);
+
+      this.source.connect(this.processor);
+      this.processor.connect(mute);
+
+    } else {
+
+      this.source = this.context.createMediaElementSource(this.video);
+
+      this.source.connect(this.context.destination);
+      this.source.connect(this.processor);
+      this.processor.connect(this.context.destination);
+
+    }
 
     if (this.context.state === "suspended") {
 
@@ -189,6 +213,13 @@ declare global {
   interface Window {
 
     webkitAudioContext?: typeof AudioContext;
+
+  }
+
+  interface HTMLVideoElement {
+
+    captureStream?(): MediaStream;
+    mozCaptureStream?(): MediaStream;
 
   }
 
