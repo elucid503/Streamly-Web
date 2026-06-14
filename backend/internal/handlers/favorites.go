@@ -11,7 +11,9 @@ import (
 )
 
 type FavoritesHandler struct {
+
 	favorites *services.FavoritesService
+
 }
 
 func NewFavoritesHandler(favorites *services.FavoritesService) *FavoritesHandler {

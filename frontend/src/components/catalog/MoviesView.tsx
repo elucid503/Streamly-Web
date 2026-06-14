@@ -125,6 +125,16 @@ export class MoviesView extends Component<MoviesViewProps, MoviesViewState> {
                 durationMs={item.durationMs}
                 progressLabel={progressLabel(item)}
 
+                favorite={favoriteIds.has(item.mediaId)}
+                onFavoriteToggle={() => onFavoriteToggle({
+                  id: item.id,
+                  kind: "movie",
+                  mediaId: item.mediaId,
+                  title: item.title,
+                  poster: item.poster,
+                  createdAt: item.updatedAt,
+                })}
+
                 onClick={() => onResume(item)}
 
               />

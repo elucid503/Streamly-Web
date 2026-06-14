@@ -28,7 +28,7 @@ export class ViewSwitcher extends Component<ViewSwitcherProps> {
 
     return (
 
-      <div className="flex w-full justify-center">
+      <div className="flex justify-center">
 
         <div className="inline-flex rounded-full border border-border bg-surface-raised p-1">
 

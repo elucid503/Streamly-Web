@@ -174,6 +174,16 @@ export class ShowsView extends Component<ShowsViewProps, ShowsViewState> {
                 durationMs={item.durationMs}
                 progressLabel={progressLabel(item)}
 
+                favorite={favoriteIds.has(item.mediaId)}
+                onFavoriteToggle={() => onFavoriteToggle({
+                  id: item.id,
+                  kind: "show",
+                  mediaId: item.mediaId,
+                  title: item.title,
+                  poster: showPosters[item.mediaId] ?? item.poster,
+                  createdAt: item.updatedAt,
+                })}
+
                 onClick={() => onSelect(item.mediaId, "show")}
 
               />

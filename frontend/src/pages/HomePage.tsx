@@ -10,6 +10,7 @@ import { ViewSwitcher } from "@/components/layout/ViewSwitcher";
 import { ViewCarousel } from "@/components/layout/ViewCarousel";
 import { AdminPanel } from "@/pages/AdminPanel";
 import { SettingsPanel } from "@/pages/SettingsPanel";
+import { SelectMenu } from "@/components/ui/SelectMenu";
 
 import type { NavigateFn } from "@/lib/navigation";
 import { resumePath } from "@/lib/history";
@@ -19,6 +20,33 @@ import type { FavoriteItem, LiveChannel, MainView, SearchHit, WatchHistoryItem }
 
 import { Component } from "react";
 import { SlidersHorizontal } from "lucide-react";
+
+const searchKindOptions = [
+  { value: "all", label: "All titles" },
+  { value: "show", label: "Shows" },
+  { value: "movie", label: "Movies" },
+];
+
+const searchYearOptions = [
+  { value: "all", label: "Any year" },
+  { value: "2020s", label: "2020s" },
+  { value: "2010s", label: "2010s" },
+  { value: "2000s", label: "2000s" },
+  { value: "older", label: "Before 2000" },
+];
+
+const searchRatingOptions = [
+  { value: "all", label: "Any rating" },
+  { value: "7", label: "7.0+" },
+  { value: "8", label: "8.0+" },
+];
+
+const searchProgressOptions = [
+  { value: "all", label: "Any progress" },
+  { value: "unwatched", label: "Unwatched" },
+  { value: "in_progress", label: "In progress" },
+  { value: "completed", label: "Completed" },
+];
 
 interface HomePageProps {
 
@@ -323,9 +351,58 @@ export class HomePage extends Component<HomePageProps, HomePageState> {
 
   };
 
+  renderSearchFilters() {
+
+    const { searchKind, searchYear, searchRating, searchProgress } = this.state;
+
+    return (
+
+      <div className="flex min-w-0 flex-wrap items-center justify-center gap-2">
+
+        <div className="flex h-9 items-center gap-2 rounded-full border border-border-subtle bg-surface-raised px-3 text-xs font-medium text-foreground-muted shadow-sm">
+
+          <SlidersHorizontal size={14} />
+          <span>Filters</span>
+
+        </div>
+
+        <SelectMenu
+          label="Title type"
+          value={searchKind}
+          options={searchKindOptions}
+          onChange={(value) => this.setState({ searchKind: value as HomePageState["searchKind"] })}
+        />
+
+        <SelectMenu
+          label="Release year"
+          value={searchYear}
+          options={searchYearOptions}
+          onChange={(value) => this.setState({ searchYear: value as HomePageState["searchYear"] })}
+        />
+
+        <SelectMenu
+          label="Rating"
+          value={searchRating}
+          options={searchRatingOptions}
+          onChange={(value) => this.setState({ searchRating: value as HomePageState["searchRating"] })}
+        />
+
+        <SelectMenu
+          label="Watch progress"
+          value={searchProgress}
+          options={searchProgressOptions}
+          onChange={(value) => this.setState({ searchProgress: value as HomePageState["searchProgress"] })}
+        />
+
+      </div>
+
+    );
+
+  }
+
   renderSearchResults() {
 
-    const { searchResults, searching, searchKind, searchYear, searchRating, searchProgress } = this.state;
+    const { searchResults, searching } = this.state;
 
     const filtered = this.filteredSearchResults();
 
@@ -350,56 +427,6 @@ export class HomePage extends Component<HomePageProps, HomePageState> {
     return (
 
       <div className="py-6">
-
-        <div className="mx-auto mb-2 flex max-w-[1600px] flex-wrap items-center gap-2 px-4 sm:px-8">
-
-          <div className="flex h-9 items-center gap-2 rounded-md border border-border-subtle bg-surface-raised px-3 text-xs text-foreground-muted">
-
-            <SlidersHorizontal size={14} />
-            Filters
-
-          </div>
-
-          <select className="h-9 rounded-md border border-border-subtle bg-surface-raised px-3 text-xs text-foreground"
-            value={searchKind}
-            onChange={(event) => this.setState({ searchKind: event.target.value as HomePageState["searchKind"] })}
-          >
-            <option value="all">All titles</option>
-            <option value="show">Shows</option>
-            <option value="movie">Movies</option>
-          </select>
-
-          <select className="h-9 rounded-md border border-border-subtle bg-surface-raised px-3 text-xs text-foreground"
-            value={searchYear}
-            onChange={(event) => this.setState({ searchYear: event.target.value as HomePageState["searchYear"] })}
-          >
-            <option value="all">Any year</option>
-            <option value="2020s">2020s</option>
-            <option value="2010s">2010s</option>
-            <option value="2000s">2000s</option>
-            <option value="older">Before 2000</option>
-          </select>
-
-          <select className="h-9 rounded-md border border-border-subtle bg-surface-raised px-3 text-xs text-foreground"
-            value={searchRating}
-            onChange={(event) => this.setState({ searchRating: event.target.value as HomePageState["searchRating"] })}
-          >
-            <option value="all">Any rating</option>
-            <option value="7">7.0+</option>
-            <option value="8">8.0+</option>
-          </select>
-
-          <select className="h-9 rounded-md border border-border-subtle bg-surface-raised px-3 text-xs text-foreground"
-            value={searchProgress}
-            onChange={(event) => this.setState({ searchProgress: event.target.value as HomePageState["searchProgress"] })}
-          >
-            <option value="all">Any progress</option>
-            <option value="unwatched">Unwatched</option>
-            <option value="in_progress">In progress</option>
-            <option value="completed">Completed</option>
-          </select>
-
-        </div>
 
         {!searching && searchResults.length > 0 && filtered.length === 0 && (
 
@@ -506,7 +533,13 @@ export class HomePage extends Component<HomePageProps, HomePageState> {
 
         <div className="sticky top-16 z-30 border-b border-border-subtle bg-surface/80 py-3 backdrop-blur-md">
 
-          <ViewSwitcher active={view} onChange={(v) => this.setState({ view: v })} />
+          <div className="mx-auto flex max-w-[1600px] flex-col items-center justify-center gap-3 px-4 sm:px-8 lg:flex-row lg:gap-4">
+
+            <ViewSwitcher active={view} onChange={(v) => this.setState({ view: v })} />
+
+            {showSearch && this.renderSearchFilters()}
+
+          </div>
 
         </div>
 
