@@ -4,6 +4,7 @@ import { alignWords, isModelReady, warmupAligner } from "@/lib/alignmentClient";
 import { AudioTap } from "@/lib/audioTap";
 
 import { loadSubtitleCues } from "@/lib/vtt";
+import { cn } from "@/lib/utils";
 import type { SubtitleTrack } from "@/lib/types";
 
 import { Component, type RefObject } from "react";
@@ -22,6 +23,16 @@ interface SubtitleDisplayState {
 
   activeWord: number;
 
+  exitingCue: AlignedSubtitleCue | null;
+
+  exitingActiveWord: number;
+
+  exitMode: "slide" | "fade";
+
+  exitKey: string;
+
+  enterMode: "slide" | "fade";
+
 }
 
 interface RefinedCue {
@@ -36,6 +47,8 @@ interface RefinedCue {
 
 const ALIGN_INTERVAL_MS = 250;
 const MAX_ALIGN_SECONDS = 15;
+const SUBTITLE_EXIT_MS = 180;
+const IMMEDIATE_NEXT_GAP_SECONDS = 0.65;
 
 const SILENCE_PEAK = 1e-4;
 const MAX_MODEL_ERRORS = 3;
@@ -43,6 +56,7 @@ const MAX_MODEL_ERRORS = 3;
 export class SubtitleDisplay extends Component<SubtitleDisplayProps, SubtitleDisplayState> {
 
   private rafId: number | null = null;
+  private exitTimer: number | null = null;
 
   private loadGen = 0;
 
@@ -64,7 +78,15 @@ export class SubtitleDisplay extends Component<SubtitleDisplayProps, SubtitleDis
 
   private modelDisabled = false;
 
-  state: SubtitleDisplayState = { cue: null, activeWord: -1 };
+  state: SubtitleDisplayState = {
+    cue: null,
+    activeWord: -1,
+    exitingCue: null,
+    exitingActiveWord: -1,
+    exitMode: "fade",
+    exitKey: "",
+    enterMode: "fade",
+  };
 
   componentDidMount() {
 
@@ -89,6 +111,7 @@ export class SubtitleDisplay extends Component<SubtitleDisplayProps, SubtitleDis
     this.loadGen += 1;
 
     if (this.rafId !== null) cancelAnimationFrame(this.rafId);
+    if (this.exitTimer !== null) window.clearTimeout(this.exitTimer);
 
     this.tap?.stop();
 
@@ -163,13 +186,16 @@ export class SubtitleDisplay extends Component<SubtitleDisplayProps, SubtitleDis
 
     const index = this.findCueIndex(time);
 
+    let enterMode: SubtitleDisplayState["enterMode"] | null = null;
+
     if (index !== this.lastCueIndex) {
 
       const prev = this.lastCueIndex;
 
       this.lastCueIndex = index;
 
-      if (prev >= 0) this.onCueExit(prev);
+      if (prev >= 0) this.onCueExit(prev, index, time);
+      if (index >= 0) enterMode = this.isImmediateCueTransition(prev, index, time) ? "slide" : "fade";
 
     }
 
@@ -181,7 +207,11 @@ export class SubtitleDisplay extends Component<SubtitleDisplayProps, SubtitleDis
 
     if (cue !== this.state.cue || activeWord !== this.state.activeWord) {
 
-      this.setState({ cue, activeWord });
+      if (enterMode) {
+        this.setState({ cue, activeWord, enterMode });
+      } else {
+        this.setState({ cue, activeWord });
+      }
 
     }
 
@@ -215,9 +245,11 @@ export class SubtitleDisplay extends Component<SubtitleDisplayProps, SubtitleDis
 
   }
 
-  private onCueExit(index: number) {
+  private onCueExit(index: number, nextIndex: number, time: number) {
 
     this.maybeRefine(index, true);
+
+    this.showExitingCue(index, nextIndex, time);
 
     if (!this.refined.get(index)?.applied && !this.loggedFallback.has(index)) {
 
@@ -237,6 +269,54 @@ export class SubtitleDisplay extends Component<SubtitleDisplayProps, SubtitleDis
       });
 
     }
+
+  }
+
+  private showExitingCue(index: number, nextIndex: number, time: number) {
+
+    const cue = this.refined.get(index)?.cue ?? this.cues[index];
+    if (!cue || this.state.cue !== cue) return;
+
+    const nextCue = this.nextCueForExit(index, nextIndex);
+    const hasImmediateNext = this.isImmediateCueTransition(index, nextIndex, time, cue, nextCue);
+
+    if (this.exitTimer !== null) window.clearTimeout(this.exitTimer);
+
+    this.setState({
+      exitingCue: cue,
+      exitingActiveWord: this.state.activeWord,
+      exitMode: hasImmediateNext ? "slide" : "fade",
+      exitKey: `${cue.start}-${cue.end}-${hasImmediateNext ? "slide" : "fade"}`,
+    });
+
+    this.exitTimer = window.setTimeout(() => {
+      this.setState({ exitingCue: null });
+      this.exitTimer = null;
+    }, SUBTITLE_EXIT_MS);
+
+  }
+
+  private nextCueForExit(index: number, nextIndex: number) {
+
+    if (nextIndex >= 0) return this.cues[nextIndex];
+
+    return this.cues[index + 1] ?? null;
+
+  }
+
+  private isImmediateCueTransition(
+    previousIndex: number,
+    nextIndex: number,
+    time: number,
+    previousCue = this.cues[previousIndex],
+    nextCue = nextIndex >= 0 ? this.cues[nextIndex] : null
+  ) {
+
+    if (!previousCue || !nextCue) return false;
+
+    const gap = Math.max(0, nextCue.start - previousCue.end);
+
+    return gap <= IMMEDIATE_NEXT_GAP_SECONDS && time >= previousCue.end - 0.08;
 
   }
 
@@ -413,36 +493,59 @@ export class SubtitleDisplay extends Component<SubtitleDisplayProps, SubtitleDis
 
   render() {
 
-    const { cue, activeWord } = this.state;
+    const { cue, activeWord, exitingCue, exitingActiveWord, exitMode, exitKey, enterMode } = this.state;
 
-    if (!this.props.track || !cue) return null;
+    if (!this.props.track || (!cue && !exitingCue)) return null;
+
+    const renderCue = (displayCue: AlignedSubtitleCue, displayActiveWord: number, className: string, key: string) => (
+
+      <p className={cn("max-w-4xl rounded-md bg-black/50 px-4 py-2.5 text-center text-[18px] leading-snug font-medium shadow-2xl shadow-black/20 backdrop-blur-md sm:text-[20px]", className)}
+
+        key={key}
+        style={{ textShadow: "0 1px 2px rgba(0, 0, 0, 0.75)" }}
+
+      >
+        {displayCue.words.map((word, index) => (
+
+          <span key={index}>
+
+            {word.lineBreakBefore ? <br /> : index > 0 ? " " : null}
+
+            <span className={ index <= displayActiveWord ? "text-white transition-colors duration-150" : "text-white/40 transition-colors duration-150" } >
+
+              {word.text}
+
+            </span>
+
+          </span>
+
+        ))}
+      </p>
+
+    );
 
     return (
 
       <div className="pointer-events-none absolute inset-x-0 bottom-24 z-[35] flex justify-center px-6 sm:bottom-28">
 
-        <p className="max-w-4xl animate-fade-in rounded-md bg-black/50 px-4 py-2.5 text-center text-[18px] leading-snug font-medium shadow-2xl shadow-black/20 backdrop-blur-md sm:text-[20px]"
+        <div className="relative flex w-full justify-center">
+          {exitingCue && renderCue(
+            exitingCue,
+            exitingActiveWord,
+            cn(
+              "absolute bottom-0 left-1/2 -translate-x-1/2",
+              exitMode === "slide" ? "subtitle-slide-out" : "subtitle-fade-out"
+            ),
+            `exit-${exitKey}`
+          )}
 
-          key={`${cue.start}-${cue.text}`}
-          style={{ textShadow: "0 1px 2px rgba(0, 0, 0, 0.75)" }}
-
-        >
-          {cue.words.map((word, index) => (
-
-            <span key={index}>
-
-              {word.lineBreakBefore ? <br /> : index > 0 ? " " : null}
-
-              <span className={ index <= activeWord ? "text-white transition-colors duration-150" : "text-white/40 transition-colors duration-150" } >
-
-                {word.text}
-
-              </span>
-
-            </span>
-
-          ))}
-        </p>
+          {cue && renderCue(
+            cue,
+            activeWord,
+            enterMode === "slide" ? "subtitle-slide-in" : "animate-fade-in",
+            `${cue.start}-${cue.text}`
+          )}
+        </div>
 
       </div>
 

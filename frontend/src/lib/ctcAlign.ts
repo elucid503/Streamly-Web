@@ -4,8 +4,7 @@ export interface AlignedWordTiming {
   start: number;
   end: number;
 
-  // Mean log-probability of character frames for this word — used to filter
-  // uncertain alignments before merging into subtitle timings.
+  // Mean log-probability of character frames for this word — used to filter uncertain alignments before merging into subtitle timings.
   confidence: number;
 
 }
