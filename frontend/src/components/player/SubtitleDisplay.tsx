@@ -79,13 +79,17 @@ export class SubtitleDisplay extends Component<SubtitleDisplayProps, SubtitleDis
   private modelDisabled = false;
 
   state: SubtitleDisplayState = {
+
     cue: null,
     activeWord: -1,
+
     exitingCue: null,
     exitingActiveWord: -1,
+
     exitMode: "fade",
     exitKey: "",
     enterMode: "fade",
+
   };
 
   componentDidMount() {
@@ -283,15 +287,20 @@ export class SubtitleDisplay extends Component<SubtitleDisplayProps, SubtitleDis
     if (this.exitTimer !== null) window.clearTimeout(this.exitTimer);
 
     this.setState({
+
       exitingCue: cue,
       exitingActiveWord: this.state.activeWord,
+
       exitMode: hasImmediateNext ? "slide" : "fade",
       exitKey: `${cue.start}-${cue.end}-${hasImmediateNext ? "slide" : "fade"}`,
+
     });
 
     this.exitTimer = window.setTimeout(() => {
+
       this.setState({ exitingCue: null });
       this.exitTimer = null;
+
     }, SUBTITLE_EXIT_MS);
 
   }
@@ -304,13 +313,7 @@ export class SubtitleDisplay extends Component<SubtitleDisplayProps, SubtitleDis
 
   }
 
-  private isImmediateCueTransition(
-    previousIndex: number,
-    nextIndex: number,
-    time: number,
-    previousCue = this.cues[previousIndex],
-    nextCue = nextIndex >= 0 ? this.cues[nextIndex] : null
-  ) {
+  private isImmediateCueTransition(previousIndex: number, nextIndex: number, time: number, previousCue = this.cues[previousIndex], nextCue = nextIndex >= 0 ? this.cues[nextIndex] : null) {
 
     if (!previousCue || !nextCue) return false;
 
@@ -529,22 +532,33 @@ export class SubtitleDisplay extends Component<SubtitleDisplayProps, SubtitleDis
       <div className="pointer-events-none absolute inset-x-0 bottom-24 z-[35] flex justify-center px-6 sm:bottom-28">
 
         <div className="relative flex w-full justify-center">
+
           {exitingCue && renderCue(
+
             exitingCue,
             exitingActiveWord,
+
             cn(
+
               "absolute bottom-0 left-1/2 -translate-x-1/2",
               exitMode === "slide" ? "subtitle-slide-out" : "subtitle-fade-out"
+
             ),
+
             `exit-${exitKey}`
+
           )}
 
           {cue && renderCue(
+
             cue,
             activeWord,
+
             enterMode === "slide" ? "subtitle-slide-in" : "animate-fade-in",
             `${cue.start}-${cue.text}`
+
           )}
+
         </div>
 
       </div>
