@@ -50,7 +50,7 @@ func (s *SettingsService) Get(ctx context.Context, userID string) (*models.UserS
 			AutoPlayNext:     true,
 			SkipIntro:        true,
 			AmbienceEnabled:  true,
-			SubtitlesEnabled: false,
+			SubtitlesEnabled: true,
 			UpdatedAt:        now,
 
 		}
