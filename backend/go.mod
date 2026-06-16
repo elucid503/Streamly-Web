@@ -1,6 +1,6 @@
 module streamly
 
-go 1.24.0
+go 1.25.0
 
 require (
 	github.com/gin-contrib/cors v1.7.6
@@ -11,6 +11,8 @@ require (
 	golang.org/x/crypto v0.46.0
 	mediakit v0.0.0
 )
+
+require golang.org/x/time v0.12.0
 
 require (
 	github.com/andybalholm/brotli v1.2.0 // indirect

@@ -119,8 +119,8 @@ func main() {
 
 	// Auth
 
-	auth.POST("/register", authHandler.Register)
-	auth.POST("/login", authHandler.Login)
+	auth.POST("/register", middleware.AuthRateLimit, authHandler.Register)
+	auth.POST("/login", middleware.AuthRateLimit, authHandler.Login)
 	auth.POST("/logout", authHandler.Logout)
 	auth.GET("/me", middleware.AuthRequired(authSvc), authHandler.Me)
 
@@ -142,19 +142,21 @@ func main() {
 
 	// Catalog
 
-	protected.GET("/search", catalogHandler.Search)
+	protected.GET("/search", middleware.SearchRateLimit, catalogHandler.Search)
 
 	movies := protected.Group("/movies")
+	movies.Use(middleware.CatalogRateLimit)
 
 	movies.GET("/trending", catalogHandler.MovieTrending)
 	movies.GET("/categories", catalogHandler.MovieCategories)
 	movies.GET("/categories/:id", catalogHandler.MovieCategoryTitles)
 	movies.GET("/:id", catalogHandler.MovieDetails)
-	movies.GET("/:id/stream", streamHandler.MovieStream)
-	movies.GET("/:id/subtitles", streamHandler.MovieSubtitles)
-	movies.GET("/:id/intro", streamHandler.MovieIntro)
+	movies.GET("/:id/stream", middleware.StreamRateLimit, streamHandler.MovieStream)
+	movies.GET("/:id/subtitles", middleware.StreamRateLimit, streamHandler.MovieSubtitles)
+	movies.GET("/:id/intro", middleware.StreamRateLimit, streamHandler.MovieIntro)
 
 	shows := protected.Group("/shows")
+	shows.Use(middleware.CatalogRateLimit)
 
 	shows.GET("/trending", catalogHandler.ShowTrending)
 	shows.GET("/categories", catalogHandler.ShowCategories)
@@ -163,19 +165,20 @@ func main() {
 	shows.GET("/:id/seasons", catalogHandler.ShowSeasons)
 	shows.GET("/:id/seasons/:season/episodes", catalogHandler.SeasonEpisodes)
 	shows.GET("/:id/seasons/:season/episodes/:episode", catalogHandler.EpisodeDetails)
-	shows.GET("/:id/seasons/:season/episodes/:episode/stream", streamHandler.EpisodeStream)
-	shows.GET("/:id/seasons/:season/episodes/:episode/subtitles", streamHandler.EpisodeSubtitles)
-	shows.GET("/:id/seasons/:season/episodes/:episode/intro", streamHandler.EpisodeIntro)
+	shows.GET("/:id/seasons/:season/episodes/:episode/stream", middleware.StreamRateLimit, streamHandler.EpisodeStream)
+	shows.GET("/:id/seasons/:season/episodes/:episode/subtitles", middleware.StreamRateLimit, streamHandler.EpisodeSubtitles)
+	shows.GET("/:id/seasons/:season/episodes/:episode/intro", middleware.StreamRateLimit, streamHandler.EpisodeIntro)
 	shows.GET("/:id/seasons/:season/episodes/:episode/next", streamHandler.NextEpisode)
 
 	// Live Channels
 
 	live := protected.Group("/live")
+	live.Use(middleware.CatalogRateLimit)
 
 	live.GET("/channels", catalogHandler.LiveChannels)
 	live.GET("/channels/popular", catalogHandler.LivePopular)
-	live.GET("/channels/search", catalogHandler.LiveSearch)
-	live.GET("/channels/:id/stream", streamHandler.LiveStream)
+	live.GET("/channels/search", middleware.SearchRateLimit, catalogHandler.LiveSearch)
+	live.GET("/channels/:id/stream", middleware.StreamRateLimit, streamHandler.LiveStream)
 
 	// Admin
 
