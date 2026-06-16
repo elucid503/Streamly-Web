@@ -180,4 +180,21 @@ export interface AccessCode {
 
 }
 
+export interface ProgramEntry {
+
+  title: string;
+  startsAt: number; // Unix seconds
+  runtime: number; // minutes
+  image?: string;
+
+}
+
+export interface ChannelGuideEntry {
+
+  channel: LiveChannel;
+  current?: ProgramEntry;
+  next?: ProgramEntry;
+
+}
+
 export type MainView = "shows" | "movies" | "live";

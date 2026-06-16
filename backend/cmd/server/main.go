@@ -145,7 +145,6 @@ func main() {
 	protected.GET("/search", middleware.SearchRateLimit, catalogHandler.Search)
 
 	movies := protected.Group("/movies")
-	movies.Use(middleware.CatalogRateLimit)
 
 	movies.GET("/trending", catalogHandler.MovieTrending)
 	movies.GET("/categories", catalogHandler.MovieCategories)
@@ -156,7 +155,6 @@ func main() {
 	movies.GET("/:id/intro", middleware.StreamRateLimit, streamHandler.MovieIntro)
 
 	shows := protected.Group("/shows")
-	shows.Use(middleware.CatalogRateLimit)
 
 	shows.GET("/trending", catalogHandler.ShowTrending)
 	shows.GET("/categories", catalogHandler.ShowCategories)
@@ -173,12 +171,12 @@ func main() {
 	// Live Channels
 
 	live := protected.Group("/live")
-	live.Use(middleware.CatalogRateLimit)
 
 	live.GET("/channels", catalogHandler.LiveChannels)
 	live.GET("/channels/popular", catalogHandler.LivePopular)
 	live.GET("/channels/search", middleware.SearchRateLimit, catalogHandler.LiveSearch)
 	live.GET("/channels/:id/stream", middleware.StreamRateLimit, streamHandler.LiveStream)
+	live.GET("/schedule", catalogHandler.LiveSchedule)
 
 	// Admin
 

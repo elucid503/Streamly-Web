@@ -343,3 +343,18 @@ func (h *CatalogHandler) LiveSearch(c *gin.Context) {
 	c.JSON(http.StatusOK, jsonSlice(channels))
 
 }
+
+func (h *CatalogHandler) LiveSchedule(c *gin.Context) {
+
+	entries, err := h.media.LiveSchedule()
+
+	if err != nil {
+
+		handleServiceError(c, err)
+		return
+
+	}
+
+	c.JSON(http.StatusOK, jsonSlice(entries))
+
+}

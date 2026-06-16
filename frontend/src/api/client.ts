@@ -1,4 +1,4 @@
-import type { AccessCode, Category, Episode, FavoriteItem, IntroInfo, LiveChannel, NextEpisode, SearchHit, Season, StreamInfo, SubtitleTrack, TitleDetails, User, UserSettings, WatchHistoryItem, } from "@/lib/types";
+import type { AccessCode, Category, ChannelGuideEntry, Episode, FavoriteItem, IntroInfo, LiveChannel, NextEpisode, SearchHit, Season, StreamInfo, SubtitleTrack, TitleDetails, User, UserSettings, WatchHistoryItem, } from "@/lib/types";
 
 export class ApiError extends Error {
 
@@ -303,6 +303,12 @@ export const api = {
   liveSearch(q: string) {
 
     return request<LiveChannel[]>(`/api/live/channels/search?q=${encodeURIComponent(q)}&limit=48`);
+
+  },
+
+  liveSchedule() {
+
+    return request<ChannelGuideEntry[]>("/api/live/schedule");
 
   },
 

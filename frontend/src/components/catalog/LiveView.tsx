@@ -2,6 +2,7 @@ import { api } from "@/api/client";
 
 import { ContentRow } from "@/components/catalog/ContentRow";
 import { CachedImage } from "@/components/ui/CachedImage";
+import { TVGuide } from "@/components/catalog/TVGuide";
 
 import { cn } from "@/lib/utils";
 import type { FavoriteItem, LiveChannel } from "@/lib/types";
@@ -276,6 +277,8 @@ export class LiveView extends Component<LiveViewProps, LiveViewState> {
               </ContentRow>
 
             )}
+
+            <TVGuide onSelect={this.props.onSelect} />
 
             <ContentRow title="Popular Channels" sectionId="live-popular" loading={loading}>
 
