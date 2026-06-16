@@ -260,7 +260,7 @@ export class EpisodePickerPanel extends Component<EpisodePickerPanelProps, Episo
 
             {this.renderEpisodeThumbnail(ep, "size-full")}
 
-            <span className="absolute top-2 left-2 rounded-md bg-black/70 px-2 py-0.5 text-[10px] font-medium tracking-wide text-foreground backdrop-blur-sm">
+            <span className="absolute top-2 left-2 rounded-md border border-border-subtle bg-surface/80 px-2 py-0.5 text-[10px] font-medium tracking-wide text-foreground backdrop-blur-md">
 
               E{ep.episode}
 
@@ -401,7 +401,7 @@ export class EpisodePickerPanel extends Component<EpisodePickerPanelProps, Episo
       <>
         <div className="w-full animate-fade-in" onClick={(e) => e.stopPropagation()}>
 
-          <div className="-mx-4 border-t border-white/10 bg-black/75 shadow-[0_-16px_48px_rgba(0,0,0,0.45)] backdrop-blur-xl sm:-mx-6">
+          <div className="-mx-4 border-t border-border-subtle bg-surface/80 shadow-[0_-16px_48px_rgba(0,0,0,0.45)] backdrop-blur-md sm:-mx-6">
 
             <div className="flex items-center justify-between gap-4 px-4 py-3 sm:px-6">
 

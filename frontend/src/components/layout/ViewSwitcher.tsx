@@ -28,9 +28,7 @@ export class ViewSwitcher extends Component<ViewSwitcherProps> {
 
     return (
 
-      <div className="flex justify-center">
-
-        <div className="inline-flex rounded-full border border-border bg-surface-raised p-1">
+      <div className="inline-flex rounded-full border border-border bg-surface-raised p-1">
 
           {views.map((view) => {
 
@@ -66,8 +64,6 @@ export class ViewSwitcher extends Component<ViewSwitcherProps> {
             );
 
           })}
-
-        </div>
 
       </div>
 

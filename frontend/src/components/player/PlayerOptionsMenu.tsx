@@ -2,7 +2,7 @@ import { cn } from "@/lib/utils";
 import type { StreamQuality, SubtitleTrack } from "@/lib/types";
 
 import { Component, createRef, type ReactNode } from "react";
-import { Check, Gauge, Settings2, SlidersHorizontal, Subtitles, X } from "lucide-react";
+import { Check, Gauge, Settings, Settings2, SlidersHorizontal, Subtitles, X } from "lucide-react";
 
 type OptionsPanel = "quality" | "subtitles";
 
@@ -17,12 +17,14 @@ interface PlayerOptionsMenuProps {
   activeSubtitleId: string | null;
 
   qualityEnabled: boolean;
+  preferredHeight?: number;
 
   onToggle: () => void;
   onClose: () => void;
 
   onQualityChange: (height: number) => void;
   onSubtitleChange: (trackId: string | null) => void;
+  onOpenSettings?: () => void;
 
 }
 
@@ -208,7 +210,7 @@ export class PlayerOptionsMenu extends Component<PlayerOptionsMenuProps, PlayerO
 
   render() {
 
-    const { open, qualities, selectedHeight, subtitleTracks, activeSubtitleId, qualityEnabled, onToggle, onClose, onQualityChange, onSubtitleChange, } = this.props;
+    const { open, qualities, selectedHeight, subtitleTracks, activeSubtitleId, qualityEnabled, preferredHeight, onToggle, onClose, onQualityChange, onSubtitleChange, onOpenSettings, } = this.props;
     const { panel } = this.state;
 
     const sortedQualities = [...qualities].sort((a, b) => b.height - a.height);
@@ -240,7 +242,7 @@ export class PlayerOptionsMenu extends Component<PlayerOptionsMenuProps, PlayerO
 
         {open && (
 
-          <div className="absolute right-0 bottom-full z-40 mb-3 w-80 animate-fade-in overflow-hidden rounded-xl border border-white/10 bg-black/80 shadow-2xl backdrop-blur-xl"
+          <div className="absolute right-0 bottom-full z-40 mb-3 w-80 animate-fade-in overflow-hidden rounded-xl border border-border-subtle bg-surface/80 shadow-2xl backdrop-blur-md"
 
             onClick={(e) => e.stopPropagation()}
 
@@ -304,23 +306,45 @@ export class PlayerOptionsMenu extends Component<PlayerOptionsMenuProps, PlayerO
 
                     <div className="space-y-1">
 
-                      {sortedQualities.map((quality) =>
+                      {sortedQualities.map((quality) => {
 
-                        this.renderOption(
+                        const isPreferred = preferredHeight === quality.height;
+
+                        const detail = isPreferred ? `${quality.label} · Preferred` : quality.label;
+
+                        return this.renderOption(
 
                           selectedHeight === quality.height,
 
                           qualityLabel(quality.height),
-                          quality.label,
+                          detail,
 
                           () => onQualityChange(quality.height),
                           `quality-${quality.height}`
 
-                        )
+                        );
 
-                      )}
+                      })}
 
                     </div>
+
+                    {onOpenSettings && (
+
+                      <button onClick={(e) => {
+
+                          e.stopPropagation();
+
+                          onClose();
+                          onOpenSettings();
+
+                        }} className="mt-2 flex w-full items-center gap-2 rounded-lg border border-white/8 px-3.5 py-2.5 text-left text-xs text-foreground-muted transition-colors hover:bg-white/6 hover:text-foreground" >
+
+                        <Settings size={13} className="shrink-0 opacity-80" />
+                        <span>Change Quality Settings</span>
+
+                      </button>
+
+                    )}
 
                   </div>
 

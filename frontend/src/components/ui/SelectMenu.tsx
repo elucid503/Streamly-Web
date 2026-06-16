@@ -1,6 +1,7 @@
 import { cn } from "@/lib/utils";
 
 import { Component, createRef } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import { Check, ChevronDown } from "lucide-react";
 
 export interface SelectMenuOption {
@@ -18,12 +19,14 @@ interface SelectMenuProps {
 
   label?: string;
   className?: string;
+  placement?: "top" | "bottom" | "auto";
 
 }
 
 interface SelectMenuState {
 
   open: boolean;
+  openUpward: boolean;
 
 }
 
@@ -34,6 +37,7 @@ export class SelectMenu extends Component<SelectMenuProps, SelectMenuState> {
   state: SelectMenuState = {
 
     open: false,
+    openUpward: false,
 
   };
 
@@ -49,6 +53,41 @@ export class SelectMenu extends Component<SelectMenuProps, SelectMenuState> {
 
   }
 
+  resolveOpenUpward = (): boolean => {
+
+    const { placement = "auto", options } = this.props;
+
+    if (placement === "top") return true;
+
+    if (placement === "bottom") return false;
+
+    const root = this.rootRef.current;
+
+    if (!root) return false;
+
+    const rect = root.getBoundingClientRect();
+    const estimatedHeight = Math.min(options.length * 36 + 8, 272);
+
+    return window.innerHeight - rect.bottom < estimatedHeight + 12;
+
+  };
+
+  toggleOpen = () => {
+
+    const { open } = this.state;
+
+    if (open) {
+
+      this.setState({ open: false });
+
+      return;
+
+    }
+
+    this.setState({ open: true, openUpward: this.resolveOpenUpward() });
+
+  };
+
   handleDocumentMouseDown = (event: MouseEvent) => {
 
     const root = this.rootRef.current;
@@ -62,7 +101,7 @@ export class SelectMenu extends Component<SelectMenuProps, SelectMenuState> {
   render() {
 
     const { value, options, onChange, label, className } = this.props;
-    const { open } = this.state;
+    const { open, openUpward } = this.state;
 
     const selected = options.find((option) => option.value === value) ?? options[0];
 
@@ -73,13 +112,13 @@ export class SelectMenu extends Component<SelectMenuProps, SelectMenuState> {
         <button
           type="button"
           className={cn(
-            "flex h-9 min-w-[132px] items-center justify-between gap-2 rounded-full border border-border-subtle bg-surface-raised px-3 text-left text-xs font-medium text-foreground shadow-sm transition-colors hover:border-border hover:bg-surface-overlay",
+            "field-focus flex h-9 min-w-[132px] items-center justify-between gap-2 rounded-full border border-border-subtle bg-surface-raised px-3 text-left text-xs font-medium text-foreground hover:border-border hover:bg-surface-overlay",
             open && "border-border bg-surface-overlay"
           )}
           aria-haspopup="listbox"
           aria-expanded={open}
           title={label}
-          onClick={() => this.setState({ open: !open })}
+          onClick={this.toggleOpen}
         >
 
           <span className="truncate">{selected?.label}</span>
@@ -87,49 +126,79 @@ export class SelectMenu extends Component<SelectMenuProps, SelectMenuState> {
 
         </button>
 
-        {open && (
+        <AnimatePresence>
 
-          <div className="absolute left-0 top-[calc(100%+6px)] z-50 min-w-full overflow-hidden rounded-md border border-border bg-surface-raised py-1 shadow-xl">
+          {open && (
 
-            <div role="listbox" aria-label={label} className="max-h-64 overflow-y-auto py-1">
+            <motion.div className={cn(
 
-              {options.map((option) => {
+                "absolute left-0 z-50 min-w-full overflow-hidden rounded-[1.25rem] border border-border-subtle bg-surface/95 p-1 shadow-2xl ring-1 ring-white/[0.04] backdrop-blur-lg",
+                openUpward ? "bottom-[calc(100%+8px)]" : "top-[calc(100%+8px)]"
 
-                const isSelected = option.value === value;
+              )}
 
-                return (
+              initial={{ opacity: 0, scale: 0.96, y: openUpward ? 6 : -6 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
 
-                  <button
-                    key={option.value}
-                    type="button"
-                    role="option"
-                    aria-selected={isSelected}
-                    className={cn(
-                      "flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-xs text-foreground-muted transition-colors hover:bg-surface-overlay hover:text-foreground",
-                      isSelected && "text-foreground"
-                    )}
-                    onClick={() => {
+              exit={{ opacity: 0, scale: 0.96, y: openUpward ? 6 : -6 }}
 
-                      onChange(option.value);
-                      this.setState({ open: false });
+              transition={{ type: "spring", stiffness: 500, damping: 32 }}
+              style={{ transformOrigin: openUpward ? "bottom center" : "top center" }}
 
-                    }}
-                  >
+            >
 
-                    <span className="whitespace-nowrap">{option.label}</span>
-                    {isSelected && <Check size={13} className="text-accent" />}
+              <div role="listbox" aria-label={label} className="flex max-h-64 flex-col gap-0.5 overflow-y-auto">
 
-                  </button>
+                {options.map((option) => {
 
-                );
+                  const isSelected = option.value === value;
 
-              })}
+                  return (
 
-            </div>
+                    <button
+                      key={option.value}
+                      type="button"
+                      role="option"
+                      aria-selected={isSelected}
+                      className={cn(
+                        "flex h-9 w-full items-center justify-between gap-2 rounded-xl px-3 text-left text-xs font-medium transition-colors",
+                        isSelected
+                          ? "bg-surface-raised text-foreground shadow-sm"
+                          : "text-foreground-muted hover:bg-surface-overlay/80 hover:text-foreground"
+                      )}
+                      onClick={() => {
 
-          </div>
+                        onChange(option.value);
+                        this.setState({ open: false });
 
-        )}
+                      }}
+                    >
+
+                      <span className="truncate">{option.label}</span>
+
+                      {isSelected && (
+
+                        <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-foreground/10">
+
+                          <Check size={11} className="text-foreground" strokeWidth={2.5} />
+
+                        </span>
+
+                      )}
+
+                    </button>
+
+                  );
+
+                })}
+
+              </div>
+
+            </motion.div>
+
+          )}
+
+        </AnimatePresence>
 
       </div>
 

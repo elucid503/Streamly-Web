@@ -101,7 +101,7 @@ export class TitleCard extends Component<TitleCardProps> {
 
           <button className={cn(
 
-              "absolute right-2 top-2 z-10 flex h-8 w-8 items-center justify-center rounded-full border border-white/15 bg-black/55 text-white shadow-sm backdrop-blur transition-colors hover:bg-black/75",
+              "absolute right-2 top-2 z-10 flex h-8 w-8 items-center justify-center rounded-full border border-border-subtle bg-surface/80 text-foreground shadow-sm backdrop-blur-md transition-colors hover:bg-surface-overlay",
               favorite && "text-accent"
 
             )}

@@ -40,7 +40,7 @@ export class PauseOverlay extends Component<PauseOverlayProps> {
 
               onResume();
 
-            }} className="absolute inset-0 z-[40] flex animate-fade-in cursor-pointer items-center justify-center overflow-hidden bg-black/35 px-4 backdrop-blur-md sm:px-8" aria-label="Resume playback" >
+            }} className="absolute inset-0 z-[40] flex animate-fade-in cursor-pointer items-center justify-center overflow-hidden bg-surface/60 px-4 backdrop-blur-md sm:px-8" aria-label="Resume playback" >
 
             <div className="pointer-events-none absolute inset-0">
 

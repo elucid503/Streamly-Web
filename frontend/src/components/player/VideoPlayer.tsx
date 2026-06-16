@@ -31,6 +31,7 @@ interface VideoPlayerProps {
 
   qualities?: StreamQuality[];
   selectedHeight?: number;
+  preferredHeight?: number;
   subtitleTracks?: SubtitleTrack[];
 
   intro?: IntroInfo | null;
@@ -48,6 +49,7 @@ interface VideoPlayerProps {
   onEnded?: () => void;
   onNextEpisode?: () => void;
   onQualityChange?: (height: number, positionMs: number) => void;
+  onOpenSettings?: () => void;
   onDurationReady?: (durationMs: number) => void;
   onPlaybackError?: (positionMs: number) => void;
 
@@ -1198,7 +1200,7 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
 
   render() {
 
-    const { title, subtitle, episodeTitle, description, poster, qualities = [], selectedHeight = 1080, nextEpisode, onBack, ambienceEnabled, live, onQualityChange, seasons, episodes, currentSeason, currentEpisode, menuSeason, episodesLoading, onSeasonChange, onEpisodeSelect, } = this.props;
+    const { title, subtitle, episodeTitle, description, poster, qualities = [], selectedHeight = 1080, preferredHeight, nextEpisode, onBack, ambienceEnabled, live, onQualityChange, onOpenSettings, seasons, episodes, currentSeason, currentEpisode, menuSeason, episodesLoading, onSeasonChange, onEpisodeSelect, } = this.props;
     const { playing, muted, volume, showControls, showOptions, showEpisodes, showSkipIntro, showUpNext, upNextCountdown, fullscreen, loading, seeking, activeSubtitleId, actionFeedback, } = this.state;
 
     const showPauseOverlay = !playing && !loading && !seeking && !showEpisodes;
@@ -1267,7 +1269,7 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
 
         {loading && (
 
-          <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/40">
+          <div className="absolute inset-0 z-20 flex items-center justify-center bg-surface/60 backdrop-blur-md">
 
             <div className="h-8 w-8 animate-spin rounded-full border-2 border-foreground/20 border-t-foreground" />
 
@@ -1294,7 +1296,7 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
 
                 onBack();
 
-              }} className="flex shrink-0 items-center gap-2 rounded-md bg-black/50 px-3 py-1.5 text-xs backdrop-blur-sm hover:bg-black/70" >
+              }} className="flex shrink-0 items-center gap-2 rounded-md border border-border-subtle bg-surface/80 px-3 py-1.5 text-xs backdrop-blur-md transition-colors hover:bg-surface-overlay" >
 
               <ArrowLeft size={14} />
 
@@ -1308,7 +1310,7 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
 
           )}
 
-          <div className="max-w-[55%] min-w-0 rounded-md bg-black/50 px-3 py-1.5 text-right backdrop-blur-sm">
+          <div className="max-w-[55%] min-w-0 rounded-md border border-border-subtle bg-surface/80 px-3 py-1.5 text-right backdrop-blur-md">
 
             <p className="truncate text-sm font-medium">
 
@@ -1332,7 +1334,7 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
 
         {!live && showSkipIntro && (
 
-          <button onClick={this.skipIntro} className="absolute right-6 bottom-20 z-20 flex animate-fade-in items-center gap-2 rounded-md border border-border bg-surface-raised/90 px-4 py-2 text-sm font-medium backdrop-blur-sm transition-colors hover:bg-surface-overlay" >
+          <button onClick={this.skipIntro} className="absolute right-6 bottom-20 z-20 flex animate-fade-in items-center gap-2 rounded-md border border-border-subtle bg-surface/80 px-4 py-2 text-sm font-medium backdrop-blur-md transition-colors hover:bg-surface-overlay" >
 
             <SkipForward size={14} />
 
@@ -1344,7 +1346,7 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
 
         {!live && showUpNext && nextEpisode && (
 
-          <div className="absolute right-6 bottom-28 z-20 w-72 animate-fade-in rounded-lg border border-border bg-surface-raised/95 p-4 backdrop-blur-md">
+          <div className="absolute right-6 bottom-28 z-20 w-72 animate-fade-in rounded-lg border border-border-subtle bg-surface/80 p-4 backdrop-blur-md">
 
             <p className="text-[11px] tracking-wide text-foreground-faint uppercase">
 
@@ -1527,6 +1529,7 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
                 open={showOptions}
                 qualities={qualities}
                 selectedHeight={selectedHeight}
+                preferredHeight={preferredHeight}
 
                 subtitleTracks={this.allSubtitleTracks()}
                 activeSubtitleId={activeSubtitleId}
@@ -1546,6 +1549,7 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
 
                 }}
                 onSubtitleChange={this.applySubtitleSelection}
+                onOpenSettings={onOpenSettings}
 
               />
 

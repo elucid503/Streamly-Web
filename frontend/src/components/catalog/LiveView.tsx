@@ -161,7 +161,7 @@ export class LiveView extends Component<LiveViewProps, LiveViewState> {
 
         <button className={cn(
 
-            "absolute right-6 top-0 flex h-7 w-7 items-center justify-center rounded-full border border-white/15 bg-black/55 text-white shadow-sm backdrop-blur transition-colors hover:bg-black/75",
+            "absolute right-6 top-0 flex h-7 w-7 items-center justify-center rounded-full border border-border-subtle bg-surface/80 text-foreground shadow-sm backdrop-blur-md transition-colors hover:bg-surface-overlay",
             favorite && "text-accent"
 
           )}
@@ -269,7 +269,7 @@ export class LiveView extends Component<LiveViewProps, LiveViewState> {
 
             {favoriteChannels.length > 0 && (
 
-              <ContentRow title="Favorites">
+              <ContentRow title="Favorites" sectionId="live-favorites">
 
                 {favoriteChannels.map((item) => this.renderChannel(this.favoriteAsChannel(item)))}
 
@@ -277,13 +277,13 @@ export class LiveView extends Component<LiveViewProps, LiveViewState> {
 
             )}
 
-            <ContentRow title="Popular Channels" loading={loading}>
+            <ContentRow title="Popular Channels" sectionId="live-popular" loading={loading}>
 
               {popular.map((ch) => this.renderChannel(ch))}
 
             </ContentRow>
 
-            <section className="px-4 sm:px-8">
+            <section id="live-all" className="scroll-mt-36 px-4 sm:px-8">
 
               <h2 className="mb-4 text-sm font-medium tracking-wide text-foreground-muted uppercase">
 

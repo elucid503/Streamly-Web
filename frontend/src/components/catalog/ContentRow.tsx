@@ -6,6 +6,7 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 interface ContentRowProps {
 
   title: string;
+  sectionId?: string;
 
   children: ReactNode;
 
@@ -27,11 +28,11 @@ export class ContentRow extends Component<ContentRowProps> {
 
   render() {
 
-    const { title, children, loading } = this.props;
+    const { title, sectionId, children, loading } = this.props;
 
     return (
 
-      <section className="mb-8">
+      <section id={sectionId} className="mb-8 scroll-mt-36">
 
         <div className="mb-3 flex items-center justify-between px-4 sm:px-8">
 

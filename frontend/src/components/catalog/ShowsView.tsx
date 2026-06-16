@@ -157,7 +157,7 @@ export class ShowsView extends Component<ShowsViewProps, ShowsViewState> {
 
         {resumeItems.length > 0 && (
 
-          <ContentRow title="Continue Watching">
+          <ContentRow title="Continue Last" sectionId="shows-continue">
 
             {resumeItems.map((item) => (
 
@@ -196,7 +196,7 @@ export class ShowsView extends Component<ShowsViewProps, ShowsViewState> {
 
         {favoriteShows.length > 0 && (
 
-          <ContentRow title="Favorites">
+          <ContentRow title="Favorites" sectionId="shows-favorites">
 
             {favoriteShows.map((item) => {
 
@@ -235,7 +235,7 @@ export class ShowsView extends Component<ShowsViewProps, ShowsViewState> {
 
         {trending.length > 0 && (
 
-          <ContentRow title="Trending Now">
+          <ContentRow title="Trending Now" sectionId="shows-trending">
 
             {trending.map((hit) => {
 

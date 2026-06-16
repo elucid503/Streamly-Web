@@ -37,11 +37,11 @@ export class Modal extends Component<ModalProps> {
 
           >
 
-            <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
+            <div className="absolute inset-0 bg-surface/60 backdrop-blur-md" onClick={onClose} />
 
             <motion.div className={cn(
 
-                "relative z-10 w-full max-w-md rounded-lg border border-border bg-surface-raised p-6 shadow-2xl",
+                "relative z-10 w-full max-w-md rounded-lg border border-border-subtle bg-surface/80 p-6 shadow-2xl backdrop-blur-md",
                 className
 
               )}

@@ -2,12 +2,13 @@ import { api, ApiError } from "@/api/client";
 
 import { VideoPlayer } from "@/components/player/VideoPlayer";
 import { Button } from "@/components/ui/Button";
+import { SettingsPanel } from "@/pages/SettingsPanel";
 
 import { history, navigate, saveReturnPath, type NavigateFn } from "@/lib/navigation";
 import { store } from "@/lib/store";
 
 import type { Episode, IntroInfo, NextEpisode, Season, StreamInfo, StreamQuality, SubtitleTrack, WatchHistoryItem, } from "@/lib/types";
-import { dedupeQualitiesByHeight, fetchStreamWithFallback, initialQualityAttempts, nextLowerQualityHeight, } from "@/lib/stream";
+import { closestAvailableHeight, dedupeQualitiesByHeight, fetchStreamWithFallback, initialQualityAttempts, nextLowerQualityHeight, } from "@/lib/stream";
 import { pickQualityByHeight, qualityHasProxy, qualityPlaybackUrl, streamFromQuality, streamPlaybackUrl, } from "@/lib/streamClient";
 
 import { parseWatchPath } from "@/lib/watchRoute";
@@ -66,6 +67,8 @@ interface WatchPageState {
 
   ready: boolean;
 
+  settingsOpen: boolean;
+
 }
 
 const EMPTY_STATE: Omit<WatchPageState, "loading" | "error" | "ready"> = {
@@ -106,6 +109,8 @@ const EMPTY_STATE: Omit<WatchPageState, "loading" | "error" | "ready"> = {
 
   streamGeneration: 0,
 
+  settingsOpen: false,
+
 };
 
 function episodeProgress(items: WatchHistoryItem[], showId: number, season: number, episode: number): number {
@@ -137,6 +142,12 @@ export class WatchPage extends Component<WatchPageProps, WatchPageState> {
 
   private failedQualityHeights = new Set<number>();
 
+  private userSelectedQuality = false;
+
+  private lastPlaybackPositionMs = 0;
+
+  private lastPreferredHeight = 1080;
+
   state: WatchPageState = {
 
     ...EMPTY_STATE,
@@ -146,9 +157,13 @@ export class WatchPage extends Component<WatchPageProps, WatchPageState> {
 
     ready: false,
 
+    settingsOpen: false,
+
   };
 
   componentDidMount() {
+
+    this.lastPreferredHeight = this.preferredHeight();
 
     this.unsubscribe = store.subscribe(this.onStoreChange);
 
@@ -182,7 +197,19 @@ export class WatchPage extends Component<WatchPageProps, WatchPageState> {
 
   onStoreChange = () => {
 
+    const nextPreferred = this.preferredHeight();
+    const preferredChanged = nextPreferred !== this.lastPreferredHeight;
+
+    this.lastPreferredHeight = nextPreferred;
+
     this.forceUpdate();
+
+    if (preferredChanged) {
+
+      this.userSelectedQuality = false;
+      void this.ensurePreferredQuality(this.lastPlaybackPositionMs);
+
+    }
 
   };
 
@@ -221,6 +248,7 @@ export class WatchPage extends Component<WatchPageProps, WatchPageState> {
     const route = parseWatchPath(this.props.watchPath);
 
     this.failedQualityHeights.clear();
+    this.userSelectedQuality = false;
 
     this.setState({
 
@@ -284,6 +312,36 @@ export class WatchPage extends Component<WatchPageProps, WatchPageState> {
 
   preferredHeight = (): number => store.settings?.preferredHeight ?? 1080;
 
+  resolvedPreferredHeight = (qualities: StreamQuality[]): number => {
+
+    return closestAvailableHeight(qualities, this.preferredHeight()) ?? this.preferredHeight();
+
+  };
+
+  ensurePreferredQuality = async (positionMs: number) => {
+
+    if (this.userSelectedQuality) return;
+
+    const { kind, qualities, selectedHeight, ready } = this.state;
+
+    if (!ready || kind === "live") return;
+
+    const resolved = this.resolvedPreferredHeight(qualities);
+
+    if (resolved === selectedHeight) return;
+
+    try {
+
+      await this.switchStream(resolved, positionMs);
+
+    } catch {
+
+      /* keep current stream */
+
+    }
+
+  };
+
   requestStream = async (height: number): Promise<StreamInfo> => {
 
     const { kind, mediaId, season, episode } = this.state;
@@ -307,23 +365,30 @@ export class WatchPage extends Component<WatchPageProps, WatchPageState> {
 
     if (!playbackUrl) throw new Error("no stream available");
 
-    this.setState((prev) => ({
+    this.setState((prev) => {
 
-      ...prev,
+      const qualities = this.mergeQualities(stream.qualities, prev.qualities);
+      const resolvedHeight = this.userSelectedQuality ? (stream.selectedHeight ?? requestedHeight) : this.resolvedPreferredHeight(qualities);
 
-      streamUrl: playbackUrl,
+      return {
 
-      isHls: stream.isHls,
+        ...prev,
 
-      qualities: this.mergeQualities(stream.qualities, prev.qualities),
-      selectedHeight: stream.selectedHeight ?? requestedHeight,
+        streamUrl: playbackUrl,
 
-      startPositionMs: Math.floor(positionMs),
-      streamGeneration: prev.streamGeneration + 1,
+        isHls: stream.isHls,
 
-      error: "",
+        qualities,
+        selectedHeight: resolvedHeight,
 
-    }));
+        startPositionMs: Math.floor(positionMs),
+        streamGeneration: prev.streamGeneration + 1,
+
+        error: "",
+
+      };
+
+    });
 
   };
 
@@ -364,17 +429,21 @@ export class WatchPage extends Component<WatchPageProps, WatchPageState> {
 
     if (!streamPlaybackUrl(stream)) throw new Error("no stream available");
 
+    const qualities = dedupeQualitiesByHeight(stream.qualities ?? []);
+    const resolvedHeight = this.resolvedPreferredHeight(qualities);
+    const startPositionMs = movieProgress(historyItems, id);
+
     this.setState((prev) => ({
 
       streamUrl: streamPlaybackUrl(stream),
 
       isHls: stream.isHls,
 
-      qualities: dedupeQualitiesByHeight(stream.qualities ?? []),
-      selectedHeight: stream.selectedHeight ?? preferredHeight,
+      qualities,
+      selectedHeight: resolvedHeight,
 
       streamGeneration: prev.streamGeneration + 1,
-      startPositionMs: movieProgress(historyItems, id),
+      startPositionMs,
 
       loading: false,
       ready: true,
@@ -384,7 +453,15 @@ export class WatchPage extends Component<WatchPageProps, WatchPageState> {
 
       subtitle: "",
 
-    }));
+    }), () => {
+
+      if (resolvedHeight !== (stream.selectedHeight ?? preferredHeight)) {
+
+        void this.ensurePreferredQuality(startPositionMs);
+
+      }
+
+    });
 
     void this.enrichMovie(id, gen);
 
@@ -454,6 +531,10 @@ export class WatchPage extends Component<WatchPageProps, WatchPageState> {
 
     if (!streamPlaybackUrl(stream)) throw new Error("no stream available");
 
+    const qualities = dedupeQualitiesByHeight(stream.qualities ?? []);
+    const resolvedHeight = this.resolvedPreferredHeight(qualities);
+    const startPositionMs = episodeProgress(historyItems, showId, season, episode);
+
     this.setState(
 
       (prev) => ({
@@ -462,11 +543,11 @@ export class WatchPage extends Component<WatchPageProps, WatchPageState> {
 
         isHls: stream.isHls,
 
-        qualities: dedupeQualitiesByHeight(stream.qualities ?? []),
-        selectedHeight: stream.selectedHeight ?? preferredHeight,
+        qualities,
+        selectedHeight: resolvedHeight,
 
         streamGeneration: prev.streamGeneration + 1,
-        startPositionMs: episodeProgress(historyItems, showId, season, episode),
+        startPositionMs,
 
         loading: false,
         ready: true,
@@ -483,6 +564,12 @@ export class WatchPage extends Component<WatchPageProps, WatchPageState> {
       }),
 
       () => {
+
+        if (resolvedHeight !== (stream.selectedHeight ?? preferredHeight)) {
+
+          void this.ensurePreferredQuality(startPositionMs);
+
+        }
 
         void this.loadMenuEpisodes(season);
 
@@ -711,6 +798,8 @@ export class WatchPage extends Component<WatchPageProps, WatchPageState> {
 
   saveProgress = (positionMs: number, durationMs: number) => {
 
+    this.lastPlaybackPositionMs = positionMs;
+
     if (this.progressDebounce) clearTimeout(this.progressDebounce);
 
     this.pendingProgress = { positionMs, durationMs };
@@ -826,6 +915,8 @@ export class WatchPage extends Component<WatchPageProps, WatchPageState> {
 
     if (!ready || kind === "live" || height === selectedHeight) return;
 
+    this.userSelectedQuality = true;
+
     try {
 
       await this.switchStream(height, positionMs);
@@ -915,7 +1006,7 @@ export class WatchPage extends Component<WatchPageProps, WatchPageState> {
 
   render() {
 
-    const { streamUrl, isHls, qualities, selectedHeight, subtitleTracks, title, subtitle, episodeTitle, description, poster, intro, nextEpisode, startPositionMs, loading, error, ready, seasons, menuEpisodes, menuSeason, menuEpisodesLoading, season, episode, kind, streamGeneration } = this.state;
+    const { streamUrl, isHls, qualities, selectedHeight, subtitleTracks, title, subtitle, episodeTitle, description, poster, intro, nextEpisode, startPositionMs, loading, error, ready, seasons, menuEpisodes, menuSeason, menuEpisodesLoading, season, episode, kind, streamGeneration, settingsOpen } = this.state;
     const settings = store.settings;
 
     if (loading) {
@@ -988,6 +1079,7 @@ export class WatchPage extends Component<WatchPageProps, WatchPageState> {
 
           qualities={qualities}
           selectedHeight={selectedHeight}
+          preferredHeight={settings?.preferredHeight ?? 1080}
 
           subtitleTracks={subtitleTracks}
 
@@ -1007,6 +1099,7 @@ export class WatchPage extends Component<WatchPageProps, WatchPageState> {
           onEpisodeSelect={kind === "show" ? this.handleEpisodeSelect : undefined}
           onDurationReady={this.state.kind === "live" ? undefined : this.loadIntro}
           onQualityChange={this.state.kind === "live" ? undefined : this.handleQualityChange}
+          onOpenSettings={() => this.setState({ settingsOpen: true })}
           onPlaybackError={this.state.kind === "live" ? undefined : this.handlePlaybackError}
 
           startPositionMs={this.state.kind === "live" ? 0 : startPositionMs}
@@ -1022,6 +1115,8 @@ export class WatchPage extends Component<WatchPageProps, WatchPageState> {
           episodesLoading={kind === "show" ? menuEpisodesLoading : undefined}
 
         />
+
+        <SettingsPanel open={settingsOpen} onClose={() => this.setState({ settingsOpen: false })} />
 
       </div>
 

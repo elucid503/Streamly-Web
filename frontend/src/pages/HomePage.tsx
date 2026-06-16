@@ -6,47 +6,20 @@ import { ShowsView } from "@/components/catalog/ShowsView";
 import { ContentRow } from "@/components/catalog/ContentRow";
 import { TitleCard } from "@/components/catalog/TitleCard";
 import { Header } from "@/components/layout/Header";
-import { ViewSwitcher } from "@/components/layout/ViewSwitcher";
+import { HomeBackdrop } from "@/components/layout/HomeBackdrop";
+import { HomeBottomBar } from "@/components/layout/HomeBottomBar";
 import { ViewCarousel } from "@/components/layout/ViewCarousel";
+import type { ContextActionId } from "@/components/layout/ViewContextBar";
 import { AdminPanel } from "@/pages/AdminPanel";
 import { SettingsPanel } from "@/pages/SettingsPanel";
-import { SelectMenu } from "@/components/ui/SelectMenu";
 
 import type { NavigateFn } from "@/lib/navigation";
-import { resumePath } from "@/lib/history";
+import { lastWatched, lastWatchedPath, resumePath, showResumeItem } from "@/lib/history";
 import { store } from "@/lib/store";
 
 import type { FavoriteItem, LiveChannel, MainView, SearchHit, WatchHistoryItem } from "@/lib/types";
 
 import { Component } from "react";
-import { SlidersHorizontal } from "lucide-react";
-
-const searchKindOptions = [
-  { value: "all", label: "All titles" },
-  { value: "show", label: "Shows" },
-  { value: "movie", label: "Movies" },
-];
-
-const searchYearOptions = [
-  { value: "all", label: "Any year" },
-  { value: "2020s", label: "2020s" },
-  { value: "2010s", label: "2010s" },
-  { value: "2000s", label: "2000s" },
-  { value: "older", label: "Before 2000" },
-];
-
-const searchRatingOptions = [
-  { value: "all", label: "Any rating" },
-  { value: "7", label: "7.0+" },
-  { value: "8", label: "8.0+" },
-];
-
-const searchProgressOptions = [
-  { value: "all", label: "Any progress" },
-  { value: "unwatched", label: "Unwatched" },
-  { value: "in_progress", label: "In progress" },
-  { value: "completed", label: "Completed" },
-];
 
 interface HomePageProps {
 
@@ -73,6 +46,8 @@ interface HomePageState {
 
   settingsOpen: boolean;
   adminOpen: boolean;
+
+  contextLoading: ContextActionId | null;
 
 }
 
@@ -101,6 +76,8 @@ export class HomePage extends Component<HomePageProps, HomePageState> {
 
     settingsOpen: false,
     adminOpen: false,
+
+    contextLoading: null,
 
   };
 
@@ -351,54 +328,167 @@ export class HomePage extends Component<HomePageProps, HomePageState> {
 
   };
 
-  renderSearchFilters() {
+  pickRandom = <T,>(items: T[]): T | null => {
 
-    const { searchKind, searchYear, searchRating, searchProgress } = this.state;
+    if (items.length === 0) return null;
 
-    return (
+    return items[Math.floor(Math.random() * items.length)] ?? null;
 
-      <div className="flex min-w-0 flex-wrap items-center justify-center gap-2">
+  };
 
-        <div className="flex h-9 items-center gap-2 rounded-full border border-border-subtle bg-surface-raised px-3 text-xs font-medium text-foreground-muted shadow-sm">
+  handleContinueWatching = () => {
 
-          <SlidersHorizontal size={14} />
-          <span>Filters</span>
+    const { view } = this.state;
 
-        </div>
+    const kind = view === "shows" ? "show" : view === "movies" ? "movie" : "live";
+    const item = lastWatched(this.state.history, kind);
 
-        <SelectMenu
-          label="Title type"
-          value={searchKind}
-          options={searchKindOptions}
-          onChange={(value) => this.setState({ searchKind: value as HomePageState["searchKind"] })}
-        />
+    if (!item) return;
 
-        <SelectMenu
-          label="Release year"
-          value={searchYear}
-          options={searchYearOptions}
-          onChange={(value) => this.setState({ searchYear: value as HomePageState["searchYear"] })}
-        />
+    const path = lastWatchedPath(item);
 
-        <SelectMenu
-          label="Rating"
-          value={searchRating}
-          options={searchRatingOptions}
-          onChange={(value) => this.setState({ searchRating: value as HomePageState["searchRating"] })}
-        />
+    if (path) this.props.navigate(path);
 
-        <SelectMenu
-          label="Watch progress"
-          value={searchProgress}
-          options={searchProgressOptions}
-          onChange={(value) => this.setState({ searchProgress: value as HomePageState["searchProgress"] })}
-        />
+  };
 
-      </div>
+  handleDiceRoll = async () => {
 
-    );
+    const { view } = this.state;
 
-  }
+    this.setState({ contextLoading: "dice" });
+
+    try {
+
+      if (view === "movies") {
+
+        const trending = await api.movieTrending(24);
+        const pick = this.pickRandom(trending ?? []);
+
+        if (pick) this.props.navigate(`/watch/movie/${pick.id}`);
+
+        return;
+
+      }
+
+      if (view === "shows") {
+
+        const trending = await api.showTrending(24);
+        const pick = this.pickRandom(trending ?? []);
+
+        if (!pick) return;
+
+        const seasons = await api.showSeasons(pick.id).catch(() => []);
+        const season = seasons[0]?.number ?? 1;
+        const episodes = await api.seasonEpisodes(pick.id, season).catch(() => []);
+        const episode = this.pickRandom(episodes) ?? { season, episode: 1 };
+
+        this.props.navigate(`/watch/show/${pick.id}/${episode.season}/${episode.episode}`);
+
+        return;
+
+      }
+
+      const channels = await api.livePopular(24);
+      const pick = this.pickRandom(channels ?? []);
+
+      if (pick) this.props.navigate(`/live/${pick.daddyId}`);
+
+    } catch {
+
+      /* ignore */
+
+    } finally {
+
+      this.setState({ contextLoading: null });
+
+    }
+
+  };
+
+  handleShuffleFavorites = async () => {
+
+    const { view, favorites, history } = this.state;
+
+    this.setState({ contextLoading: "shuffle-favorites" });
+
+    try {
+
+      if (view === "live") {
+
+        const pool = favorites.filter((item) => item.kind === "live");
+        const pick = this.pickRandom(pool);
+
+        if (pick?.channelId) this.props.navigate(`/live/${pick.channelId}`);
+
+        return;
+
+      }
+
+      const kind = view === "shows" ? "show" : "movie";
+      const pool = favorites.filter((item) => item.kind === kind);
+      const pick = this.pickRandom(pool);
+
+      if (!pick) return;
+
+      if (kind === "movie") {
+
+        this.props.navigate(`/watch/movie/${pick.mediaId}`);
+
+        return;
+
+      }
+
+      const resumeItem = showResumeItem(history, pick.mediaId);
+      const path = resumeItem ? resumePath(resumeItem) : null;
+
+      if (path) {
+
+        this.props.navigate(path);
+
+        return;
+
+      }
+
+      const seasons = await api.showSeasons(pick.mediaId).catch(() => []);
+      const season = seasons[0]?.number ?? 1;
+
+      this.props.navigate(`/watch/show/${pick.mediaId}/${season}/1`);
+
+    } catch {
+
+      /* ignore */
+
+    } finally {
+
+      this.setState({ contextLoading: null });
+
+    }
+
+  };
+
+  handleContextAction = (actionId: ContextActionId) => {
+
+    if (this.state.contextLoading) return;
+
+    if (actionId === "continue") {
+
+      this.handleContinueWatching();
+
+      return;
+
+    }
+
+    if (actionId === "dice") {
+
+      void this.handleDiceRoll();
+
+      return;
+
+    }
+
+    void this.handleShuffleFavorites();
+
+  };
 
   renderSearchResults() {
 
@@ -512,36 +602,27 @@ export class HomePage extends Component<HomePageProps, HomePageState> {
 
   render() {
 
-    const { view, searchQuery, history, favorites, settingsOpen, adminOpen } = this.state;
+    const { view, searchQuery, searchKind, searchYear, searchRating, searchProgress, history, favorites, settingsOpen, adminOpen, contextLoading } = this.state;
 
     const showSearch = searchQuery.trim().length > 0 && view !== "live";
 
     return (
 
-      <div className="min-h-screen overflow-x-hidden">
+      <div className="relative min-h-screen">
+
+        <HomeBackdrop view={view} history={history} favorites={favorites} />
 
         <Header
 
-          searchQuery={searchQuery}
-
-          onSearch={this.handleSearch}
+          view={view}
+          onViewChange={(v) => this.setState({ view: v, contextLoading: null })}
           onOpenSettings={() => this.setState({ settingsOpen: true })}
           onOpenAdmin={() => this.setState({ adminOpen: true })}
           onLogout={this.handleLogout}
 
         />
 
-        <div className="sticky top-16 z-30 border-b border-border-subtle bg-surface/80 py-3 backdrop-blur-md">
-
-          <div className="mx-auto flex max-w-[1600px] flex-col items-center justify-center gap-3 px-4 sm:px-8 lg:flex-row lg:gap-4">
-
-            <ViewSwitcher active={view} onChange={(v) => this.setState({ view: v })} />
-
-            {showSearch && this.renderSearchFilters()}
-
-          </div>
-
-        </div>
+        <div className="relative z-10 overflow-x-hidden pt-16 pb-24 lg:pb-32">
 
         {showSearch ? (
 
@@ -607,6 +688,34 @@ export class HomePage extends Component<HomePageProps, HomePageState> {
         <SettingsPanel open={settingsOpen} onClose={() => this.setState({ settingsOpen: false })} />
 
         <AdminPanel open={adminOpen} onClose={() => this.setState({ adminOpen: false })} />
+
+        <HomeBottomBar
+
+          searchQuery={searchQuery}
+          onSearch={this.handleSearch}
+
+          view={view}
+          showSearch={showSearch}
+
+          searchKind={searchKind}
+          searchYear={searchYear}
+          searchRating={searchRating}
+          searchProgress={searchProgress}
+
+          onSearchKindChange={(value) => this.setState({ searchKind: value })}
+          onSearchYearChange={(value) => this.setState({ searchYear: value })}
+          onSearchRatingChange={(value) => this.setState({ searchRating: value })}
+          onSearchProgressChange={(value) => this.setState({ searchProgress: value })}
+
+          history={history}
+          favorites={favorites}
+
+          contextLoading={contextLoading}
+          onContextAction={this.handleContextAction}
+
+        />
+
+        </div>
 
       </div>
 

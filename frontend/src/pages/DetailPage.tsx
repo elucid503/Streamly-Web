@@ -410,7 +410,7 @@ export class DetailPage extends Component<DetailPageProps, DetailPageState> {
 
           <div className="absolute inset-0 bg-gradient-to-t from-surface via-surface/50 to-surface/10" />
 
-          <button onClick={() => navigate("/")} className="absolute top-4 left-4 z-10 flex items-center gap-2 rounded-md bg-black/40 px-3 py-1.5 text-xs backdrop-blur-sm transition-colors hover:bg-black/60" >
+          <button onClick={() => navigate("/")} className="absolute top-4 left-4 z-10 flex items-center gap-2 rounded-md border border-border-subtle bg-surface/80 px-3 py-1.5 text-xs backdrop-blur-md transition-colors hover:bg-surface-overlay" >
 
             <ArrowLeft size={14} />
             Back

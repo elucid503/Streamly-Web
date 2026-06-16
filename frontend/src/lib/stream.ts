@@ -57,6 +57,22 @@ export function dedupeQualitiesByHeight(qualities: StreamQuality[]): StreamQuali
 
 }
 
+export function closestAvailableHeight(qualities: StreamQuality[], preferredHeight: number): number | null {
+
+  const heights = uniqueQualityHeights(qualities);
+
+  if (heights.length === 0) return null;
+
+  if (heights.includes(preferredHeight)) return preferredHeight;
+
+  const atOrBelow = heights.filter((height) => height <= preferredHeight);
+
+  if (atOrBelow.length > 0) return atOrBelow[0];
+
+  return heights[heights.length - 1];
+
+}
+
 export function nextLowerQualityHeight( qualities: StreamQuality[], currentHeight: number ): number | null {
 
   if (currentHeight <= 0) return null;

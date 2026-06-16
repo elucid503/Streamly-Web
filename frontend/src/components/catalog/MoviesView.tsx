@@ -108,7 +108,7 @@ export class MoviesView extends Component<MoviesViewProps, MoviesViewState> {
 
         {resumeItems.length > 0 && (
 
-          <ContentRow title="Continue Watching">
+          <ContentRow title="Continue Last" sectionId="movies-continue">
 
             {resumeItems.map((item) => (
 
@@ -147,7 +147,7 @@ export class MoviesView extends Component<MoviesViewProps, MoviesViewState> {
 
         {favoriteMovies.length > 0 && (
 
-          <ContentRow title="Favorites">
+          <ContentRow title="Favorites" sectionId="movies-favorites">
 
             {favoriteMovies.map((item) => {
 
@@ -186,7 +186,7 @@ export class MoviesView extends Component<MoviesViewProps, MoviesViewState> {
 
         {trending.length > 0 && (
 
-          <ContentRow title="Trending Now">
+          <ContentRow title="Trending Now" sectionId="movies-trending">
 
             {trending.map((hit) => {
 

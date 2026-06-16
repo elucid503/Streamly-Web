@@ -52,6 +52,12 @@
 
 @layer utilities {
 
+  .field-focus {
+
+    @apply outline-none transition-[border-color,background-color];
+
+  }
+
   .scrollbar-hide {
 
     -ms-overflow-style: none;

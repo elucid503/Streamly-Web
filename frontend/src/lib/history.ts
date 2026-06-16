@@ -16,6 +16,24 @@ export function continueWatching( history: WatchHistoryItem[], kind: "movie" | "
 
 }
 
+export function lastWatched(history: WatchHistoryItem[], kind: "movie" | "show" | "live"): WatchHistoryItem | undefined {
+
+  return history.filter((item) => item.kind === kind).sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt))[0];
+
+}
+
+export function lastWatchedPath(item: WatchHistoryItem): string | null {
+
+  if (item.kind === "live" && item.channelId) {
+
+    return `/live/${item.channelId}`;
+
+  }
+
+  return resumePath(item);
+
+}
+
 export function resumePath(item: WatchHistoryItem): string | null {
 
   if (item.kind === "movie") {
