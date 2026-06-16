@@ -2,7 +2,7 @@ import { cn } from "@/lib/utils";
 import type { StreamQuality, SubtitleTrack } from "@/lib/types";
 
 import { Component, createRef, type ReactNode } from "react";
-import { Check, Gauge, Settings, Settings2, SlidersHorizontal, Subtitles, X } from "lucide-react";
+import { Check, Gauge, LucideSlidersHorizontal, Settings, Settings2, SlidersHorizontal, SlidersVertical, Subtitles, X } from "lucide-react";
 
 type OptionsPanel = "quality" | "subtitles";
 
@@ -252,7 +252,7 @@ export class PlayerOptionsMenu extends Component<PlayerOptionsMenuProps, PlayerO
 
               <div className="flex items-center gap-2">
 
-                <SlidersHorizontal size={14} className="text-foreground-muted" />
+                <Settings2 size={14} className="text-foreground-muted" />
 
                 <p className="text-sm font-medium text-foreground">
 

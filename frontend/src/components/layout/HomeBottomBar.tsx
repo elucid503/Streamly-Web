@@ -1,12 +1,16 @@
+import { api } from "@/api/client";
+
 import { ViewContextBar, type ContextActionId } from "@/components/layout/ViewContextBar";
 import { Input } from "@/components/ui/Input";
+import { Modal } from "@/components/ui/Modal";
 import { SelectMenu } from "@/components/ui/SelectMenu";
 
 import { cn } from "@/lib/utils";
 import type { FavoriteItem, MainView, WatchHistoryItem } from "@/lib/types";
 
 import { Component, type ReactNode } from "react";
-import { Search, X } from "lucide-react";
+import { createPortal } from "react-dom";
+import { HelpCircle, Search, X } from "lucide-react";
 
 interface HomeBottomBarProps {
 
@@ -31,6 +35,13 @@ interface HomeBottomBarProps {
 
   contextLoading: ContextActionId | null;
   onContextAction: (actionId: ContextActionId) => void;
+
+}
+
+interface HomeBottomBarState {
+
+  faqOpen: boolean;
+  version: string;
 
 }
 
@@ -71,7 +82,55 @@ const searchProgressOptions = [
 
 const mobileSelectClass = "min-w-0 flex-1 [&_button]:h-8 [&_button]:w-full [&_button]:min-w-0 [&_button]:px-2 [&_button]:text-[11px]";
 
-export class HomeBottomBar extends Component<HomeBottomBarProps> {
+const faqItems = [
+
+  {
+    q: "What is Streamly?",
+    a: "Streamly is a personal streaming aggregator that organizes and links to video content available from third-party sources across the web.",
+  },
+  {
+    q: "Does Streamly host any content?",
+    a: "No. Streamly does not host, store, or distribute any video content. All media is streamed directly from independent third-party sources. It is solely an interface that indexes and links to existing publicly available streams.",
+  },
+  {
+    q: "Copyright & DMCA",
+    a: "Streamly does not control or upload any of the content accessible through this service. If you are a rights holder and believe content is being made available inappropriately, please contact the relevant hosting provider directly. Streamly is not a host and cannot remove content from third-party servers.",
+  },
+  {
+    q: "Is this service legal?",
+    a: "Streamly operates similarly to a search engine — it does not provide, upload, or profit from any copyrighted content. Responsibility for the legality of accessing third-party streams rests with the end user and their local jurisdiction.",
+  },
+  {
+    q: "Privacy & Data",
+    a: "Streamly only stores what is necessary to operate the service: your watch history and favorites. No personally identifiable data is shared with or sold to any third party.",
+  },
+
+];
+
+export class HomeBottomBar extends Component<HomeBottomBarProps, HomeBottomBarState> {
+
+  state: HomeBottomBarState = {
+
+    faqOpen: false,
+    version: "",
+
+  };
+
+  async componentDidMount() {
+
+    try {
+
+      const { version } = await api.getVersion();
+
+      this.setState({ version });
+
+    } catch {
+
+      /* version is non-critical */
+
+    }
+
+  }
 
   searchFilters = (compact = false): ReactNode[] => {
 
@@ -232,70 +291,127 @@ export class HomeBottomBar extends Component<HomeBottomBarProps> {
   render() {
 
     const { view, showSearch, history, favorites, contextLoading, onContextAction } = this.props;
+    const { faqOpen, version } = this.state;
+
+    const faqModal = (
+      <Modal open={faqOpen} onClose={() => this.setState({ faqOpen: false })} title="Help & Legal">
+
+        <div className="space-y-4 text-sm">
+
+          {faqItems.map((item) => (
+
+            <div key={item.q}>
+
+              <p className="mb-1 font-medium text-foreground">{item.q}</p>
+
+              <p className="leading-relaxed text-foreground-muted">{item.a}</p>
+
+            </div>
+
+          ))}
+
+        </div>
+
+      </Modal>
+    );
 
     return (
 
-      <div className="fixed inset-x-0 bottom-0 z-40 border-t border-border-subtle bg-surface/80 backdrop-blur-md pb-[max(0.5rem,env(safe-area-inset-bottom))] lg:pb-0">
+      <>
 
-        <div className="mx-auto flex max-w-[1600px] flex-col gap-1.5 px-3 py-2 lg:hidden">
+        <div className="fixed inset-x-0 bottom-0 z-40 border-t border-border-subtle bg-surface/80 backdrop-blur-md pb-[max(0.5rem,env(safe-area-inset-bottom))] lg:pb-0">
 
-          {this.renderSearchField(true)}
+          <div className="mx-auto flex max-w-[1600px] flex-col gap-1.5 px-3 py-2 lg:hidden">
 
-          {this.renderMobileActions()}
+            {this.renderSearchField(true)}
+
+            {this.renderMobileActions()}
+
+          </div>
+
+          <div className="mx-auto hidden w-full max-w-[1600px] grid-cols-[1fr_auto_1fr] items-center gap-3 px-4 py-2.5 sm:px-8 lg:grid">
+
+            <div className="min-w-0">
+
+              {showSearch ? this.renderSearchFilters("left") : (
+
+                <ViewContextBar
+
+                  view={view}
+                  side="left"
+                  history={history}
+                  favorites={favorites}
+
+                  loadingAction={contextLoading}
+                  onAction={onContextAction}
+
+                />
+
+              )}
+
+            </div>
+
+            <div className="w-full lg:w-auto">
+
+              {this.renderSearchField()}
+
+            </div>
+
+            <div className="min-w-0">
+
+              {showSearch ? this.renderSearchFilters("right") : (
+
+                <ViewContextBar
+
+                  view={view}
+                  side="right"
+                  history={history}
+                  favorites={favorites}
+
+                  loadingAction={contextLoading}
+                  onAction={onContextAction}
+
+                />
+
+              )}
+
+            </div>
+
+          </div>
+
+          {/* Absolute-positioned corner elements - desktop only */}
+
+          <button
+
+            type="button"
+            aria-label="Help & Legal"
+            title="Help & Legal"
+
+            className="absolute bottom-4 left-4 hidden items-center justify-center rounded-full p-1 text-foreground-faint transition-colors hover:text-foreground-muted sm:left-8 lg:flex"
+
+            onClick={() => this.setState({ faqOpen: true })}
+
+          >
+
+            <HelpCircle size={18} />
+
+          </button>
+
+          {version && (
+
+            <span className="absolute bottom-4 right-4 hidden text-[13px] tabular-nums text-foreground-faint sm:right-8 lg:block">
+
+              v{version}
+
+            </span>
+
+          )}
 
         </div>
 
-        <div className="mx-auto hidden w-full max-w-[1600px] grid-cols-[1fr_auto_1fr] items-center gap-3 px-4 py-2.5 sm:px-8 lg:grid">
+        {createPortal(faqModal, document.body)}
 
-          <div className="min-w-0">
-
-            {showSearch ? this.renderSearchFilters("left") : (
-
-              <ViewContextBar
-
-                view={view}
-                side="left"
-                history={history}
-                favorites={favorites}
-
-                loadingAction={contextLoading}
-                onAction={onContextAction}
-
-              />
-
-            )}
-
-          </div>
-
-          <div className="w-full lg:w-auto">
-
-            {this.renderSearchField()}
-
-          </div>
-
-          <div className="min-w-0">
-
-            {showSearch ? this.renderSearchFilters("right") : (
-
-              <ViewContextBar
-
-                view={view}
-                side="right"
-                history={history}
-                favorites={favorites}
-
-                loadingAction={contextLoading}
-                onAction={onContextAction}
-
-              />
-
-            )}
-
-          </div>
-
-        </div>
-
-      </div>
+      </>
 
     );
 

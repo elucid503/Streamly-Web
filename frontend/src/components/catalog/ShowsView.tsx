@@ -3,7 +3,7 @@ import { api } from "@/api/client";
 import { ContentRow } from "@/components/catalog/ContentRow";
 import { TitleCard } from "@/components/catalog/TitleCard";
 
-import { continueWatching, latestTitleProgress, progressLabel } from "@/lib/history";
+import { continueWatching, latestTitleProgress, progressLabel, resumePath } from "@/lib/history";
 import type { Category, FavoriteItem, SearchHit, WatchHistoryItem } from "@/lib/types";
 
 import { Component } from "react";
@@ -12,6 +12,8 @@ interface ShowsViewProps {
 
   onSelect: (id: number, kind: "movie" | "show") => void;
   onFavoriteToggle: (item: FavoriteItem | SearchHit) => void;
+  onResumeWatching: (path: string) => void;
+  onRemoveFromHistory: (historyId: string) => void;
 
   history: WatchHistoryItem[];
   favorites: FavoriteItem[];
@@ -143,7 +145,7 @@ export class ShowsView extends Component<ShowsViewProps, ShowsViewState> {
 
   render() {
 
-    const { onSelect, onFavoriteToggle, history, favorites } = this.props;
+    const { onSelect, onFavoriteToggle, onResumeWatching, onRemoveFromHistory, history, favorites } = this.props;
 
     const { categories, rows, trending, showPosters, loading } = this.state;
 
@@ -184,6 +186,9 @@ export class ShowsView extends Component<ShowsViewProps, ShowsViewState> {
                   createdAt: item.updatedAt,
                 })}
 
+                onResume={resumePath(item) ? () => onResumeWatching(resumePath(item)!) : undefined}
+                onRemoveFromHistory={() => onRemoveFromHistory(item.id)}
+
                 onClick={() => onSelect(item.mediaId, "show")}
 
               />
@@ -201,6 +206,8 @@ export class ShowsView extends Component<ShowsViewProps, ShowsViewState> {
             {favoriteShows.map((item) => {
 
               const progress = latestTitleProgress(history, "show", item.mediaId);
+
+              const resumable = progress ? resumePath(progress) : null;
 
               return (
 
@@ -220,6 +227,9 @@ export class ShowsView extends Component<ShowsViewProps, ShowsViewState> {
                   progressMs={progress?.positionMs}
                   durationMs={progress?.durationMs}
                   progressLabel={progressLabel(progress)}
+
+                  onResume={resumable ? () => onResumeWatching(resumable) : undefined}
+                  onRemoveFromHistory={progress ? () => onRemoveFromHistory(progress.id) : undefined}
 
                   onClick={() => onSelect(item.mediaId, "show")}
 
@@ -241,6 +251,8 @@ export class ShowsView extends Component<ShowsViewProps, ShowsViewState> {
 
               const progress = latestTitleProgress(history, "show", hit.id);
 
+              const resumable = progress ? resumePath(progress) : null;
+
               return (
 
                 <TitleCard
@@ -259,6 +271,9 @@ export class ShowsView extends Component<ShowsViewProps, ShowsViewState> {
                   progressMs={progress?.positionMs}
                   durationMs={progress?.durationMs}
                   progressLabel={progressLabel(progress)}
+
+                  onResume={resumable ? () => onResumeWatching(resumable) : undefined}
+                  onRemoveFromHistory={progress ? () => onRemoveFromHistory(progress.id) : undefined}
 
                   onClick={() => onSelect(hit.id, "show")}
 
@@ -285,6 +300,7 @@ export class ShowsView extends Component<ShowsViewProps, ShowsViewState> {
               {(titles ?? []).map((hit) => {
 
                 const progress = latestTitleProgress(history, "show", hit.id);
+                const resumable = progress ? resumePath(progress) : null;
 
                 return (
 
@@ -304,6 +320,9 @@ export class ShowsView extends Component<ShowsViewProps, ShowsViewState> {
                     progressMs={progress?.positionMs}
                     durationMs={progress?.durationMs}
                     progressLabel={progressLabel(progress)}
+
+                    onResume={resumable ? () => onResumeWatching(resumable) : undefined}
+                    onRemoveFromHistory={progress ? () => onRemoveFromHistory(progress.id) : undefined}
 
                     onClick={() => onSelect(hit.id, "show")}
 

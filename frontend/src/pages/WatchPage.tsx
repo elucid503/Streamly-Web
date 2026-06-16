@@ -806,7 +806,7 @@ export class WatchPage extends Component<WatchPageProps, WatchPageState> {
 
     const now = Date.now();
     const elapsed = now - this.lastProgressSave;
-    const wait = Math.max(1000, 10000 - elapsed);
+    const wait = Math.max(500, 3000 - elapsed);
 
     this.progressDebounce = setTimeout(() => {
 

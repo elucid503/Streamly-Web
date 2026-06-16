@@ -59,7 +59,7 @@ export class HomePage extends Component<HomePageProps, HomePageState> {
 
   state: HomePageState = {
 
-    view: "shows",
+    view: (localStorage.getItem("streamly:lastView") as MainView) ?? "shows",
 
     searchQuery: "",
 
@@ -294,19 +294,17 @@ export class HomePage extends Component<HomePageProps, HomePageState> {
 
   };
 
-  handleResume = (item: WatchHistoryItem) => {
+  handleResumeWatching = (path: string) => {
 
-    const path = resumePath(item);
+    this.props.navigate(path);
 
-    if (path) {
+  };
 
-      this.props.navigate(path);
+  handleRemoveFromHistory = async (historyId: string) => {
 
-      return;
+    this.setState({ history: this.state.history.filter((item) => item.id !== historyId) });
 
-    }
-
-    this.handleSelect(item.mediaId, item.kind as "movie" | "show");
+    await api.deleteHistory(historyId).catch(() => this.loadHomeData());
 
   };
 
@@ -532,25 +530,35 @@ export class HomePage extends Component<HomePageProps, HomePageState> {
 
           <ContentRow title="TV Shows">
 
-            {shows.map((hit) => (
+            {shows.map((hit) => {
 
-              <TitleCard key={`show-${hit.id}`}
+              const progress = this.searchProgressFor(hit);
+              const resumable = progress ? resumePath(progress) : null;
 
-                id={hit.id}
-                kind="show"
+              return (
 
-                title={hit.title}
-                poster={hit.poster}
-                year={hit.year}
+                <TitleCard key={`show-${hit.id}`}
 
-                favorite={this.isFavorite(hit)}
-                onFavoriteToggle={() => this.handleFavoriteToggle(hit)}
+                  id={hit.id}
+                  kind="show"
 
-                onClick={() => this.handleSelect(hit.id, hit.kind)}
+                  title={hit.title}
+                  poster={hit.poster}
+                  year={hit.year}
 
-              />
+                  favorite={this.isFavorite(hit)}
+                  onFavoriteToggle={() => this.handleFavoriteToggle(hit)}
 
-            ))}
+                  onResume={resumable ? () => this.handleResumeWatching(resumable) : undefined}
+                  onRemoveFromHistory={progress ? () => this.handleRemoveFromHistory(progress.id) : undefined}
+
+                  onClick={() => this.handleSelect(hit.id, hit.kind)}
+
+                />
+
+              );
+
+            })}
 
           </ContentRow>
 
@@ -560,25 +568,35 @@ export class HomePage extends Component<HomePageProps, HomePageState> {
 
           <ContentRow title="Movies">
 
-            {movies.map((hit) => (
+            {movies.map((hit) => {
 
-              <TitleCard key={`movie-${hit.id}`}
+              const progress = this.searchProgressFor(hit);
+              const resumable = progress ? resumePath(progress) : null;
 
-                id={hit.id}
-                kind="movie"
+              return (
 
-                title={hit.title}
-                poster={hit.poster}
-                year={hit.year}
+                <TitleCard key={`movie-${hit.id}`}
 
-                favorite={this.isFavorite(hit)}
-                onFavoriteToggle={() => this.handleFavoriteToggle(hit)}
+                  id={hit.id}
+                  kind="movie"
 
-                onClick={() => this.handleSelect(hit.id, hit.kind)}
+                  title={hit.title}
+                  poster={hit.poster}
+                  year={hit.year}
 
-              />
+                  favorite={this.isFavorite(hit)}
+                  onFavoriteToggle={() => this.handleFavoriteToggle(hit)}
 
-            ))}
+                  onResume={resumable ? () => this.handleResumeWatching(resumable) : undefined}
+                  onRemoveFromHistory={progress ? () => this.handleRemoveFromHistory(progress.id) : undefined}
+
+                  onClick={() => this.handleSelect(hit.id, hit.kind)}
+
+                />
+
+              );
+
+            })}
 
           </ContentRow>
 
@@ -615,7 +633,12 @@ export class HomePage extends Component<HomePageProps, HomePageState> {
         <Header
 
           view={view}
-          onViewChange={(v) => this.setState({ view: v, contextLoading: null })}
+          onViewChange={(v) => {
+
+            localStorage.setItem("streamly:lastView", v);
+            this.setState({ view: v, contextLoading: null });
+
+          }}
           onOpenSettings={() => this.setState({ settingsOpen: true })}
           onOpenAdmin={() => this.setState({ adminOpen: true })}
           onLogout={this.handleLogout}
@@ -642,6 +665,8 @@ export class HomePage extends Component<HomePageProps, HomePageState> {
 
                   onSelect={this.handleSelect}
                   onFavoriteToggle={this.handleFavoriteToggle}
+                  onResumeWatching={this.handleResumeWatching}
+                  onRemoveFromHistory={this.handleRemoveFromHistory}
 
                   history={history}
                   favorites={favorites}
@@ -655,8 +680,9 @@ export class HomePage extends Component<HomePageProps, HomePageState> {
                 <MoviesView
 
                   onSelect={this.handleSelect}
-                  onResume={this.handleResume}
+                  onResumeWatching={this.handleResumeWatching}
                   onFavoriteToggle={this.handleFavoriteToggle}
+                  onRemoveFromHistory={this.handleRemoveFromHistory}
 
                   history={history}
                   favorites={favorites}

@@ -3,7 +3,7 @@ import { api } from "@/api/client";
 import { ContentRow } from "@/components/catalog/ContentRow";
 import { TitleCard } from "@/components/catalog/TitleCard";
 
-import { continueWatching, latestTitleProgress, progressLabel } from "@/lib/history";
+import { continueWatching, latestTitleProgress, progressLabel, resumePath } from "@/lib/history";
 import type { Category, FavoriteItem, SearchHit, WatchHistoryItem } from "@/lib/types";
 
 import { Component } from "react";
@@ -11,8 +11,9 @@ import { Component } from "react";
 interface MoviesViewProps {
 
   onSelect: (id: number, kind: "movie" | "show") => void;
-  onResume: (item: WatchHistoryItem) => void;
+  onResumeWatching: (path: string) => void;
   onFavoriteToggle: (item: FavoriteItem | SearchHit) => void;
+  onRemoveFromHistory: (historyId: string) => void;
 
   history: WatchHistoryItem[];
   favorites: FavoriteItem[];
@@ -94,7 +95,7 @@ export class MoviesView extends Component<MoviesViewProps, MoviesViewState> {
 
   render() {
 
-    const { onSelect, onResume, onFavoriteToggle, history, favorites } = this.props;
+    const { onSelect, onResumeWatching, onFavoriteToggle, onRemoveFromHistory, history, favorites } = this.props;
 
     const { categories, rows, trending, loading } = this.state;
 
@@ -135,7 +136,10 @@ export class MoviesView extends Component<MoviesViewProps, MoviesViewState> {
                   createdAt: item.updatedAt,
                 })}
 
-                onClick={() => onResume(item)}
+                onResume={() => onResumeWatching(resumePath(item)!)}
+                onRemoveFromHistory={() => onRemoveFromHistory(item.id)}
+
+                onClick={() => onResumeWatching(resumePath(item)!)}
 
               />
 
@@ -152,6 +156,7 @@ export class MoviesView extends Component<MoviesViewProps, MoviesViewState> {
             {favoriteMovies.map((item) => {
 
               const progress = latestTitleProgress(history, "movie", item.mediaId);
+              const resumable = progress ? resumePath(progress) : null;
 
               return (
 
@@ -172,6 +177,9 @@ export class MoviesView extends Component<MoviesViewProps, MoviesViewState> {
                   durationMs={progress?.durationMs}
                   progressLabel={progressLabel(progress)}
 
+                  onResume={resumable ? () => onResumeWatching(resumable) : undefined}
+                  onRemoveFromHistory={progress ? () => onRemoveFromHistory(progress.id) : undefined}
+
                   onClick={() => onSelect(item.mediaId, "movie")}
 
                 />
@@ -191,6 +199,7 @@ export class MoviesView extends Component<MoviesViewProps, MoviesViewState> {
             {trending.map((hit) => {
 
               const progress = latestTitleProgress(history, "movie", hit.id);
+              const resumable = progress ? resumePath(progress) : null;
 
               return (
 
@@ -210,6 +219,9 @@ export class MoviesView extends Component<MoviesViewProps, MoviesViewState> {
                   progressMs={progress?.positionMs}
                   durationMs={progress?.durationMs}
                   progressLabel={progressLabel(progress)}
+
+                  onResume={resumable ? () => onResumeWatching(resumable) : undefined}
+                  onRemoveFromHistory={progress ? () => onRemoveFromHistory(progress.id) : undefined}
 
                   onClick={() => onSelect(hit.id, "movie")}
 
@@ -236,6 +248,7 @@ export class MoviesView extends Component<MoviesViewProps, MoviesViewState> {
               {(titles ?? []).map((hit) => {
 
                 const progress = latestTitleProgress(history, "movie", hit.id);
+                const resumable = progress ? resumePath(progress) : null;
 
                 return (
 
@@ -255,6 +268,9 @@ export class MoviesView extends Component<MoviesViewProps, MoviesViewState> {
                     progressMs={progress?.positionMs}
                     durationMs={progress?.durationMs}
                     progressLabel={progressLabel(progress)}
+
+                    onResume={resumable ? () => onResumeWatching(resumable) : undefined}
+                    onRemoveFromHistory={progress ? () => onRemoveFromHistory(progress.id) : undefined}
 
                     onClick={() => onSelect(hit.id, "movie")}
 

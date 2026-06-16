@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -87,6 +88,15 @@ func main() {
 		MaxAge:           12 * time.Hour,
 	}))
 
+	versionBytes, _ := os.ReadFile("version.txt")
+	version := strings.TrimSpace(string(versionBytes))
+
+	if version == "" {
+
+		version = "1.0.0"
+
+	}
+
 	// Health
 
 	r.GET("/health", func(c *gin.Context) {
@@ -98,6 +108,12 @@ func main() {
 	// API Bases
 
 	api := r.Group("/api")
+
+	api.GET("/version", func(c *gin.Context) {
+
+		c.JSON(http.StatusOK, gin.H{"version": version})
+
+	})
 	auth := api.Group("/auth")
 
 	// Auth

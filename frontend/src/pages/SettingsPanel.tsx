@@ -65,7 +65,7 @@ export class SettingsPanel extends Component<SettingsPanelProps, SettingsPanelSt
 
             <div className="flex gap-2">
 
-              {[720, 1080, 2160].map((h) => (
+              {([360, 720, 1080, 2160] as const).map((h) => (
 
                 <button key={h} className={`rounded-md border px-3 py-1.5 text-xs transition-colors ${ settings.preferredHeight === h ? "border-foreground bg-foreground text-surface" : "border-border text-foreground-muted hover:text-foreground" }`}
 

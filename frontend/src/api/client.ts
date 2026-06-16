@@ -335,4 +335,10 @@ export const api = {
 
   },
 
+  getVersion() {
+
+    return request<{ version: string }>("/api/version");
+
+  },
+
 };

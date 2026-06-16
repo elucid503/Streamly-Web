@@ -1,6 +1,6 @@
 import type HLS from "hls.js";
 import { Component, createRef, type RefObject } from "react";
-import { ArrowLeft, Clapperboard, Maximize, Minimize, Pause, Play, SkipForward, } from "lucide-react";
+import { ArrowLeft, Clapperboard, Maximize, Minimize, Pause, Play, SkipForward } from "lucide-react";
 
 import { AmbienceLayer } from "@/components/player/AmbienceLayer";
 import { EpisodePickerPanel } from "@/components/player/EpisodePickerPanel";
@@ -1548,6 +1548,7 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
                   onQualityChange?.(height, positionMs);
 
                 }}
+
                 onSubtitleChange={this.applySubtitleSelection}
                 onOpenSettings={onOpenSettings}
 
