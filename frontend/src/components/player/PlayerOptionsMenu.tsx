@@ -2,7 +2,7 @@ import { cn } from "@/lib/utils";
 import type { StreamQuality, SubtitleTrack } from "@/lib/types";
 
 import { Component, createRef, type ReactNode } from "react";
-import { Check, Gauge, LucideSlidersHorizontal, Settings, Settings2, SlidersHorizontal, SlidersVertical, Subtitles, X } from "lucide-react";
+import { Check, Gauge, Settings, Settings2, Subtitles, X } from "lucide-react";
 
 type OptionsPanel = "quality" | "subtitles";
 
