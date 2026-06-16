@@ -41,6 +41,8 @@ type Config struct {
 	UpstreamMinInterval time.Duration
 	VODMinInterval time.Duration
 
+	StaticDir string
+
 }
 
 func Load() (*Config, error) {
@@ -76,6 +78,8 @@ func Load() (*Config, error) {
 
 		UpstreamMinInterval: durationOr("UPSTREAM_MIN_INTERVAL", 1500*time.Millisecond),
 		VODMinInterval: durationOr("VOD_MIN_INTERVAL", 250*time.Millisecond),
+
+		StaticDir: envOr("STATIC_DIR", "../frontend/dist"),
 
 	}
 

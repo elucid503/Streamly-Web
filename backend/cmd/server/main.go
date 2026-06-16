@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
@@ -188,6 +189,34 @@ func main() {
 	// Proxy
 
 	api.GET("/proxy/:token", proxyHandler.Serve)
+
+	// SPA
+
+	staticDir := cfg.StaticDir
+
+	r.NoRoute(func(c *gin.Context) {
+
+		if strings.HasPrefix(c.Request.URL.Path, "/api") {
+
+			c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
+			return
+
+		}
+
+		filePath := filepath.Join(staticDir, filepath.Clean("/"+c.Request.URL.Path))
+
+		info, err := os.Stat(filePath)
+
+		if err == nil && !info.IsDir() {
+
+			c.File(filePath)
+			return
+
+		}
+
+		c.File(filepath.Join(staticDir, "index.html"))
+
+	})
 
 	server := &http.Server{
 
