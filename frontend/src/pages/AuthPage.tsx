@@ -96,13 +96,11 @@ export class AuthPage extends Component<AuthPageProps, AuthPageState> {
 
           <div className="mb-8 text-center">
 
-            <div className="mb-2 flex items-center justify-center gap-1.5">
+            <div className="mb-2">
 
-              <span className="text-lg font-semibold tracking-tight">streamly</span>
+              <span className="text-lg font-semibold tracking-tight">
 
-              <span className="rounded border border-border px-1 py-px text-[9px] font-medium tracking-wider text-foreground-faint uppercase">
-
-                Web
+                Streamly <span className="font-light text-foreground-muted">Web</span>
 
               </span>
 
