@@ -18,7 +18,10 @@ import (
 	"golang.org/x/sync/singleflight"
 )
 
-const maxSubtitleCacheEntries = 512
+const (
+	maxSubtitleCacheEntries = 512
+	emptySubtitleTTL        = 2 * time.Minute
+)
 
 type subtitleCacheEntry struct {
 
@@ -179,10 +182,18 @@ func (r *SubtitleResolver) setMovieCached(id int, tracks []SubtitleDTO) {
 
 	defer r.cacheMu.Unlock()
 
+	ttl := r.ttl
+
+	if len(tracks) == 0 {
+
+		ttl = emptySubtitleTTL
+
+	}
+
 	r.movieCache[id] = subtitleCacheEntry{
 
 		tracks: cloneSubtitleTracks(tracks),
-		expiry: time.Now().Add(r.ttl),
+		expiry: time.Now().Add(ttl),
 
 	}
 
@@ -214,10 +225,18 @@ func (r *SubtitleResolver) setEpisodeCached(key string, tracks []SubtitleDTO) {
 
 	defer r.cacheMu.Unlock()
 
+	ttl := r.ttl
+
+	if len(tracks) == 0 {
+
+		ttl = emptySubtitleTTL
+
+	}
+
 	r.episodeCache[key] = subtitleCacheEntry{
 
 		tracks: cloneSubtitleTracks(tracks),
-		expiry: time.Now().Add(r.ttl),
+		expiry: time.Now().Add(ttl),
 
 	}
 

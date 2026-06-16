@@ -421,13 +421,7 @@ func cloneQualities(qualities []Quality) []Quality {
 
 func isDegradedQualityRefresh(previous, next []Quality) bool {
 
-	if len(previous) == 0 || len(next) != 1 {
-
-		return false
-
-	}
-
-	return maxQualityHeight(previous) > 360 && maxQualityHeight(next) <= 360
+	return len(previous) > 0 && maxQualityHeight(previous) > 360 && maxQualityHeight(next) <= 360
 
 }
 

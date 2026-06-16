@@ -108,7 +108,7 @@ func WithOriginalFallback(qualities []Quality, originalURL, fileName string) []Q
 
 	originalURL = strings.TrimSpace(originalURL)
 
-	if originalURL == "" || maxHeight(qualities) > 360 {
+	if originalURL == "" || maxHeight(qualities) > 360 || !IsWebPlayableURL(originalURL) {
 
 		return qualities
 
@@ -257,9 +257,19 @@ func maxHeight(qualities []Quality) int {
 
 func displayLabel(raw string, height int) string {
 
-	if height == 360 {
+	switch height {
+
+	case 360:
 
 		return "Faster Streaming"
+
+	case 720:
+
+		return "Balanced Quality"
+
+	case 1080:
+
+		return "Uses More Data"
 
 	}
 

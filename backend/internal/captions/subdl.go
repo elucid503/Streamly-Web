@@ -332,7 +332,7 @@ func pickSubDLTracks(response subdlSearchResponse, season, episode int) []Track 
 
 				path := strings.TrimSpace(subtitle.URL)
 
-				if path != "" && !strings.HasSuffix(strings.ToLower(path), ".zip") {
+				if path != "" && !isZipPath(path) {
 
 					add(path, subtitle.Name, "en", "", subtitle.Hi)
 
@@ -384,7 +384,9 @@ func pickSubDLTracks(response subdlSearchResponse, season, episode int) []Track 
 
 func subtitleZipLabel(path string) string {
 
-	parts := strings.Split(strings.Trim(path, "/"), "/")
+	before, _, _ := strings.Cut(path, "?")
+
+	parts := strings.Split(strings.Trim(before, "/"), "/")
 
 	if len(parts) == 0 {
 
@@ -393,6 +395,16 @@ func subtitleZipLabel(path string) string {
 	}
 
 	return parts[len(parts)-1]
+
+}
+
+// isZipPath reports whether a URL or path points at a zip archive,
+// ignoring any query string (e.g. ?api_key=xxx).
+func isZipPath(path string) bool {
+
+	before, _, _ := strings.Cut(path, "?")
+
+	return strings.HasSuffix(strings.ToLower(before), ".zip")
 
 }
 
@@ -418,13 +430,15 @@ func normalizeFormat(format, name string) string {
 
 	format = strings.ToLower(strings.TrimSpace(format))
 
-	if format == "srt" || format == "vtt" {
+	if format == "srt" || format == "vtt" || format == "zip" {
 
 		return format
 
 	}
 
-	lower := strings.ToLower(name)
+	// Strip query string before checking file extension (SubDL may append ?api_key=...).
+	namePath, _, _ := strings.Cut(name, "?")
+	lower := strings.ToLower(namePath)
 
 	if strings.HasSuffix(lower, ".vtt") {
 
@@ -458,7 +472,7 @@ func pickSubDLSeasonZipPaths(response subdlSearchResponse, season int) []string 
 
 		path := strings.TrimSpace(subtitle.URL)
 
-		if path == "" || !strings.HasSuffix(strings.ToLower(path), ".zip") {
+		if path == "" || !isZipPath(path) {
 
 			continue
 
@@ -636,13 +650,26 @@ func parseLeadingEpisode(label string) int {
 
 func (c *SubDLClient) downloadBytes(ctx context.Context, path string) ([]byte, error) {
 
-	if !strings.HasPrefix(path, "/") {
+	// dl.subdl.com is a public CDN — strip any ?api_key=... before fetching.
+	path, _, _ = strings.Cut(strings.TrimSpace(path), "?")
 
-		path = "/" + path
+	var downloadURL string
+
+	if strings.HasPrefix(path, "http://") || strings.HasPrefix(path, "https://") {
+
+		downloadURL = path
+
+	} else {
+
+		if !strings.HasPrefix(path, "/") {
+
+			path = "/" + path
+
+		}
+
+		downloadURL = subDLDownload + path
 
 	}
-
-	downloadURL := subDLDownload + path
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, downloadURL, nil)
 
