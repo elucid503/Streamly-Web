@@ -18,10 +18,10 @@ const (
 // ProgramDTO is a TV program airing slot.
 type ProgramDTO struct {
 
-	Title    string `json:"title"`
-	StartsAt int64  `json:"startsAt"` // Unix seconds
-	Runtime  int    `json:"runtime"`  // minutes
-	Image    string `json:"image,omitempty"`
+	Title string `json:"title"`
+	StartsAt int64 `json:"startsAt"` // Unix seconds
+	Runtime int `json:"runtime"`  // minutes
+	Image string `json:"image,omitempty"`
 
 }
 
@@ -29,32 +29,45 @@ type ProgramDTO struct {
 type ChannelGuideEntry struct {
 
 	Channel LiveChannelDTO `json:"channel"`
-	Current *ProgramDTO   `json:"current,omitempty"`
-	Next    *ProgramDTO   `json:"next,omitempty"`
+	Current *ProgramDTO `json:"current,omitempty"`
+	Next *ProgramDTO `json:"next,omitempty"`
 
 }
 
 var epgCache struct {
-	mu        sync.RWMutex
-	entries   []ChannelGuideEntry
+
+	mu sync.RWMutex
+	entries []ChannelGuideEntry
+
 	fetchedAt time.Time
+
 }
 
 type tvmazeItem struct {
 
 	AirStamp string `json:"airstamp"`
-	Runtime  int    `json:"runtime"`
-	Show     struct {
+	Runtime int `json:"runtime"`
 
-		Name    string `json:"name"`
+	Show struct {
+
+		Name string `json:"name"`
+
 		Network *struct {
+
 			Name string `json:"name"`
+
 		} `json:"network"`
+
 		WebChannel *struct {
+
 			Name string `json:"name"`
+
 		} `json:"webChannel"`
+
 		Image *struct {
+
 			Medium string `json:"medium"`
+
 		} `json:"image"`
 
 	} `json:"show"`
@@ -65,13 +78,16 @@ type tvmazeItem struct {
 func (s *MediaService) LiveSchedule() ([]ChannelGuideEntry, error) {
 
 	epgCache.mu.RLock()
+
 	if time.Since(epgCache.fetchedAt) < epgCacheTTL && epgCache.entries != nil {
 
 		entries := epgCache.entries
 		epgCache.mu.RUnlock()
+
 		return entries, nil
 
 	}
+
 	epgCache.mu.RUnlock()
 
 	epgCache.mu.Lock()
@@ -84,6 +100,7 @@ func (s *MediaService) LiveSchedule() ([]ChannelGuideEntry, error) {
 	}
 
 	items, err := fetchTVMaze()
+
 	if err != nil {
 
 		if epgCache.entries != nil {
@@ -97,6 +114,7 @@ func (s *MediaService) LiveSchedule() ([]ChannelGuideEntry, error) {
 	}
 
 	channels, err := s.LivePopular(20)
+
 	if err != nil {
 
 		return nil, err
@@ -117,6 +135,7 @@ func fetchTVMaze() ([]tvmazeItem, error) {
 	client := &http.Client{Timeout: 10 * time.Second}
 
 	resp, err := client.Get(tvmazeScheduleURL)
+
 	if err != nil {
 
 		return nil, fmt.Errorf("epg: fetch schedule: %w", err)
@@ -132,6 +151,7 @@ func fetchTVMaze() ([]tvmazeItem, error) {
 	}
 
 	body, err := io.ReadAll(io.LimitReader(resp.Body, 4<<20))
+
 	if err != nil {
 
 		return nil, fmt.Errorf("epg: read schedule: %w", err)
@@ -193,8 +213,9 @@ func buildChannelGuide(items []tvmazeItem, channels []LiveChannelDTO) []ChannelG
 		entries = append(entries, ChannelGuideEntry{
 
 			Channel: ch,
+
 			Current: current,
-			Next:    next,
+			Next: next,
 
 		})
 
@@ -295,8 +316,10 @@ func findPrograms(items []tvmazeItem, now time.Time) (*ProgramDTO, *ProgramDTO) 
 			current = &ProgramDTO{
 
 				Title:    item.Show.Name,
+
 				StartsAt: start.Unix(),
 				Runtime:  item.Runtime,
+
 				Image:    tvmazeImage(item),
 
 			}
@@ -308,8 +331,10 @@ func findPrograms(items []tvmazeItem, now time.Time) (*ProgramDTO, *ProgramDTO) 
 			next = &ProgramDTO{
 
 				Title:    item.Show.Name,
+
 				StartsAt: start.Unix(),
 				Runtime:  item.Runtime,
+
 				Image:    tvmazeImage(item),
 
 			}
