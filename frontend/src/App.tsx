@@ -4,6 +4,9 @@ import { consumeReturnPath, currentPath, history, navigate, parseRoute, saveRetu
 
 import { store } from "@/lib/store";
 
+import { PWAInstallDesktop } from "@/components/layout/PWAInstallDesktop";
+import { PWAInstallGate } from "@/components/layout/PWAInstallGate";
+
 import { Component, lazy, Suspense, type ReactNode } from "react";
 import type { Location } from "history";
 
@@ -121,23 +124,9 @@ export class App extends Component<object, AppState> {
 
   );
 
-  render() {
+  renderPage(): ReactNode {
 
-    const { location, booting } = this.state;
-
-    if (booting) {
-
-      return (
-
-        <div className="flex min-h-screen items-center justify-center">
-
-          <div className="h-8 w-8 animate-spin rounded-full border-2 border-foreground/20 border-t-foreground" />
-
-        </div>
-
-      );
-
-    }
+    const { location } = this.state;
 
     const route = parseRoute(location);
 
@@ -201,7 +190,41 @@ export class App extends Component<object, AppState> {
 
         );
 
-     }
+    }
+
+  }
+
+  render() {
+
+    const { booting } = this.state;
+
+    if (booting) {
+
+      return (
+
+        <div className="flex min-h-screen items-center justify-center">
+
+          <div className="h-8 w-8 animate-spin rounded-full border-2 border-foreground/20 border-t-foreground" />
+
+        </div>
+
+      );
+
+    }
+
+    return (
+
+      <>
+
+        {this.renderPage()}
+
+        <PWAInstallGate />
+
+        <PWAInstallDesktop />
+
+      </>
+
+    );
 
   }
 

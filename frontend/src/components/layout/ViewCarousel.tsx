@@ -23,7 +23,7 @@ export class ViewCarousel extends Component<ViewCarouselProps> {
 
     return (
 
-      <div className="relative w-full overflow-hidden">
+      <div className="relative w-full overflow-x-clip">
 
         <motion.div className="flex w-full"
 

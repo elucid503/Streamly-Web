@@ -645,7 +645,7 @@ export class HomePage extends Component<HomePageProps, HomePageState> {
 
         />
 
-        <div className="relative z-10 overflow-x-hidden pt-16 pb-24 lg:pb-32">
+        <div className="relative z-10 overflow-x-clip pt-[calc(4rem+env(safe-area-inset-top))] pb-24 lg:pb-32">
 
         {showSearch ? (
 
