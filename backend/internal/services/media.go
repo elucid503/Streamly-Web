@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"fmt"
+	"sort"
 	"sync"
 	"time"
 
@@ -18,8 +19,10 @@ import (
 )
 
 const (
-	titleDetailsTTL        = 6 * time.Hour
+
+	titleDetailsTTL = 6 * time.Hour
 	titleDetailsMaxEntries = 1024
+
 )
 
 // Type aliases so callers (handlers, subtitles, proxy) need not import sub-packages.
@@ -38,18 +41,18 @@ type MediaService struct {
 	cfg *config.Config
 
 	upstream *upstream.Throttle
-	catalog *catalog.Cache
+	catalog  *catalog.Cache
 
 	search *search.Cache
 	stream *stream.Cache
 
 	vod *vod.Cache
 
-	detailsMu    sync.RWMutex
+	detailsMu sync.RWMutex
 	detailsGroup singleflight.Group
 
 	movieDetails map[int]titleDetailsCacheEntry
-	showDetails  map[int]titleDetailsCacheEntry
+	showDetails map[int]titleDetailsCacheEntry
 
 }
 
@@ -86,7 +89,6 @@ type QualityDTO struct {
 	IsHLS bool `json:"isHls"`
 
 	URL string `json:"url"`
-	ProxyURL string `json:"proxyUrl,omitempty"`
 
 }
 
@@ -94,12 +96,6 @@ type QualityDTO struct {
 type StreamDTO struct {
 
 	Qualities []QualityDTO `json:"qualities"`
-
-	URL string `json:"url"`
-	ProxyURL string `json:"proxyUrl,omitempty"`
-
-	IsHLS bool `json:"isHls"`
-	SelectedHeight int  `json:"selectedHeight"`
 
 }
 
@@ -110,7 +106,7 @@ type SubtitleDTO struct {
 	Label string `json:"label"`
 
 	Language string `json:"language"`
-	Format   string `json:"format"`
+	Format string `json:"format"`
 
 	ProxyURL string `json:"proxyUrl"`
 	Source string `json:"source,omitempty"`
@@ -147,7 +143,6 @@ func NewMediaService(cfg *config.Config) *MediaService {
 		mediakit.WithTVBaseURL(cfg.TVBaseURL),
 		mediakit.WithChildMode(cfg.ChildMode),
 		mediakit.WithIntroCache(true),
-
 	)
 
 	client.Warmup()
@@ -160,16 +155,18 @@ func NewMediaService(cfg *config.Config) *MediaService {
 	return &MediaService{
 
 		client: client,
-		cfg:    cfg,
+		cfg: cfg,
 
 		upstream: throttle,
-		catalog:  cat,
-		search:   search.New(client, throttle, cat.Snapshot, cfg.CatalogCacheTTL),
-		stream:   stream.New(client),
-		vod:      vod.New(client, vodThrottle),
+		catalog: cat,
+
+		search: search.New(client, throttle, cat.Snapshot, cfg.CatalogCacheTTL),
+		stream: stream.New(client),
+
+		vod: vod.New(client, vodThrottle),
 
 		movieDetails: make(map[int]titleDetailsCacheEntry),
-		showDetails:  make(map[int]titleDetailsCacheEntry),
+		showDetails: make(map[int]titleDetailsCacheEntry),
 
 	}
 
@@ -178,12 +175,6 @@ func NewMediaService(cfg *config.Config) *MediaService {
 func (s *MediaService) Client() *mediakit.Client {
 
 	return s.client
-
-}
-
-func (s *MediaService) DefaultHeight() int {
-
-	return s.cfg.DefaultQuality
 
 }
 
@@ -337,25 +328,9 @@ func (s *MediaService) EpisodeDetails(showID, season, episode int) (*EpisodeDTO,
 
 }
 
-func (s *MediaService) MovieQualities(id, height int) ([]mediakit.Quality, *mediakit.Quality, error) {
+func (s *MediaService) MovieQualities(id int) ([]mediakit.Quality, error) {
 
-	qualities, err := s.stream.MovieQualities(id)
-
-	if err != nil {
-
-		return nil, nil, err
-
-	}
-
-	if height <= 0 {
-
-		height = s.cfg.DefaultQuality
-
-	}
-
-	best := mediakit.PickQuality(qualities, height)
-
-	return qualities, best, nil
+	return s.stream.MovieQualities(id)
 
 }
 
@@ -371,25 +346,9 @@ func (s *MediaService) EpisodeSubtitles(showID, season, episode int) ([]mediakit
 
 }
 
-func (s *MediaService) EpisodeQualities(showID, season, episode, height int) ([]mediakit.Quality, *mediakit.Quality, error) {
+func (s *MediaService) EpisodeQualities(showID, season, episode int) ([]mediakit.Quality, error) {
 
-	qualities, err := s.stream.EpisodeQualities(showID, season, episode)
-
-	if err != nil {
-
-		return nil, nil, err
-
-	}
-
-	if height <= 0 {
-
-		height = s.cfg.DefaultQuality
-
-	}
-
-	best := mediakit.PickQuality(qualities, height)
-
-	return qualities, best, nil
+	return s.stream.EpisodeQualities(showID, season, episode)
 
 }
 
@@ -512,31 +471,46 @@ func (s *MediaService) ResolveLiveStream(daddyID string) (*mediakit.LiveStream, 
 
 }
 
-// QualitiesToDTO converts a slice of qualities to DTOs.
+// QualitiesToDTO converts a slice of qualities to DTOs, filtering to web-playable URLs and sorting by height descending.
 func QualitiesToDTO(items []mediakit.Quality) []QualityDTO {
 
 	out := make([]QualityDTO, 0, len(items))
 
 	for _, q := range items {
 
+		if q.URL == "" || !mediakit.IsWebPlayableURL(q.URL) {
+
+			continue
+
+		}
+
 		out = append(out, QualityDTO{
 
-			Label:  q.Label,
+			Label: q.Label,
 			Height: q.Height,
-			IsHLS:  q.IsHLS,
-			URL:    q.URL,
+			IsHLS: q.IsHLS,
+			URL: q.URL,
+
 		})
 
 	}
+
+	sort.Slice(out, func(i, j int) bool {
+
+		return out[i].Height > out[j].Height
+
+	})
 
 	return out
 
 }
 
-// BuildStreamDTO assembles a StreamDTO from a quality list and the selected best quality.
-func BuildStreamDTO(qualities []mediakit.Quality, best *mediakit.Quality) *StreamDTO {
+// BuildStreamDTO assembles a StreamDTO from all available qualities.
+func BuildStreamDTO(qualities []mediakit.Quality) *StreamDTO {
 
-	if best == nil || best.URL == "" {
+	dtos := QualitiesToDTO(qualities)
+
+	if len(dtos) == 0 {
 
 		return nil
 
@@ -544,10 +518,7 @@ func BuildStreamDTO(qualities []mediakit.Quality, best *mediakit.Quality) *Strea
 
 	return &StreamDTO{
 
-		Qualities:      QualitiesToDTO(qualities),
-		URL:            best.URL,
-		IsHLS:          best.IsHLS || mediakit.IsHLSURL(best.URL),
-		SelectedHeight: best.Height,
+		Qualities: dtos,
 	}
 
 }

@@ -18,9 +18,11 @@ interface PlayerOptionsMenuProps {
 
   qualityEnabled: boolean;
   preferredHeight?: number;
+  hdrHeights?: Set<number>;
 
   onToggle: () => void;
   onClose: () => void;
+  onOutsideClose?: (event: PointerEvent) => void;
 
   onQualityChange: (height: number) => void;
   onSubtitleChange: (trackId: string | null) => void;
@@ -41,6 +43,16 @@ const qualityLabel = (height: number) => {
   if (height >= 720) return "720p";
 
   return `${height}p`;
+
+};
+
+const qualityDetailLabel = (quality: StreamQuality) => {
+
+  const label = quality.label?.trim();
+
+  if (!label || label.toLowerCase() === qualityLabel(quality.height).toLowerCase()) return "";
+
+  return label;
 
 };
 
@@ -100,11 +112,11 @@ export class PlayerOptionsMenu extends Component<PlayerOptionsMenuProps, PlayerO
 
       if (this.props.open) {
 
-        document.addEventListener("mousedown", this.handleOutsideClick);
+        document.addEventListener("pointerdown", this.handleOutsidePointerDown, true);
 
       } else {
 
-        document.removeEventListener("mousedown", this.handleOutsideClick);
+        document.removeEventListener("pointerdown", this.handleOutsidePointerDown, true);
 
       }
 
@@ -114,16 +126,21 @@ export class PlayerOptionsMenu extends Component<PlayerOptionsMenuProps, PlayerO
 
   componentWillUnmount() {
 
-    document.removeEventListener("mousedown", this.handleOutsideClick);
+    document.removeEventListener("pointerdown", this.handleOutsidePointerDown, true);
 
   }
 
-  handleOutsideClick = (event: MouseEvent) => {
+  handleOutsidePointerDown = (event: PointerEvent) => {
 
     const root = this.rootRef.current;
 
     if (!root || root.contains(event.target as Node)) return;
 
+    event.preventDefault();
+    event.stopPropagation();
+    event.stopImmediatePropagation();
+
+    this.props.onOutsideClose?.(event);
     this.props.onClose();
 
   };
@@ -210,7 +227,7 @@ export class PlayerOptionsMenu extends Component<PlayerOptionsMenuProps, PlayerO
 
   render() {
 
-    const { open, qualities, selectedHeight, subtitleTracks, activeSubtitleId, qualityEnabled, preferredHeight, onToggle, onClose, onQualityChange, onSubtitleChange, onOpenSettings, } = this.props;
+    const { open, qualities, selectedHeight, subtitleTracks, activeSubtitleId, qualityEnabled, preferredHeight, hdrHeights, onToggle, onClose, onQualityChange, onSubtitleChange, onOpenSettings, } = this.props;
     const { panel } = this.state;
 
     const sortedQualities = [...qualities].sort((a, b) => b.height - a.height);
@@ -240,9 +257,12 @@ export class PlayerOptionsMenu extends Component<PlayerOptionsMenuProps, PlayerO
 
         </button>
 
-        {open && (
+        <div className={cn(
 
-          <div className="absolute right-0 bottom-full z-40 mb-3 w-80 animate-fade-in overflow-hidden rounded-xl border border-border-subtle bg-surface/80 shadow-2xl backdrop-blur-md"
+            "absolute right-0 bottom-full z-40 mb-3 w-80 origin-bottom-right overflow-hidden rounded-xl border border-white/10 bg-surface/75 shadow-2xl shadow-black/40 backdrop-blur-xl backdrop-saturate-150 transition-[opacity,transform,filter] duration-200 ease-out",
+            open ? "pointer-events-auto translate-y-0 scale-100 opacity-100 blur-0" : "pointer-events-none translate-y-2 scale-95 opacity-0 blur-sm"
+
+          )}
 
             onClick={(e) => e.stopPropagation()}
 
@@ -309,8 +329,16 @@ export class PlayerOptionsMenu extends Component<PlayerOptionsMenuProps, PlayerO
                       {sortedQualities.map((quality) => {
 
                         const isPreferred = preferredHeight === quality.height;
+                        const isHdr = hdrHeights?.has(quality.height) ?? false;
 
-                        const detail = isPreferred ? `${quality.label} · Preferred` : quality.label;
+                        const parts: string[] = [];
+                        const label = qualityDetailLabel(quality);
+
+                        if (label) parts.push(label);
+                        if (isHdr) parts.push("HDR");
+                        if (isPreferred) parts.push("Preferred");
+
+                        const detail = parts.join(" · ") || undefined;
 
                         return this.renderOption(
 
@@ -330,14 +358,14 @@ export class PlayerOptionsMenu extends Component<PlayerOptionsMenuProps, PlayerO
 
                     {onOpenSettings && (
 
-                      <button onClick={(e) => {
+                      <button className="mt-2 mb-4 flex w-full items-center gap-2 rounded-lg border border-white/8 px-3.5 py-2.5 text-left text-xs text-foreground-muted transition-colors hover:bg-white/6 hover:text-foreground" onClick={(e) => {
 
                           e.stopPropagation();
 
                           onClose();
                           onOpenSettings();
 
-                        }} className="mt-2 flex w-full items-center gap-2 rounded-lg border border-white/8 px-3.5 py-2.5 text-left text-xs text-foreground-muted transition-colors hover:bg-white/6 hover:text-foreground" >
+                        }}>
 
                         <Settings size={13} className="shrink-0 opacity-80" />
                         <span>Change Quality Settings</span>
@@ -414,9 +442,7 @@ export class PlayerOptionsMenu extends Component<PlayerOptionsMenuProps, PlayerO
 
             </div>
 
-          </div>
-
-        )}
+        </div>
 
       </div>
 

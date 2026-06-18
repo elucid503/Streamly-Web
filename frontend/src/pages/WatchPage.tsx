@@ -8,8 +8,8 @@ import { history, navigate, saveReturnPath, type NavigateFn } from "@/lib/naviga
 import { store } from "@/lib/store";
 
 import type { Episode, IntroInfo, NextEpisode, Season, StreamInfo, StreamQuality, SubtitleTrack, WatchHistoryItem, } from "@/lib/types";
-import { closestAvailableHeight, dedupeQualitiesByHeight, fetchStreamWithFallback, initialQualityAttempts, nextLowerQualityHeight, } from "@/lib/stream";
-import { pickQualityByHeight, qualityHasProxy, qualityPlaybackUrl, streamFromQuality, streamPlaybackUrl, } from "@/lib/streamClient";
+import { closestAvailableHeight, dedupeQualitiesByHeight, nextLowerQualityHeight, } from "@/lib/stream";
+import { pickQualityByHeight, qualityPlaybackUrl, streamFromQuality, streamPlaybackUrl, } from "@/lib/streamClient";
 
 import { parseWatchPath } from "@/lib/watchRoute";
 
@@ -63,8 +63,6 @@ interface WatchPageState {
   menuEpisodesLoading: boolean;
   episodeCache: Record<number, Episode[]>;
 
-  streamGeneration: number;
-
   ready: boolean;
 
   settingsOpen: boolean;
@@ -106,8 +104,6 @@ const EMPTY_STATE: Omit<WatchPageState, "loading" | "error" | "ready"> = {
   menuSeason: 1,
   menuEpisodesLoading: false,
   episodeCache: {},
-
-  streamGeneration: 0,
 
   settingsOpen: false,
 
@@ -207,7 +203,7 @@ export class WatchPage extends Component<WatchPageProps, WatchPageState> {
     if (preferredChanged) {
 
       this.userSelectedQuality = false;
-      void this.ensurePreferredQuality(this.lastPlaybackPositionMs);
+      this.ensurePreferredQuality(this.lastPlaybackPositionMs);
 
     }
 
@@ -318,7 +314,7 @@ export class WatchPage extends Component<WatchPageProps, WatchPageState> {
 
   };
 
-  ensurePreferredQuality = async (positionMs: number) => {
+  ensurePreferredQuality = (positionMs: number) => {
 
     if (this.userSelectedQuality) return;
 
@@ -330,26 +326,7 @@ export class WatchPage extends Component<WatchPageProps, WatchPageState> {
 
     if (resolved === selectedHeight) return;
 
-    try {
-
-      await this.switchStream(resolved, positionMs);
-
-    } catch {
-
-      /* keep current stream */
-
-    }
-
-  };
-
-  requestStream = async (height: number): Promise<StreamInfo> => {
-
-    const { kind, mediaId, season, episode } = this.state;
-
-    if (kind === "movie") return api.movieStream(mediaId, height);
-    if (kind === "show") return api.episodeStream(mediaId, season, episode, height);
-
-    throw new Error("no stream available");
+    this.switchStream(resolved, positionMs);
 
   };
 
@@ -382,7 +359,6 @@ export class WatchPage extends Component<WatchPageProps, WatchPageState> {
         selectedHeight: resolvedHeight,
 
         startPositionMs: Math.floor(positionMs),
-        streamGeneration: prev.streamGeneration + 1,
 
         error: "",
 
@@ -392,57 +368,50 @@ export class WatchPage extends Component<WatchPageProps, WatchPageState> {
 
   };
 
-  switchStream = async (height: number, positionMs: number) => {
+  switchStream = (height: number, positionMs: number) => {
 
     const { qualities } = this.state;
 
-    const localQuality = pickQualityByHeight(qualities, height);
+    const quality = pickQualityByHeight(qualities, height);
 
-    if (localQuality && (qualityHasProxy(localQuality) || qualityPlaybackUrl(localQuality))) {
+    if (!quality || !qualityPlaybackUrl(quality)) return;
 
-      this.applyStream(streamFromQuality(qualities, localQuality, height), height, positionMs);
-
-      return;
-
-    }
-
-    const stream = await this.requestStream(height);
-
-    if (!streamPlaybackUrl(stream)) throw new Error("no stream available");
-
-    this.applyStream(stream, height, positionMs);
+    this.applyStream(streamFromQuality(qualities, quality, height), height, positionMs);
 
   };
 
   loadMovie = async (id: number, gen: number) => {
 
-    const preferredHeight = this.preferredHeight();
+    const [streamData, historyItems] = await Promise.all([
 
-    const [stream, historyItems] = await Promise.all([
-
-      api.movieStream(id, preferredHeight),
+      api.movieStream(id),
       api.getHistory(5, id).catch(() => []),
 
     ]);
 
     if (gen !== this.loadGen) return;
 
-    if (!streamPlaybackUrl(stream)) throw new Error("no stream available");
+    const qualities = dedupeQualitiesByHeight(streamData.qualities ?? []);
 
-    const qualities = dedupeQualitiesByHeight(stream.qualities ?? []);
+    if (qualities.length === 0) throw new Error("no stream available");
+
     const resolvedHeight = this.resolvedPreferredHeight(qualities);
+    const selectedQuality = pickQualityByHeight(qualities, resolvedHeight) ?? qualities[0];
+    const playbackUrl = qualityPlaybackUrl(selectedQuality);
+
+    if (!playbackUrl) throw new Error("no stream available");
+
     const startPositionMs = movieProgress(historyItems, id);
 
-    this.setState((prev) => ({
+    this.setState({
 
-      streamUrl: streamPlaybackUrl(stream),
+      streamUrl: playbackUrl,
 
-      isHls: stream.isHls,
+      isHls: selectedQuality.isHls,
 
       qualities,
       selectedHeight: resolvedHeight,
 
-      streamGeneration: prev.streamGeneration + 1,
       startPositionMs,
 
       loading: false,
@@ -452,14 +421,6 @@ export class WatchPage extends Component<WatchPageProps, WatchPageState> {
       mediaId: id,
 
       subtitle: "",
-
-    }), () => {
-
-      if (resolvedHeight !== (stream.selectedHeight ?? preferredHeight)) {
-
-        void this.ensurePreferredQuality(startPositionMs);
-
-      }
 
     });
 
@@ -516,37 +477,40 @@ export class WatchPage extends Component<WatchPageProps, WatchPageState> {
 
   loadEpisode = async (showId: number, season: number, episode: number, gen: number) => {
 
-    const preferredHeight = this.preferredHeight();
-
     const menuPromise = this.loadMenuData(showId, season);
 
-    const [stream, historyItems] = await Promise.all([
+    const [streamData, historyItems] = await Promise.all([
 
-      api.episodeStream(showId, season, episode, preferredHeight),
+      api.episodeStream(showId, season, episode),
       api.getHistory(30, showId).catch(() => []),
 
     ]);
 
     if (gen !== this.loadGen) return;
 
-    if (!streamPlaybackUrl(stream)) throw new Error("no stream available");
+    const qualities = dedupeQualitiesByHeight(streamData.qualities ?? []);
 
-    const qualities = dedupeQualitiesByHeight(stream.qualities ?? []);
+    if (qualities.length === 0) throw new Error("no stream available");
+
     const resolvedHeight = this.resolvedPreferredHeight(qualities);
+    const selectedQuality = pickQualityByHeight(qualities, resolvedHeight) ?? qualities[0];
+    const playbackUrl = qualityPlaybackUrl(selectedQuality);
+
+    if (!playbackUrl) throw new Error("no stream available");
+
     const startPositionMs = episodeProgress(historyItems, showId, season, episode);
 
     this.setState(
 
-      (prev) => ({
+      {
 
-        streamUrl: streamPlaybackUrl(stream),
+        streamUrl: playbackUrl,
 
-        isHls: stream.isHls,
+        isHls: selectedQuality.isHls,
 
         qualities,
         selectedHeight: resolvedHeight,
 
-        streamGeneration: prev.streamGeneration + 1,
         startPositionMs,
 
         loading: false,
@@ -561,15 +525,9 @@ export class WatchPage extends Component<WatchPageProps, WatchPageState> {
         subtitle: `Season ${season}, Episode ${episode}`,
         menuSeason: season,
 
-      }),
+      },
 
       () => {
-
-        if (resolvedHeight !== (stream.selectedHeight ?? preferredHeight)) {
-
-          void this.ensurePreferredQuality(startPositionMs);
-
-        }
 
         void this.loadMenuEpisodes(season);
 
@@ -909,29 +867,20 @@ export class WatchPage extends Component<WatchPageProps, WatchPageState> {
 
   };
 
-  handleQualityChange = async (height: number, positionMs: number) => {
+  handleQualityChange = (height: number, positionMs: number) => {
 
     const { ready, kind, selectedHeight } = this.state;
 
     if (!ready || kind === "live" || height === selectedHeight) return;
 
     this.userSelectedQuality = true;
+    this.failedQualityHeights.clear();
 
-    try {
-
-      await this.switchStream(height, positionMs);
-
-      this.failedQualityHeights.clear();
-
-    } catch {
-
-      /* keep current stream on quality switch failure */
-
-    }
+    this.switchStream(height, positionMs);
 
   };
 
-  handlePlaybackError = async (positionMs: number) => {
+  handlePlaybackError = (positionMs: number) => {
 
     const { ready, kind, selectedHeight, qualities } = this.state;
 
@@ -952,27 +901,7 @@ export class WatchPage extends Component<WatchPageProps, WatchPageState> {
 
     if (nextHeight === null || this.failedQualityHeights.size > qualities.length + 2) return;
 
-    try {
-
-      await this.switchStream(nextHeight, positionMs);
-
-    } catch {
-
-      this.failedQualityHeights.add(nextHeight);
-
-      try {
-
-        const { stream } = await fetchStreamWithFallback(initialQualityAttempts(nextHeight).filter((h) => h <= nextHeight), (height) => this.requestStream(height));
-
-        this.applyStream(stream, stream.selectedHeight ?? nextHeight, positionMs);
-
-      } catch {
-
-        await this.handlePlaybackError(positionMs);
-
-      }
-
-    }
+    this.switchStream(nextHeight, positionMs);
 
   };
 
@@ -1006,7 +935,7 @@ export class WatchPage extends Component<WatchPageProps, WatchPageState> {
 
   render() {
 
-    const { streamUrl, isHls, qualities, selectedHeight, subtitleTracks, title, subtitle, episodeTitle, description, poster, intro, nextEpisode, startPositionMs, loading, error, ready, seasons, menuEpisodes, menuSeason, menuEpisodesLoading, season, episode, kind, streamGeneration, settingsOpen } = this.state;
+    const { streamUrl, isHls, qualities, selectedHeight, subtitleTracks, title, subtitle, episodeTitle, description, poster, intro, nextEpisode, startPositionMs, loading, error, ready, seasons, menuEpisodes, menuSeason, menuEpisodesLoading, season, episode, kind, mediaId, channelId, settingsOpen } = this.state;
     const settings = store.settings;
 
     if (loading) {
@@ -1063,7 +992,7 @@ export class WatchPage extends Component<WatchPageProps, WatchPageState> {
 
         <VideoPlayer
 
-          key={`${streamUrl}-${selectedHeight}-${streamGeneration}`}
+          key={kind === "live" ? `live-${channelId}` : `${kind}-${mediaId}-${season}-${episode}`}
           src={streamUrl}
 
           isHls={isHls}

@@ -184,7 +184,7 @@ export class TitleCard extends Component<TitleCardProps, TitleCardState> {
 
             <motion.div
 
-              className="fixed z-[100] min-w-[172px] overflow-hidden rounded-[1.25rem] border border-border-subtle bg-surface/95 p-1 shadow-2xl ring-1 ring-white/[0.04] backdrop-blur-lg"
+              className="fixed z-[100] min-w-[172px] overflow-hidden rounded-[1.25rem] border border-white/10 bg-surface/70 p-1 shadow-2xl shadow-black/40 ring-1 ring-white/[0.04] backdrop-blur-xl backdrop-saturate-150"
 
               style={{ top: menuPos.top, left: menuPos.left }}
 
@@ -196,14 +196,12 @@ export class TitleCard extends Component<TitleCardProps, TitleCardState> {
 
               {onResume && (
 
-                <button
-
-                  type="button"
-                  className="flex h-9 w-full items-center gap-2 rounded-xl px-3 text-left text-xs font-medium text-foreground-muted transition-colors hover:bg-surface-overlay/80 hover:text-foreground"
+                <button className="flex h-9 w-full items-center gap-2 rounded-xl px-3 text-left text-xs font-medium text-foreground-muted transition-colors hover:bg-surface-overlay/80 hover:text-foreground" type="button"
 
                   onClick={(e) => {
 
                     e.stopPropagation();
+
                     this.closeMenu();
                     onResume();
 
@@ -220,14 +218,12 @@ export class TitleCard extends Component<TitleCardProps, TitleCardState> {
 
               {onRemoveFromHistory && (
 
-                <button
-
-                  type="button"
-                  className="flex h-9 w-full items-center gap-2 rounded-xl px-3 text-left text-xs font-medium text-foreground-muted transition-colors hover:bg-surface-overlay/80 hover:text-foreground"
+                <button type="button" className="flex h-9 w-full items-center gap-2 rounded-xl px-3 text-left text-xs font-medium text-foreground-muted transition-colors hover:bg-surface-overlay/80 hover:text-foreground"
 
                   onClick={(e) => {
 
                     e.stopPropagation();
+
                     this.closeMenu();
                     onRemoveFromHistory();
 
@@ -244,14 +240,12 @@ export class TitleCard extends Component<TitleCardProps, TitleCardState> {
 
               {onFavoriteToggle && (
 
-                <button
-
-                  type="button"
-                  className="flex h-9 w-full items-center gap-2 rounded-xl px-3 text-left text-xs font-medium text-foreground-muted transition-colors hover:bg-surface-overlay/80 hover:text-foreground"
+                <button type="button" className="flex h-9 w-full items-center gap-2 rounded-xl px-3 text-left text-xs font-medium text-foreground-muted transition-colors hover:bg-surface-overlay/80 hover:text-foreground"
 
                   onClick={(e) => {
 
                     e.stopPropagation();
+
                     this.closeMenu();
                     onFavoriteToggle();
 
@@ -266,14 +260,7 @@ export class TitleCard extends Component<TitleCardProps, TitleCardState> {
 
               )}
 
-              <button
-
-                type="button"
-                className="flex h-9 w-full items-center gap-2 rounded-xl px-3 text-left text-xs font-medium text-foreground-muted transition-colors hover:bg-surface-overlay/80 hover:text-foreground"
-
-                onClick={this.copyLink}
-
-              >
+              <button type="button" className="flex h-9 w-full items-center gap-2 rounded-xl px-3 text-left text-xs font-medium text-foreground-muted transition-colors hover:bg-surface-overlay/80 hover:text-foreground" onClick={this.copyLink}>
 
                 <Link size={13} />
                 <span>Copy Link</span>

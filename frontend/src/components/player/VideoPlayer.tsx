@@ -1,5 +1,5 @@
 import type HLS from "hls.js";
-import { Component, createRef, type RefObject } from "react";
+import { Component, createRef, type PointerEvent as ReactPointerEvent, type RefObject } from "react";
 import { ArrowLeft, Clapperboard, Maximize, Minimize, Pause, Play, SkipForward } from "lucide-react";
 
 import { AmbienceLayer } from "@/components/player/AmbienceLayer";
@@ -15,6 +15,82 @@ import { hasIntroWindow, isInIntroWindow } from "@/lib/intro";
 import { isProxiedStream, isWebPlayableUrl } from "@/lib/streamClient";
 import { cn, formatDuration } from "@/lib/utils";
 import type { Episode, IntroInfo, NextEpisode, Season, StreamQuality, SubtitleTrack, } from "@/lib/types";
+
+type HlsLevelLike = {
+
+  attrs?: Record<string, string | undefined>;
+  height?: number;
+  videoCodec?: string;
+  codecSet?: string;
+
+};
+
+const videoCodecFromLevel = (level: HlsLevelLike): string => {
+
+  const explicit = level.videoCodec?.trim();
+  if (explicit) return explicit;
+
+  const codecs = (level.attrs?.["CODECS"] ?? level.codecSet ?? "").split(",");
+  const video = codecs.find((codec) => /^(avc1|avc3|hvc1|hev1|dvh1|dvhe|av01|vp09)\./i.test(codec.trim()));
+
+  return video?.trim() ?? "";
+
+};
+
+const isHdrLevel = (level: HlsLevelLike): boolean => {
+
+  const videoRange = level.attrs?.["VIDEO-RANGE"];
+  const codec = videoCodecFromLevel(level);
+
+  return (
+    videoRange === "PQ" ||
+    videoRange === "HLG" ||
+    /hvc1\.2\./i.test(codec) ||
+    /hev1\.2\./i.test(codec) ||
+    /dvh1\.|dvhe\./i.test(codec)
+  );
+
+};
+
+const isHlsLevelSupported = (level: HlsLevelLike): boolean => {
+
+  const codec = videoCodecFromLevel(level);
+
+  if (!codec) return true;
+
+  const mime = `video/mp4; codecs="${codec}"`;
+
+  if (window.MediaSource?.isTypeSupported(mime)) return true;
+
+  const video = document.createElement("video");
+
+  return video.canPlayType(mime) !== "";
+
+};
+
+const bestSupportedHlsLevel = (levels: HlsLevelLike[], selectedHeight: number): { index: number; isExact: boolean } | null => {
+
+  const supported = levels
+    .map((level, index) => ({ level, index }))
+    .filter(({ level }) => isHlsLevelSupported(level));
+
+  if (supported.length === 0) return null;
+
+  const capped = selectedHeight > 0
+    ? supported.filter(({ level }) => (level.height ?? 0) > 0 && (level.height ?? 0) <= selectedHeight)
+    : supported;
+
+  const target = (capped.length > 0 ? capped : supported)
+    .reduce((best, item) => ((item.level.height ?? 0) > (best.level.height ?? 0) ? item : best));
+
+  return {
+
+    index: target.index,
+    isExact: selectedHeight <= 0 || (target.level.height ?? 0) === selectedHeight,
+
+  };
+
+};
 
 interface VideoPlayerProps {
 
@@ -80,11 +156,16 @@ interface VideoPlayerState {
   fullscreen: boolean;
   loading: boolean;
   seeking: boolean;
+  holdPauseActive: boolean;
 
   activeSubtitleId: string | null;
   hlsSubtitleTracks: SubtitleTrack[];
 
   actionFeedback: PlayerActionFeedback | null;
+
+  // Heights (in px) for which HDR content has been detected. Persists across
+  // quality switches within the same content so the menu can label them.
+  hdrHeights: Set<number>;
 
 }
 
@@ -103,6 +184,11 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
   private waitingTimer: ReturnType<typeof setTimeout> | null = null;
   private feedbackTimer: ReturnType<typeof setTimeout> | null = null;
   private audioProbeTimer: ReturnType<typeof setTimeout> | null = null;
+  private sourceReadyTimer: ReturnType<typeof setTimeout> | null = null;
+  private holdPauseTimer: ReturnType<typeof setTimeout> | null = null;
+  private holdPausePointerId: number | null = null;
+  private holdPauseWasPlaying = false;
+  private suppressNextVideoClick = false;
 
   private lastProgressReport = 0;
   private lastUiUpdate = 0;
@@ -112,7 +198,9 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
   private playbackErrorReported = false;
   private hlsRecoveryAttempts = 0;
 
-  private static readonly MAX_HLS_RECOVERIES = 3;
+  private static readonly MAX_HLS_RECOVERIES = 1;
+  private static readonly SOURCE_READY_TIMEOUT_MS = 8_000;
+  private static readonly HOLD_PAUSE_DELAY_MS = 220;
 
   state: VideoPlayerState = {
 
@@ -130,11 +218,14 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
     fullscreen: false,
     loading: true,
     seeking: false,
+    holdPauseActive: false,
 
     activeSubtitleId: null,
     hlsSubtitleTracks: [],
 
     actionFeedback: null,
+
+    hdrHeights: new Set(),
 
   };
 
@@ -154,7 +245,11 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
 
   componentDidUpdate(prev: VideoPlayerProps) {
 
-    if (prev.src !== this.props.src || prev.isHls !== this.props.isHls) {
+    if (
+      prev.src !== this.props.src ||
+      prev.isHls !== this.props.isHls ||
+      (this.props.isHls && prev.selectedHeight !== this.props.selectedHeight)
+    ) {
 
       this.unbindVideoEvents();
 
@@ -243,6 +338,8 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
 
   onVideoError = () => {
 
+    this.clearSourceReadyTimer();
+
     this.setState({ loading: false, playing: false });
 
     if (this.playbackErrorReported || !this.props.onPlaybackError) return;
@@ -251,7 +348,8 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
 
     const video = this.videoRef.current;
 
-    const positionMs = video ? video.currentTime * 1000 : 0;
+    const currentMs = video && video.currentTime > 0 ? video.currentTime * 1000 : 0;
+    const positionMs = currentMs || this.props.startPositionMs || 0;
 
     this.props.onPlaybackError(positionMs);
 
@@ -429,6 +527,8 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
 
     }
 
+    this.clearSourceReadyTimer();
+
   };
 
   onCanPlay = () => {
@@ -468,10 +568,24 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
     if (this.waitingTimer) clearTimeout(this.waitingTimer);
     if (this.feedbackTimer) clearTimeout(this.feedbackTimer);
     if (this.audioProbeTimer) clearTimeout(this.audioProbeTimer);
+    if (this.sourceReadyTimer) clearTimeout(this.sourceReadyTimer);
+    if (this.holdPauseTimer) clearTimeout(this.holdPauseTimer);
 
     this.waitingTimer = null;
     this.feedbackTimer = null;
     this.audioProbeTimer = null;
+    this.sourceReadyTimer = null;
+    this.holdPauseTimer = null;
+    this.holdPausePointerId = null;
+
+  };
+
+  clearSourceReadyTimer = () => {
+
+    if (!this.sourceReadyTimer) return;
+
+    clearTimeout(this.sourceReadyTimer);
+    this.sourceReadyTimer = null;
 
   };
 
@@ -700,10 +814,25 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
       showSkipIntro: false,
 
       seeking: false,
+      holdPauseActive: false,
 
       hlsSubtitleTracks: [],
 
     });
+
+    this.clearSourceReadyTimer();
+
+    this.sourceReadyTimer = setTimeout(() => {
+
+      const current = this.videoRef.current;
+
+      if (current === video && this.state.loading) {
+
+        this.onVideoError();
+
+      }
+
+    }, VideoPlayer.SOURCE_READY_TIMEOUT_MS);
 
     video.removeEventListener("error", this.onVideoError);
 
@@ -720,9 +849,9 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
       video.volume = this.state.volume;
       video.muted = this.state.muted;
 
-      video.play().catch(() => undefined);
-
-      this.setState({ loading: false, playing: true });
+      // Don't mark loading:false here — onCanPlay/onPlaying handle that so the
+      // spinner stays visible through any initial seek without oscillating.
+      video.play().catch(() => this.setState({ loading: false, playing: false }));
 
       this.onLoadedMetadata();
       this.syncHlsSubtitles();
@@ -773,6 +902,57 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
       this.hls.attachMedia(video);
 
       this.hls.on(HlsConstructor.Events.MANIFEST_PARSED, () => {
+
+        const hls = this.hls;
+
+        if (hls && hls.levels.length > 0) {
+
+          const selectedHeight = this.props.selectedHeight ?? 0;
+          const levels = hls.levels as HlsLevelLike[];
+          const target = bestSupportedHlsLevel(levels, selectedHeight);
+
+          if (!target) {
+
+            this.onVideoError();
+            return;
+
+          }
+
+          if (!this.props.live && selectedHeight > 0 && !target.isExact) {
+
+            this.onVideoError();
+            return;
+
+          }
+
+          // Lock to the highest level this browser says it can decode, so ABR
+          // doesn't downgrade explicit choices unless the codec is unsupported.
+          if (!this.props.live) {
+
+            hls.currentLevel = target.index;
+            hls.nextLevel = target.index;
+            hls.autoLevelCapping = target.index;
+
+          }
+
+          // Detect HDR content from the manifest's codec / video-range attrs.
+          if (selectedHeight > 0) {
+
+            const isHdr = levels.some((level) => isHdrLevel(level));
+
+            if (isHdr) {
+
+              this.setState((prev) => ({
+
+                hdrHeights: new Set([...prev.hdrHeights, selectedHeight]),
+
+              }));
+
+            }
+
+          }
+
+        }
 
         this.ensureHlsAudio();
 
@@ -927,6 +1107,82 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
       this.setState({ playing: false });
 
     }
+
+  };
+
+  beginHoldPause = (event: ReactPointerEvent<HTMLVideoElement>) => {
+
+    if (event.pointerType === "mouse" && event.button !== 0) return;
+    if (this.holdPauseTimer || this.holdPausePointerId !== null) return;
+
+    const video = this.videoRef.current;
+
+    if (!video || video.paused || this.state.loading || this.state.seeking) return;
+
+    this.holdPausePointerId = event.pointerId;
+    this.holdPauseWasPlaying = !video.paused;
+
+    try {
+
+      event.currentTarget.setPointerCapture(event.pointerId);
+
+    } catch {
+
+      /* pointer capture is optional */
+
+    }
+
+    this.holdPauseTimer = setTimeout(() => {
+
+      this.holdPauseTimer = null;
+
+      const current = this.videoRef.current;
+
+      if (!current || !this.holdPauseWasPlaying || current.paused) return;
+
+      this.suppressNextVideoClick = true;
+      this.setState({ holdPauseActive: true, showControls: false });
+      current.pause();
+
+    }, VideoPlayer.HOLD_PAUSE_DELAY_MS);
+
+  };
+
+  endHoldPause = (event?: ReactPointerEvent<HTMLVideoElement>) => {
+
+    if (event && this.holdPausePointerId !== event.pointerId) return;
+
+    if (this.holdPauseTimer) {
+
+      clearTimeout(this.holdPauseTimer);
+      this.holdPauseTimer = null;
+
+    }
+
+    const wasActive = this.state.holdPauseActive;
+    const shouldResume = wasActive && this.holdPauseWasPlaying;
+
+    this.holdPausePointerId = null;
+    this.holdPauseWasPlaying = false;
+
+    if (!wasActive) return;
+
+    event?.preventDefault();
+    event?.stopPropagation();
+
+    this.setState({ holdPauseActive: false });
+
+    if (shouldResume) {
+
+      this.videoRef.current?.play().then(() => this.setState({ playing: true })).catch(() => this.setState({ playing: false }));
+
+    }
+
+  };
+
+  cancelHoldPause = (event: ReactPointerEvent<HTMLVideoElement>) => {
+
+    this.endHoldPause(event);
 
   };
 
@@ -1173,6 +1429,18 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
 
   };
 
+  closeOptionsFromOutside = (event: PointerEvent) => {
+
+    if (event.target === this.videoRef.current) {
+
+      this.suppressNextVideoClick = true;
+
+    }
+
+    this.setState({ showOptions: false });
+
+  };
+
   toggleEpisodes = () => {
 
     this.setState((s) => {
@@ -1201,9 +1469,9 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
   render() {
 
     const { title, subtitle, episodeTitle, description, poster, qualities = [], selectedHeight = 1080, preferredHeight, nextEpisode, onBack, ambienceEnabled, live, onQualityChange, onOpenSettings, seasons, episodes, currentSeason, currentEpisode, menuSeason, episodesLoading, onSeasonChange, onEpisodeSelect, } = this.props;
-    const { playing, muted, volume, showControls, showOptions, showEpisodes, showSkipIntro, showUpNext, upNextCountdown, fullscreen, loading, seeking, activeSubtitleId, actionFeedback, } = this.state;
+    const { playing, muted, volume, showControls, showOptions, showEpisodes, showSkipIntro, showUpNext, upNextCountdown, fullscreen, loading, seeking, holdPauseActive, activeSubtitleId, actionFeedback, hdrHeights, } = this.state;
 
-    const showPauseOverlay = !playing && !loading && !seeking && !showEpisodes;
+    const showPauseOverlay = !playing && !loading && !seeking && !holdPauseActive && !showEpisodes;
 
     const qualityEnabled = !live && qualities.length > 0 && !!onQualityChange;
     const episodesEnabled = !live && !!onEpisodeSelect && !!onSeasonChange;
@@ -1226,16 +1494,26 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
 
         />
 
-        <video className="relative z-10 h-full w-full object-contain [transform:translateZ(0)] [will-change:transform]"
+        <video className="relative z-10 h-full w-full object-contain"
 
           ref={this.videoRef}
           playsInline
           crossOrigin={ambienceEnabled ? "anonymous" : undefined}
 
           onEnded={this.onEnded}
+          onPointerDown={this.beginHoldPause}
+          onPointerUp={this.endHoldPause}
+          onPointerCancel={this.cancelHoldPause}
           onClick={(e) => {
 
             e.stopPropagation();
+
+            if (this.suppressNextVideoClick) {
+
+              this.suppressNextVideoClick = false;
+              return;
+
+            }
 
             this.togglePlay();
 
@@ -1530,6 +1808,7 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
                 qualities={qualities}
                 selectedHeight={selectedHeight}
                 preferredHeight={preferredHeight}
+                hdrHeights={hdrHeights}
 
                 subtitleTracks={this.allSubtitleTracks()}
                 activeSubtitleId={activeSubtitleId}
@@ -1537,6 +1816,7 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
 
                 onToggle={this.toggleOptions}
                 onClose={() => this.setState({ showOptions: false })}
+                onOutsideClose={this.closeOptionsFromOutside}
                 onQualityChange={(height) => {
 
                   const video = this.videoRef.current;

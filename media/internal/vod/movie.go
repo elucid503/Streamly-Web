@@ -16,10 +16,11 @@ import (
 
 // Movie is a chainable handle for a film.
 type Movie struct {
-	deps Deps
-	id   int
 
-	mu      sync.Mutex
+	deps Deps
+	id int
+
+	mu sync.Mutex
 	details *meta.TitleDetails
 
 	shareKey string
@@ -27,6 +28,7 @@ type Movie struct {
 	shareSet bool
 
 	file *febbox.File
+
 }
 
 // NewMovie creates a Movie handle for the given Showbox id.
@@ -115,29 +117,17 @@ func (m *Movie) File() (*MediaFile, error) {
 
 	return &MediaFile{
 
-		ID:       file.FID,
-		Name:     file.FileName,
+		ID: file.FID,
+		Name: file.FileName,
+
 		shareKey: shareKey,
+
 	}, nil
 
 }
 
 // Qualities lists available download renditions for this movie.
 func (m *Movie) Qualities() ([]quality.Quality, error) {
-
-	file, err := m.resolveFile()
-
-	if err != nil {
-
-		return nil, err
-
-	}
-
-	if file == nil {
-
-		return nil, fmt.Errorf("movie %d: no playable file found", m.id)
-
-	}
 
 	shareKey, err := m.ShareKey()
 
@@ -147,6 +137,45 @@ func (m *Movie) Qualities() ([]quality.Quality, error) {
 
 	}
 
+	root, err := m.deps.ListFiles(shareKey, 0, "")
+
+	if err != nil {
+
+		return nil, err
+
+	}
+
+	direct := fileparser.FilesOnly(root)
+
+	if len(direct) == 0 {
+
+		seasons := fileparser.SeasonsOnly(root)
+
+		if len(seasons) == 0 {
+
+			return nil, fmt.Errorf("movie %d: no playable file found", m.id)
+
+		}
+
+		children, err := m.deps.ListFiles(shareKey, seasons[0].FID, "")
+
+		if err != nil {
+
+			return nil, err
+
+		}
+
+		direct = fileparser.FilesOnly(children)
+
+	}
+
+	if len(direct) == 0 {
+
+		return nil, fmt.Errorf("movie %d: no playable file found", m.id)
+
+	}
+
+	file := fileparser.BestSourceFile(direct) // Pick the highest-resolution source file.
 	items, err := m.deps.GetLinks(shareKey, file.FID, "")
 
 	if err != nil {
@@ -156,6 +185,16 @@ func (m *Movie) Qualities() ([]quality.Quality, error) {
 	}
 
 	qualities := quality.ToQualities(items)
+
+	if source1080, ok := fileparser.BestSourceFileAtHeight(direct, 1080); ok {
+
+		if originalURL, err := m.deps.GetDownloadURL(shareKey, source1080.FID, ""); err == nil {
+
+			qualities = quality.WithOriginalAtHeight(qualities, originalURL, source1080.FileName, 1080)
+
+		}
+
+	}
 
 	if quality.NeedsOriginalFallback(qualities) {
 

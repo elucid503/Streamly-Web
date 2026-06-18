@@ -107,8 +107,7 @@ func ParseSeasons(entries []febbox.File) []ParsedSeason {
 
 			Folder: folder,
 			Number: info.Number,
-			Label: info.Label,
-
+			Label:  info.Label,
 		})
 
 	}
@@ -118,10 +117,8 @@ func ParseSeasons(entries []febbox.File) []ParsedSeason {
 }
 
 func seasonInfo(name string, ordinal int) struct {
-
 	Number int
-	Label string
-
+	Label  string
 } {
 
 	if match := seasonNumberRE.FindStringSubmatch(name); len(match) > 1 {
@@ -129,29 +126,23 @@ func seasonInfo(name string, ordinal int) struct {
 		number, _ := strconv.Atoi(match[1])
 
 		return struct {
-
 			Number int
-			Label string
-
+			Label  string
 		}{
 
 			Number: number,
-			Label: fmt.Sprintf("Season %d", number),
-
+			Label:  fmt.Sprintf("Season %d", number),
 		}
 
 	}
 
 	return struct {
-
 		Number int
-		Label string
-
+		Label  string
 	}{
 
 		Number: ordinal,
-		Label: fmt.Sprintf("Season %d", ordinal),
-
+		Label:  fmt.Sprintf("Season %d", ordinal),
 	}
 
 }
@@ -186,9 +177,8 @@ func ParseEpisodes(files []febbox.File, seasonNumber int) []ParsedEpisode {
 
 			Number: number,
 
-			Season: season,
+			Season:  season,
 			SeasonN: seasonNumber,
-
 		}
 
 		if existing, exists := byNumber[number]; !exists {
@@ -252,6 +242,7 @@ func EpisodeNumbers(name string) (season, episode int) {
 }
 
 // FilePreference scores a filename to prefer H.264 and Blu-ray copies over HEVC or low-quality sources.
+// Used for fallback file selection when subtitles or metadata are needed.
 func FilePreference(name string) int {
 
 	lower := strings.ToLower(name)
@@ -294,5 +285,126 @@ func FilePreference(name string) int {
 	}
 
 	return score
+
+}
+
+// SourceQualityScore estimates the source resolution of a file from its name.
+func SourceQualityScore(name string) int {
+
+	lower := strings.ToLower(name)
+
+	switch {
+
+		case strings.Contains(lower, "2160") || strings.Contains(lower, "4k") || strings.Contains(lower, "uhd"):
+
+			return 2160
+
+		case strings.Contains(lower, "1080"):
+
+			return 1080
+
+		case strings.Contains(lower, "720"):
+
+			return 720
+
+		case strings.Contains(lower, "480"):
+
+			return 480
+
+		case strings.Contains(lower, "360"):
+
+			return 360
+
+	}
+
+	return 0
+
+}
+
+// BestSourceFile returns the file with the highest estimated source resolution.
+func BestSourceFile(files []febbox.File) febbox.File {
+
+	best := files[0]
+	bestScore := SourceQualityScore(files[0].FileName)
+
+	for _, f := range files[1:] {
+
+		if score := SourceQualityScore(f.FileName); score > bestScore {
+
+			best = f
+			bestScore = score
+
+		}
+
+	}
+
+	return best
+
+}
+
+// BestSourceFileAtHeight returns the best file whose name indicates the given source resolution.
+func BestSourceFileAtHeight(files []febbox.File, height int) (febbox.File, bool) {
+
+	var best febbox.File
+
+	bestPreference := 0
+	found := false
+
+	for _, file := range files {
+
+		if SourceQualityScore(file.FileName) != height {
+
+			continue
+
+		}
+
+		preference := FilePreference(file.FileName)
+
+		if !found || preference > bestPreference {
+
+			best = file
+			bestPreference = preference
+			found = true
+
+		}
+
+	}
+
+	return best, found
+
+}
+
+// AllEpisodeFiles returns every file in the listing that matches the given episode number, without deduplication.
+func AllEpisodeFiles(files []febbox.File, seasonNumber, episodeNumber int) []febbox.File {
+
+	var out []febbox.File
+	fallback := 0
+
+	for _, file := range files {
+
+		season, number := EpisodeNumbers(file.FileName)
+
+		if number == 0 {
+
+			fallback++
+			number = fallback
+
+		}
+
+		if season == 0 {
+
+			season = seasonNumber
+
+		}
+
+		if number == episodeNumber {
+
+			out = append(out, file)
+
+		}
+
+	}
+
+	return out
 
 }

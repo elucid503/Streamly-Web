@@ -10,13 +10,16 @@ import (
 )
 
 var (
-	quality4KRE  = regexp.MustCompile(`(?i)2160|4k`)
-	qualityPRe   = regexp.MustCompile(`(\d{3,4})\s*p`)
+
+	quality4KRE = regexp.MustCompile(`(?i)2160|4k`)
+	qualityPRe = regexp.MustCompile(`(\d{3,4})\s*p`)
 	qualityOrgRE = regexp.MustCompile(`(?i)org|origin`)
+
 )
 
 // Quality is one downloadable rendition of a video file.
 type Quality struct {
+
 	URL string
 
 	Label string
@@ -24,10 +27,11 @@ type Quality struct {
 
 	Speed string
 
-	Size   string
+	Size string
 	Height int
 
 	IsHLS bool
+
 }
 
 // IsHLSURL reports whether a URL points at an HLS playlist.
@@ -139,8 +143,61 @@ func WithOriginalFallback(qualities []Quality, originalURL, fileName string) []Q
 
 }
 
-// NeedsOriginalFallback reports whether a direct source file lookup could add
-// a useful higher-quality option to the current Febbox transcode list.
+// WithOriginalAtHeight replaces the transcode at height with the original source file URL when that source can be played directly in the browser.
+func WithOriginalAtHeight(qualities []Quality, originalURL, fileName string, height int) []Quality {
+
+	originalURL = strings.TrimSpace(originalURL)
+
+	if originalURL == "" || height <= 0 || !IsWebPlayableURL(originalURL) || !IsWebPlayableURL(fileName) {
+
+		return qualities
+
+	}
+
+	original := Quality{
+
+		URL: originalURL,
+
+		Label: "Original Format",
+		Name:  fileName,
+
+		Height: height,
+		IsHLS:  IsHLSURL(originalURL),
+	}
+
+	out := make([]Quality, 0, len(qualities)+1)
+	replaced := false
+
+	for _, item := range qualities {
+
+		if item.Height == height {
+
+			if !replaced {
+
+				out = append(out, original)
+				replaced = true
+
+			}
+
+			continue
+
+		}
+
+		out = append(out, item)
+
+	}
+
+	if !replaced {
+
+		out = append(out, original)
+
+	}
+
+	return out
+
+}
+
+// NeedsOriginalFallback reports whether a direct source file lookup could add a useful higher-quality option to the current Febbox transcode list.
 func NeedsOriginalFallback(qualities []Quality) bool {
 
 	return maxHeight(qualities) <= 360
@@ -270,6 +327,10 @@ func displayLabel(raw string, height int) string {
 	case 1080:
 
 		return "Uses More Data"
+
+	case 2160:
+
+		return "Best Available"
 
 	}
 

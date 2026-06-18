@@ -290,7 +290,7 @@ export class HomePage extends Component<HomePageProps, HomePageState> {
 
   handleSelect = (id: number, kind: "movie" | "show") => {
 
-    this.props.navigate(`/${kind}/${id}`);
+    this.props.navigate(kind === "movie" ? `/watch/movie/${id}` : `/show/${id}`);
 
   };
 

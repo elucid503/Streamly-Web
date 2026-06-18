@@ -31,22 +31,16 @@
 
   }
 
-  ::-webkit-scrollbar {
+  * {
 
-    width: 6px;
-    height: 6px;
-
-  }
-
-  ::-webkit-scrollbar-track {
-
-    @apply bg-transparent;
+    -ms-overflow-style: none;
+    scrollbar-width: none;
 
   }
 
-  ::-webkit-scrollbar-thumb {
+  *::-webkit-scrollbar {
 
-    @apply rounded-full bg-border;
+    display: none;
 
   }
 

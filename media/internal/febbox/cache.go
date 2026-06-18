@@ -10,54 +10,82 @@ import (
 )
 
 const (
-	listCacheTTL  = 45 * time.Minute
+
+	listCacheTTL = 45 * time.Minute
 	linksCacheTTL = 30 * time.Minute
+	downloadCacheTTL = 30 * time.Minute
 	staleCacheTTL = 24 * time.Hour
 
-	listRequestGap = 250 * time.Millisecond
-	linkRequestGap = 2 * time.Second
 )
 
 var qualityHeightRe = regexp.MustCompile(`(?i)(\d{3,4})\s*p|2160|4k`)
 
 type listCacheEntry struct {
-	files     []File
+
+	files []File
 	fetchedAt time.Time
+
 }
 
 type linksCacheEntry struct {
+
 	qualities []Quality
 	fetchedAt time.Time
+
+}
+
+type downloadCacheEntry struct {
+
+	url string
+	fetchedAt time.Time
+
 }
 
 type inflightList struct {
+
 	files []File
 
 	err  error
 	done chan struct{}
+
 }
 
 type inflightLinks struct {
+
 	qualities []Quality
 
 	done chan struct{}
 	err  error
+
+}
+
+type inflightDownload struct {
+
+	url string
+
+	done chan struct{}
+	err  error
+
 }
 
 // CachedClient wraps a Client with in-memory caching, request throttling, in-flight deduplication, and stale fallback on rate limits.
 type CachedClient struct {
+
 	inner *Client
 
-	mu    sync.RWMutex
+	mu sync.RWMutex
+
 	lists map[string]listCacheEntry
 	links map[string]linksCacheEntry
 
-	throttleMu sync.Mutex
-	lastFetch  time.Time
+	downloads map[string]downloadCacheEntry
 
-	listInflight  map[string]*inflightList
+	listInflight map[string]*inflightList
 	linksInflight map[string]*inflightLinks
-	inflightMu    sync.Mutex
+	downloadInflight map[string]*inflightDownload
+
+	inflightMu sync.Mutex
+
 }
 
 // NewCached wraps client with defensive caching defaults.
@@ -69,9 +97,12 @@ func NewCached(client *Client) *CachedClient {
 
 		lists: make(map[string]listCacheEntry),
 		links: make(map[string]linksCacheEntry),
+		downloads: make(map[string]downloadCacheEntry),
 
-		listInflight:  make(map[string]*inflightList),
+		listInflight: make(map[string]*inflightList),
 		linksInflight: make(map[string]*inflightLinks),
+		downloadInflight: make(map[string]*inflightDownload),
+
 	}
 
 }
@@ -108,8 +139,6 @@ func (c *CachedClient) ListFiles(shareKey string, parentID any, cookie string) (
 		return nil, call.err
 
 	}
-
-	c.throttle(listRequestGap)
 
 	files, err := c.inner.ListFiles(shareKey, parentID, cookie)
 
@@ -166,8 +195,6 @@ func (c *CachedClient) GetLinks(shareKey string, fid any, cookie string) ([]Qual
 
 	}
 
-	c.throttle(linkRequestGap)
-
 	qualities, err := c.inner.GetLinks(shareKey, fid, cookie)
 
 	c.finishLinksInflight(key, qualities, err)
@@ -199,8 +226,55 @@ func (c *CachedClient) GetLinks(shareKey string, fid any, cookie string) ([]Qual
 // GetDownloadURL resolves a direct download link for a shared file.
 func (c *CachedClient) GetDownloadURL(shareKey string, fid any, cookie string) (string, error) {
 
-	c.throttle(linkRequestGap)
-	return c.inner.GetDownloadURL(shareKey, fid, cookie)
+	key := downloadKey(shareKey, fid)
+
+	if url, ok := c.freshDownload(key); ok {
+
+		return url, nil
+
+	}
+
+	call := c.beginDownloadInflight(key)
+
+	if call != nil {
+
+		<-call.done
+
+		if call.err == nil {
+
+			return call.url, nil
+
+		}
+
+		if stale, ok := c.staleDownload(key); ok {
+
+			return stale, nil
+
+		}
+
+		return "", call.err
+
+	}
+
+	url, err := c.inner.GetDownloadURL(shareKey, fid, cookie)
+
+	c.finishDownloadInflight(key, url, err)
+
+	if err != nil {
+
+		if stale, ok := c.staleDownload(key); ok {
+
+			return stale, nil
+
+		}
+
+		return "", err
+
+	}
+
+	c.storeDownload(key, url)
+
+	return url, nil
 
 }
 
@@ -284,6 +358,46 @@ func (c *CachedClient) finishLinksInflight(key string, qualities []Quality, err 
 
 }
 
+func (c *CachedClient) beginDownloadInflight(key string) *inflightDownload {
+
+	c.inflightMu.Lock()
+	defer c.inflightMu.Unlock()
+
+	if call, ok := c.downloadInflight[key]; ok {
+
+		return call
+
+	}
+
+	call := &inflightDownload{done: make(chan struct{})}
+	c.downloadInflight[key] = call
+
+	return nil
+
+}
+
+func (c *CachedClient) finishDownloadInflight(key, url string, err error) {
+
+	c.inflightMu.Lock()
+
+	call := c.downloadInflight[key]
+	delete(c.downloadInflight, key)
+
+	c.inflightMu.Unlock()
+
+	if call == nil {
+
+		return
+
+	}
+
+	call.url = url
+	call.err = err
+
+	close(call.done)
+
+}
+
 func (c *CachedClient) freshList(key string) ([]File, bool) {
 
 	c.mu.RLock()
@@ -322,6 +436,54 @@ func (c *CachedClient) storeList(key string, files []File) {
 
 	c.mu.Lock()
 	c.lists[key] = listCacheEntry{files: cloneFiles(files), fetchedAt: time.Now()}
+	c.mu.Unlock()
+
+}
+
+func (c *CachedClient) freshDownload(key string) (string, bool) {
+
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	entry, ok := c.downloads[key]
+
+	if !ok || time.Since(entry.fetchedAt) > downloadCacheTTL {
+
+		return "", false
+
+	}
+
+	return entry.url, entry.url != ""
+
+}
+
+func (c *CachedClient) staleDownload(key string) (string, bool) {
+
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	entry, ok := c.downloads[key]
+
+	if !ok || time.Since(entry.fetchedAt) > staleCacheTTL {
+
+		return "", false
+
+	}
+
+	return entry.url, entry.url != ""
+
+}
+
+func (c *CachedClient) storeDownload(key, url string) {
+
+	if url == "" {
+
+		return
+
+	}
+
+	c.mu.Lock()
+	c.downloads[key] = downloadCacheEntry{url: url, fetchedAt: time.Now()}
 	c.mu.Unlock()
 
 }
@@ -368,21 +530,6 @@ func (c *CachedClient) storeLinks(key string, qualities []Quality) {
 
 }
 
-func (c *CachedClient) throttle(minGap time.Duration) {
-
-	c.throttleMu.Lock()
-	defer c.throttleMu.Unlock()
-
-	if wait := minGap - time.Since(c.lastFetch); wait > 0 {
-
-		time.Sleep(wait)
-
-	}
-
-	c.lastFetch = time.Now()
-
-}
-
 func listKey(shareKey string, parentID any) string {
 
 	return fmt.Sprintf("list:%s:%v", shareKey, parentID)
@@ -392,6 +539,12 @@ func listKey(shareKey string, parentID any) string {
 func linksKey(shareKey string, fid any) string {
 
 	return fmt.Sprintf("links:%s:%v", shareKey, fid)
+
+}
+
+func downloadKey(shareKey string, fid any) string {
+
+	return fmt.Sprintf("download:%s:%v", shareKey, fid)
 
 }
 

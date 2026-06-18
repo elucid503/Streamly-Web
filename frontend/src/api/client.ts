@@ -1,4 +1,4 @@
-import type { AccessCode, Category, ChannelGuideEntry, Episode, FavoriteItem, IntroInfo, LiveChannel, NextEpisode, SearchHit, Season, StreamInfo, SubtitleTrack, TitleDetails, User, UserSettings, WatchHistoryItem, } from "@/lib/types";
+import type { AccessCode, Category, ChannelGuideEntry, Episode, FavoriteItem, IntroInfo, LiveChannel, NextEpisode, SearchHit, Season, StreamQuality, SubtitleTrack, TitleDetails, User, UserSettings, WatchHistoryItem, } from "@/lib/types";
 
 export class ApiError extends Error {
 
@@ -14,9 +14,61 @@ export class ApiError extends Error {
 
 }
 
+const GET_REUSE_MS = 1000;
+const MAX_RECENT_GETS = 128;
+
+const inflightGets = new Map<string, Promise<unknown>>();
+
+const recentGets = new Map<string, { expiresAt: number; value: unknown }>();
+
+function rememberGet(path: string, value: unknown) {
+
+  const now = Date.now();
+
+  if (recentGets.size >= MAX_RECENT_GETS) {
+
+    for (const [key, entry] of recentGets) {
+
+      if (entry.expiresAt <= now || recentGets.size >= MAX_RECENT_GETS) {
+
+        recentGets.delete(key);
+
+      }
+
+    }
+
+  }
+
+  recentGets.set(path, { value, expiresAt: now + GET_REUSE_MS });
+
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
-  const res = await fetch(path, {
+  const method = (init?.method ?? "GET").toUpperCase();
+  const canReuse = method === "GET" && !init?.body;
+
+  if (canReuse) {
+
+    const recent = recentGets.get(path);
+
+    if (recent && recent.expiresAt > Date.now()) {
+
+      return recent.value as T;
+
+    }
+
+    const inflight = inflightGets.get(path);
+
+    if (inflight) {
+
+      return inflight as Promise<T>;
+
+    }
+
+  }
+
+  const promise = fetch(path, {
 
     credentials: "include",
 
@@ -29,23 +81,47 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
     ...init,
 
+  }).then(async (res) => {
+
+    if (res.status === 204) {
+
+      return undefined as T;
+
+    }
+
+    const data = await res.json().catch(() => ({}));
+
+    if (!res.ok) {
+
+      throw new ApiError(res.status, data.error ?? "request failed");
+
+    }
+
+    return data as T;
+
   });
 
-  if (res.status === 204) {
+  if (!canReuse) {
 
-    return undefined as T;
-
-  }
-
-  const data = await res.json().catch(() => ({}));
-
-  if (!res.ok) {
-
-    throw new ApiError(res.status, data.error ?? "request failed");
+    return promise;
 
   }
 
-  return data as T;
+  inflightGets.set(path, promise);
+
+  try {
+
+    const data = await promise;
+
+    rememberGet(path, data);
+
+    return data;
+
+  } finally {
+
+    inflightGets.delete(path);
+
+  }
 
 }
 
@@ -226,15 +302,9 @@ export const api = {
 
   },
 
-  movieStream(id: number, height?: number) {
+  movieStream(id: number) {
 
-    const params = new URLSearchParams();
-
-    if (height) params.set("height", String(height));
-
-    const q = params.toString() ? `?${params}` : "";
-
-    return request<StreamInfo>(`/api/movies/${id}/stream${q}`);
+    return request<{ qualities: StreamQuality[] }>(`/api/movies/${id}/stream`);
 
   },
 
@@ -244,16 +314,10 @@ export const api = {
 
   },
 
-  episodeStream(showId: number, season: number, episode: number, height?: number) {
+  episodeStream(showId: number, season: number, episode: number) {
 
-    const params = new URLSearchParams();
-
-    if (height) params.set("height", String(height));
-
-    const q = params.toString() ? `?${params}` : "";
-
-    return request<StreamInfo>(
-      `/api/shows/${showId}/seasons/${season}/episodes/${episode}/stream${q}`
+    return request<{ qualities: StreamQuality[] }>(
+      `/api/shows/${showId}/seasons/${season}/episodes/${episode}/stream`
     );
 
   },

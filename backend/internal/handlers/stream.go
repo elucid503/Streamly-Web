@@ -10,9 +10,12 @@ import (
 )
 
 type StreamHandler struct {
-	media     *services.MediaService
-	proxy     *services.ProxyService
+
+	media *services.MediaService
+	proxy *services.ProxyService
+
 	subtitles *services.SubtitleResolver
+
 }
 
 func NewStreamHandler(media *services.MediaService, proxy *services.ProxyService, subtitles *services.SubtitleResolver) *StreamHandler {
@@ -32,9 +35,7 @@ func (h *StreamHandler) MovieStream(c *gin.Context) {
 
 	}
 
-	height, _ := strconv.Atoi(c.DefaultQuery("height", strconv.Itoa(h.media.DefaultHeight())))
-
-	qualities, best, err := h.media.MovieQualities(id, height)
+	qualities, err := h.media.MovieQualities(id)
 
 	if err != nil {
 
@@ -43,14 +44,7 @@ func (h *StreamHandler) MovieStream(c *gin.Context) {
 
 	}
 
-	if best == nil || best.URL == "" {
-
-		writeError(c, http.StatusNotFound, "no stream available")
-		return
-
-	}
-
-	stream := services.BuildStreamDTO(qualities, best)
+	stream := services.BuildStreamDTO(qualities)
 
 	if stream == nil {
 
@@ -107,9 +101,7 @@ func (h *StreamHandler) EpisodeStream(c *gin.Context) {
 
 	}
 
-	height, _ := strconv.Atoi(c.DefaultQuery("height", strconv.Itoa(h.media.DefaultHeight())))
-
-	qualities, best, err := h.media.EpisodeQualities(showID, season, episode, height)
+	qualities, err := h.media.EpisodeQualities(showID, season, episode)
 
 	if err != nil {
 
@@ -118,14 +110,7 @@ func (h *StreamHandler) EpisodeStream(c *gin.Context) {
 
 	}
 
-	if best == nil || best.URL == "" {
-
-		writeError(c, http.StatusNotFound, "no stream available")
-		return
-
-	}
-
-	stream := services.BuildStreamDTO(qualities, best)
+	stream := services.BuildStreamDTO(qualities)
 
 	if stream == nil {
 
@@ -319,8 +304,9 @@ func (h *StreamHandler) LiveStream(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{
 
 			"proxyUrl": baseURL(c) + session.ProxyPath,
-			"isHls":    true,
-			"channel":  cached,
+			"isHls": true,
+			"channel": cached,
+
 		})
 
 		return
@@ -330,8 +316,9 @@ func (h *StreamHandler) LiveStream(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 
 		"proxyUrl": baseURL(c) + session.ProxyPath,
-		"isHls":    true,
-		"channel":  channel,
+		"isHls": true,
+		"channel": channel,
+
 	})
 
 }

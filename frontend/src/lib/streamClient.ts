@@ -48,12 +48,6 @@ export function pickQualityByHeight(qualities: StreamQuality[], height: number):
 
 }
 
-export function qualityHasProxy(quality: StreamQuality): boolean {
-
-  return !!quality.proxyUrl?.trim();
-
-}
-
 export function streamFromQuality(qualities: StreamQuality[], quality: StreamQuality, selectedHeight?: number): StreamInfo {
 
   return {

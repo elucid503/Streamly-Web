@@ -1,23 +1,20 @@
-import { isWebPlayableUrl, qualityPlaybackUrl, streamPlaybackUrl } from "@/lib/streamClient";
-import type { StreamInfo, StreamQuality } from "@/lib/types";
+import type { StreamQuality } from "@/lib/types";
 
 function qualityPreferenceScore(quality: StreamQuality): number {
 
-  const url = qualityPlaybackUrl(quality) || quality.url;
-  if (!url || !isWebPlayableUrl(url)) return -100; // unplayable urls are the least preferred
+  const url = quality.url?.trim() || "";
+  if (!url) return -100;
 
   let score = 0;
   const path = url.split("?")[0].toLowerCase();
 
-  if (path.endsWith(".mp4") || path.endsWith(".m4v")) score += 30; // prefer direct mp4 links
+  if (path.endsWith(".mp4") || path.endsWith(".m4v")) score += 30;
 
-  if (!quality.isHls) score += 10; // prefer non-hls streams
+  if (!quality.isHls) score += 10;
 
   return score;
 
 }
-
-const QUALITY_TIERS = [2160, 1440, 1080, 720, 480, 360];
 
 export function uniqueQualityHeights(qualities: StreamQuality[]): number[] {
 
@@ -83,43 +80,4 @@ export function nextLowerQualityHeight( qualities: StreamQuality[], currentHeigh
 
 }
 
-export function initialQualityAttempts(preferredHeight?: number): number[] {
 
-  const preferred = preferredHeight && preferredHeight > 0 ? preferredHeight : 1080;
-  const attempts = new Set<number>([preferred]);
-
-  for (const tier of QUALITY_TIERS) {
-
-    if (tier < preferred) attempts.add(tier);
-
-  }
-
-  return [...attempts].sort((a, b) => b - a);
-
-}
-
-export async function fetchStreamWithFallback(heights: number[], fetchStream: (height: number) => Promise<StreamInfo>): Promise<{ stream: StreamInfo; height: number }> {
-
-  let lastError: unknown;
-
-  for (const height of heights) {
-
-    try {
-
-      const stream = await fetchStream(height);
-
-      if (streamPlaybackUrl(stream)) return { stream, height };
-
-    } catch (err) {
-
-      lastError = err;
-
-    }
-
-  }
-
-  if (lastError instanceof Error) throw lastError;
-
-  throw new Error("no stream available");
-
-}

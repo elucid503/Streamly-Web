@@ -15,12 +15,14 @@ import (
 
 // Episode is a chainable handle for one episode of a TV show.
 type Episode struct {
+
 	show *Show
 
-	season  int
+	season int
 	episode int
 
 	file *febbox.File
+
 }
 
 // SeasonNumber returns the season number.
@@ -162,20 +164,6 @@ func (e *Episode) File() (*MediaFile, error) {
 // Qualities lists available download renditions for this episode.
 func (e *Episode) Qualities() ([]quality.Quality, error) {
 
-	file, err := e.resolveFile()
-
-	if err != nil {
-
-		return nil, err
-
-	}
-
-	if file == nil {
-
-		return nil, fmt.Errorf("episode S%02dE%02d not found", e.season, e.episode)
-
-	}
-
 	shareKey, err := e.show.ShareKey()
 
 	if err != nil {
@@ -183,6 +171,25 @@ func (e *Episode) Qualities() ([]quality.Quality, error) {
 		return nil, err
 
 	}
+
+	// Collect all source files matching this episode number, then pick the
+	// highest-resolution one. Febbox transcodes a source to all lower resolutions,
+	// so the 4K source's quality list is a superset of a 1080p source's list.
+	files, err := e.allEpisodeFiles(shareKey)
+
+	if err != nil {
+
+		return nil, err
+
+	}
+
+	if len(files) == 0 {
+
+		return nil, fmt.Errorf("episode S%02dE%02d not found", e.season, e.episode)
+
+	}
+
+	file := fileparser.BestSourceFile(files)
 
 	items, err := e.show.deps.GetLinks(shareKey, file.FID, "")
 
@@ -193,6 +200,16 @@ func (e *Episode) Qualities() ([]quality.Quality, error) {
 	}
 
 	qualities := quality.ToQualities(items)
+
+	if source1080, ok := fileparser.BestSourceFileAtHeight(files, 1080); ok {
+
+		if originalURL, err := e.show.deps.GetDownloadURL(shareKey, source1080.FID, ""); err == nil {
+
+			qualities = quality.WithOriginalAtHeight(qualities, originalURL, source1080.FileName, 1080)
+
+		}
+
+	}
 
 	if quality.NeedsOriginalFallback(qualities) {
 
@@ -205,6 +222,44 @@ func (e *Episode) Qualities() ([]quality.Quality, error) {
 	}
 
 	return qualities, nil
+
+}
+
+func (e *Episode) allEpisodeFiles(shareKey string) ([]febbox.File, error) {
+
+	season := e.show.Season(e.season)
+
+	folder, err := season.resolveFolder(shareKey)
+
+	var allFiles []febbox.File
+
+	if err != nil {
+
+		root, listErr := e.show.listFiles(shareKey, 0)
+
+		if listErr != nil {
+
+			return nil, listErr
+
+		}
+
+		allFiles = fileparser.FilesOnly(root)
+
+	} else {
+
+		children, listErr := e.show.listFiles(shareKey, folder.FID)
+
+		if listErr != nil {
+
+			return nil, listErr
+
+		}
+
+		allFiles = fileparser.FilesOnly(children)
+
+	}
+
+	return fileparser.AllEpisodeFiles(allFiles, e.season, e.episode), nil
 
 }
 

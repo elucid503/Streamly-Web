@@ -20,15 +20,13 @@ interface SubtitleDisplayProps {
 interface SubtitleDisplayState {
 
   cue: AlignedSubtitleCue | null;
+  exitingCue: AlignedSubtitleCue | null;
 
   activeWord: number;
-
-  exitingCue: AlignedSubtitleCue | null;
 
   exitingActiveWord: number;
 
   exitMode: "slide" | "fade";
-
   exitKey: string;
 
   enterMode: "slide" | "fade";
@@ -39,9 +37,8 @@ interface RefinedCue {
 
   cue: AlignedSubtitleCue;
 
-  final: boolean;
-
   applied: boolean;
+  final: boolean;
 
 }
 
@@ -500,14 +497,27 @@ export class SubtitleDisplay extends Component<SubtitleDisplayProps, SubtitleDis
 
     if (!this.props.track || (!cue && !exitingCue)) return null;
 
+    const captionBackdropStyle = {
+
+      backdropFilter: "blur(18px) saturate(1.35)",
+      WebkitBackdropFilter: "blur(18px) saturate(1.35)",
+
+    };
+
     const renderCue = (displayCue: AlignedSubtitleCue, displayActiveWord: number, className: string, key: string) => (
 
-      <p className={cn("max-w-4xl rounded-md bg-surface/50 px-4 py-2.5 text-center text-[18px] leading-snug font-medium backdrop-blur-md sm:text-[20px]", className)}
+      <p className={cn("max-w-4xl rounded-md bg-black/35 px-4 py-2.5 text-center text-[18px] leading-snug font-medium shadow-[0_8px_30px_rgba(0,0,0,0.35)] sm:text-[20px]", className)}
 
         key={key}
-        style={{ textShadow: "0 1px 2px rgba(0, 0, 0, 0.75)" }}
+        style={{
+
+          ...captionBackdropStyle,
+          textShadow: "0 1px 2px rgba(0, 0, 0, 0.75)",
+
+        }}
 
       >
+
         {displayCue.words.map((word, index) => (
 
           <span key={index}>
