@@ -218,7 +218,7 @@ export class HomeBottomBar extends Component<HomeBottomBarProps, HomeBottomBarSt
 
         <Input className={cn(
 
-            "w-full rounded-full pl-9 text-sm lg:pl-11",
+            "w-full rounded-full pl-9 lg:pl-11",
             compact ? "h-9" : "h-10",
             hasQuery && "pr-9 lg:pr-11"
 
@@ -319,7 +319,7 @@ export class HomeBottomBar extends Component<HomeBottomBarProps, HomeBottomBarSt
 
       <>
 
-        <div className="fixed inset-x-0 bottom-0 z-40 border-t border-border-subtle bg-surface/80 backdrop-blur-md pb-[max(0.5rem,env(safe-area-inset-bottom))] lg:pb-0">
+        <div className="fixed inset-x-0 bottom-0 z-40 border-t border-border-subtle bg-surface/80 backdrop-blur-md pb-[max(0.25rem,calc(env(safe-area-inset-bottom,0px)*0.55))] lg:pb-0">
 
           <div className="mx-auto flex max-w-[1600px] flex-col gap-1.5 px-3 py-2 lg:hidden">
 

@@ -8,6 +8,7 @@
 
     @apply overflow-x-clip;
     overscroll-behavior: none;
+    touch-action: manipulation;
 
   }
 
