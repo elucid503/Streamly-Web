@@ -650,8 +650,7 @@ func parseLeadingEpisode(label string) int {
 
 func (c *SubDLClient) downloadBytes(ctx context.Context, path string) ([]byte, error) {
 
-	// dl.subdl.com is a public CDN — strip any ?api_key=... before fetching.
-	path, _, _ = strings.Cut(strings.TrimSpace(path), "?")
+	path = strings.TrimSpace(path)
 
 	var downloadURL string
 
