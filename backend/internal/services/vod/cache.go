@@ -52,7 +52,6 @@ type cacheEntry[T any] struct {
 type Cache struct {
 
 	client *mediakit.Client
-	throttle *upstream.Throttle
 
 	mu sync.RWMutex
 	group singleflight.Group
@@ -62,13 +61,12 @@ type Cache struct {
 
 }
 
-// New builds a Cache backed by client and throttle.
-func New(client *mediakit.Client, throttle *upstream.Throttle) *Cache {
+// New builds a Cache backed by client.
+func New(client *mediakit.Client) *Cache {
 
 	return &Cache{
 
 		client: client,
-		throttle: throttle,
 
 		seasons: make(map[int]cacheEntry[[]SeasonDTO]),
 		episodes: make(map[string]cacheEntry[[]EpisodeDTO]),
@@ -95,8 +93,6 @@ func (c *Cache) ShowSeasons(id int) ([]SeasonDTO, error) {
 	result, err, _ := c.group.Do(fmt.Sprintf("seasons:%d", id), func() (any, error) {
 
 		return upstream.Retry(3, func() ([]SeasonDTO, error) {
-
-			c.throttle.Before()
 
 			return c.fetchShowSeasons(id)
 
@@ -150,8 +146,6 @@ func (c *Cache) SeasonEpisodes(showID, season int) ([]EpisodeDTO, error) {
 	result, err, _ := c.group.Do("episodes:"+key, func() (any, error) {
 
 		return upstream.Retry(3, func() ([]EpisodeDTO, error) {
-
-			c.throttle.Before()
 
 			return c.fetchSeasonEpisodes(showID, season)
 

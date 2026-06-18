@@ -45,7 +45,10 @@ func New(options Options) *Client {
 	return &Client{
 
 		cookie: options.Cookie,
-		client: &http.Client{},
+
+		// A timeout is mandatory: ListFiles/GetLinks results are de-duplicated by an in-flight map
+		client: &http.Client{Timeout: 20 * time.Second},
+
 	}
 
 }

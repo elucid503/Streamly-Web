@@ -90,6 +90,8 @@ func (c *Client) ResolveStream(daddyID string) (ResolvedStream, error) {
 
 	}
 
+	// dlhd is tried first: it returns the embed page as the Referer, which the segment CDN
+
 	if stream, err := c.resolveDLHD(daddyID); err == nil && stream.URL != "" {
 
 		return stream, nil

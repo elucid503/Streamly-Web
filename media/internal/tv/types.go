@@ -105,6 +105,43 @@ type Channel struct {
 
 }
 
+// UnmarshalJSON tolerates provider schema drift: newer catalogs name the logo field "image" and omit "id", so we accept both logo keys and synthesize an id from daddyId.
+func (c *Channel) UnmarshalJSON(data []byte) error {
+
+	type channelAlias Channel
+
+	var raw struct {
+
+		channelAlias
+
+		Image string `json:"image"`
+
+	}
+
+	if err := json.Unmarshal(data, &raw); err != nil {
+
+		return err
+
+	}
+
+	*c = Channel(raw.channelAlias)
+
+	if c.Logo == "" {
+
+		c.Logo = strings.TrimSpace(raw.Image)
+
+	}
+
+	if c.ID == "" {
+
+		c.ID = c.DaddyID
+
+	}
+
+	return nil
+
+}
+
 // ChannelCatalog is the top-level response from tv-channels.json.
 type ChannelCatalog struct {
 

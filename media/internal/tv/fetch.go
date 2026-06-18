@@ -296,7 +296,33 @@ func parseCatalogJSON(body []byte) (*ChannelCatalog, error) {
 
 	}
 
+	// The dlhd/tv247 resolvers expect daddylive premium ids. The cdnlivetv provider numbers channels with its own sequential index (e.g. ABC=1)
+
+	if isCDNLiveTVCatalog(catalog.Channels) {
+
+		return nil, fmt.Errorf("decode channels: incompatible cdnlivetv id space")
+
+	}
+
 	return &catalog, nil
+
+}
+
+func isCDNLiveTVCatalog(channels []Channel) bool {
+
+	cdn := 0
+
+	for _, ch := range channels {
+
+		if strings.EqualFold(strings.TrimSpace(ch.Source), "cdnlivetv") {
+
+			cdn++
+
+		}
+
+	}
+
+	return cdn*2 > len(channels)
 
 }
 

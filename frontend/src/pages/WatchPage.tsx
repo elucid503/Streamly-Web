@@ -14,6 +14,7 @@ import { pickQualityByHeight, qualityPlaybackUrl, streamFromQuality, streamPlayb
 import { parseWatchPath } from "@/lib/watchRoute";
 
 import { Component } from "react";
+import { AlertTriangle, ArrowLeft } from "lucide-react";
 
 interface WatchPageProps {
 
@@ -899,9 +900,27 @@ export class WatchPage extends Component<WatchPageProps, WatchPageState> {
 
     }
 
-    if (nextHeight === null || this.failedQualityHeights.size > qualities.length + 2) return;
+    if (nextHeight === null || this.failedQualityHeights.size > qualities.length + 2) {
+
+      this.handleFatalError();
+
+      return;
+
+    }
 
     this.switchStream(nextHeight, positionMs);
+
+  };
+
+  handleFatalError = () => {
+
+    if (this.state.error) return;
+
+    const message = this.state.kind === "live"
+      ? "This channel is unavailable right now. It may be offline or between broadcasts."
+      : "Playback failed. This title may be temporarily unavailable.";
+
+    this.setState({ error: message, ready: false });
 
   };
 
@@ -956,25 +975,36 @@ export class WatchPage extends Component<WatchPageProps, WatchPageState> {
 
       return (
 
-        <div className="flex h-screen flex-col items-center justify-center gap-4 bg-black px-6">
+        <div className="relative flex h-screen flex-col items-center justify-center gap-5 bg-black px-6">
 
-          <p className="text-center text-sm text-foreground-muted">
+          <button onClick={this.handleBack}
+            className="absolute left-4 top-[calc(env(safe-area-inset-top,0px)+1rem)] flex items-center gap-2 rounded-md border border-border-subtle bg-surface/80 px-3 py-1.5 text-xs text-foreground backdrop-blur-md transition-colors hover:bg-surface-overlay"
+          >
 
-            {error || "unable to start playback"}
+            <ArrowLeft size={14} />
+            Back
+
+          </button>
+
+          <AlertTriangle size={32} className="text-foreground-faint" />
+
+          <p className="max-w-sm text-center text-sm text-foreground-muted">
+
+            {error || "Unable to start playback."}
 
           </p>
 
           <div className="flex gap-3">
 
-            <Button variant="outline" onClick={this.load}>
+            <Button onClick={this.load}>
 
               Retry
 
             </Button>
 
-            <Button variant="outline" onClick={() => this.props.navigate("/")}>
+            <Button variant="outline" onClick={this.handleBack}>
 
-              Go home
+              Go back
 
             </Button>
 
@@ -1030,6 +1060,7 @@ export class WatchPage extends Component<WatchPageProps, WatchPageState> {
           onQualityChange={this.state.kind === "live" ? undefined : this.handleQualityChange}
           onOpenSettings={() => this.setState({ settingsOpen: true })}
           onPlaybackError={this.state.kind === "live" ? undefined : this.handlePlaybackError}
+          onFatalError={this.handleFatalError}
 
           startPositionMs={this.state.kind === "live" ? 0 : startPositionMs}
 

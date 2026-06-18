@@ -8,7 +8,6 @@ import (
 	mediakit "mediakit"
 
 	"streamly/internal/services/catalog"
-	"streamly/internal/services/upstream"
 
 	"golang.org/x/sync/singleflight"
 )
@@ -26,7 +25,6 @@ type cacheEntry struct {
 type Cache struct {
 
 	client *mediakit.Client
-	throttle *upstream.Throttle
 	catalogSnap func() catalog.Snapshot
 	ttl time.Duration
 
@@ -36,14 +34,12 @@ type Cache struct {
 
 }
 
-// New builds a Cache. catalogSnap is called to read the current catalog snapshot for
-// offline index filtering; ttl controls how long search results are cached.
-func New(client *mediakit.Client, throttle *upstream.Throttle, catalogSnap func() catalog.Snapshot, ttl time.Duration) *Cache {
+// New builds a Cache. catalogSnap is called to read the current catalog snapshot for offline index filtering; ttl controls how long search results are cached.
+func New(client *mediakit.Client, catalogSnap func() catalog.Snapshot, ttl time.Duration) *Cache {
 
 	return &Cache{
 
 		client: client,
-		throttle: throttle,
 		catalogSnap: catalogSnap,
 		ttl: ttl,
 
@@ -76,7 +72,7 @@ func (c *Cache) Search(query string) ([]catalog.SearchResultDTO, error) {
 
 		results := make([]catalog.SearchResultDTO, 0, 50)
 
-		hits, apiErr := c.throttle.Search(c.client, key)
+		hits, apiErr := c.client.Search(key)
 
 		if apiErr == nil {
 

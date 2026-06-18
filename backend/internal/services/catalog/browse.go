@@ -81,8 +81,6 @@ func (c *Cache) loadTrendingHits(kind mediakit.MediaKind, limit int) ([]SearchRe
 
 	}
 
-	c.throttle.Before()
-
 	keywords, err := c.client.Trending(kind, limit)
 
 	if err != nil || len(keywords) == 0 {
@@ -139,7 +137,7 @@ func (c *Cache) resolveKeywordHits(kind mediakit.MediaKind, keywords []string, l
 
 		}
 
-		hits, err := c.throttle.Search(c.client, keyword)
+		hits, err := c.client.Search(keyword)
 
 		if err != nil {
 
@@ -187,7 +185,7 @@ func (c *Cache) resolveKeywordHits(kind mediakit.MediaKind, keywords []string, l
 
 func (c *Cache) browseByQuery(kind mediakit.MediaKind, query string, limit int, allowFallback bool) ([]SearchResultDTO, error) {
 
-	hits, err := c.throttle.Search(c.client, query)
+	hits, err := c.client.Search(query)
 
 	if err != nil {
 
@@ -241,8 +239,6 @@ func (c *Cache) browseByQuery(kind mediakit.MediaKind, query string, limit int, 
 
 func (c *Cache) loadCategories(kind mediakit.MediaKind) ([]CategoryDTO, error) {
 
-	c.throttle.Before()
-
 	cats, err := c.client.TopCategories(kind)
 
 	if err != nil {
@@ -270,8 +266,6 @@ func (c *Cache) loadCategories(kind mediakit.MediaKind) ([]CategoryDTO, error) {
 }
 
 func (c *Cache) loadLiveChannels() ([]LiveChannelDTO, error) {
-
-	c.throttle.Before()
 
 	catalog, err := c.client.LiveTV()
 

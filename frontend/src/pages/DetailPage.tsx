@@ -4,19 +4,15 @@ import { PosterImage } from "@/components/catalog/PosterImage";
 import { Button } from "@/components/ui/Button";
 import { CachedImage } from "@/components/ui/CachedImage";
 
-import {
-  episodeProgressPercent,
-  resumePath,
-  showEpisodeHistory,
-  showResumeItem,
-} from "@/lib/history";
-import type { NavigateFn } from "@/lib/navigation";
+import { episodeProgressPercent, resumePath, showEpisodeHistory, showResumeItem, } from "@/lib/history"
+
 import { cn } from "@/lib/utils";
+import type { NavigateFn } from "@/lib/navigation";
 import type { Episode, Season, TitleDetails, WatchHistoryItem } from "@/lib/types";
 
 import { Component } from "react";
 import { motion } from "framer-motion";
-import { ArrowLeft, Play } from "lucide-react";
+import { ArrowLeft, Film, Play } from "lucide-react";
 
 interface DetailPageProps {
 
@@ -326,6 +322,44 @@ export class DetailPage extends Component<DetailPageProps, DetailPageState> {
 
   heroImage = (details: TitleDetails) => details.banner || details.poster;
 
+  renderPlayProgress = (pct: number) => {
+
+    const radius = 15;
+    const circumference = 2 * Math.PI * radius;
+
+    const clamped = Math.min(100, Math.max(0, pct));
+
+    return (
+
+      <span className="relative mr-2 flex h-9 w-9 flex-shrink-0 items-center justify-center self-center">
+
+        {clamped > 1 && (
+
+          <svg className="absolute inset-0 size-full -rotate-90" viewBox="0 0 36 36">
+
+            <circle cx="18" cy="18" r={radius} fill="none" strokeWidth="3" className="stroke-white/10" />
+
+            <circle cx="18" cy="18" r={radius} fill="none" strokeWidth="3" strokeLinecap="round"
+
+              className="stroke-accent"
+
+              strokeDasharray={circumference}
+              strokeDashoffset={circumference * (1 - clamped / 100)}
+
+            />
+
+          </svg>
+
+        )}
+
+        <Play size={14} fill="currentColor" className="text-foreground-faint group-hover:text-foreground" />
+
+      </span>
+
+    );
+
+  };
+
   render() {
 
     const { navigate } = this.props;
@@ -410,7 +444,7 @@ export class DetailPage extends Component<DetailPageProps, DetailPageState> {
 
           <div className="absolute inset-0 bg-gradient-to-t from-surface via-surface/50 to-surface/10" />
 
-          <button onClick={() => navigate("/")} className="absolute top-4 left-4 z-10 flex items-center gap-2 rounded-md border border-border-subtle bg-surface/80 px-3 py-1.5 text-xs backdrop-blur-md transition-colors hover:bg-surface-overlay" >
+          <button onClick={() => navigate("/")} className="absolute left-4 top-[calc(env(safe-area-inset-top,0px)+1rem)] z-10 flex items-center gap-2 rounded-md border border-border-subtle bg-surface/80 px-3 py-1.5 text-xs backdrop-blur-md transition-colors hover:bg-surface-overlay" >
 
             <ArrowLeft size={14} />
             Back
@@ -556,49 +590,53 @@ export class DetailPage extends Component<DetailPageProps, DetailPageState> {
                       <button key={`${ep.season}-${ep.episode}`}
 
                         onClick={() => this.play(ep.season, ep.episode)}
-                        className="group flex w-full items-center gap-4 px-3 py-3 text-left transition-colors first:rounded-t-md last:rounded-b-md hover:bg-surface-raised"
+                        className="group flex w-full items-stretch gap-3 px-3 py-3 text-left transition-colors first:rounded-t-md last:rounded-b-md hover:bg-surface-raised"
 
                       >
-                        <span className="w-8 text-xs text-foreground-faint tabular-nums">
 
-                          {ep.episode}
+                        <div className="relative aspect-video w-28 flex-shrink-0 overflow-hidden rounded sm:w-36">
 
-                        </span>
+                          <CachedImage className="size-full"
 
-                        <span className="min-w-0 flex-1">
+                            src={ep.poster}
+                            alt={ep.title}
 
-                          <span className="block truncate text-sm">{ep.title}</span>
+                            imgClassName="object-cover"
+                            rounded="rounded"
 
-                          {pct > 2 && (
+                            fallback={<Film size={18} className="text-foreground-faint" />}
 
-                            <span className="mt-1.5 block h-1 max-w-56 overflow-hidden rounded-full bg-white/10">
+                          />
 
-                              <motion.span className="block h-full rounded-full bg-foreground/80"
+                          <span className="absolute top-1 left-1 rounded bg-black/70 px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-white">
 
-                                initial={{ width: 0 }}
-                                animate={{ width: `${pct}%` }}
-
-                                transition={{ duration: 0.3, ease: "easeOut" }}
-
-                              />
-
-                            </span>
-
-                          )}
-
-                        </span>
-
-                        {pct > 2 && (
-
-                          <span className="rounded-full border border-white/10 px-2 py-0.5 text-[10px] text-foreground-muted">
-
-                            {Math.round(pct)}%
+                            E{ep.episode}
 
                           </span>
 
-                        )}
+                        </div>
 
-                        <Play size={14} className="flex-shrink-0 text-foreground-faint group-hover:text-foreground" />
+                        <div className="flex min-w-0 flex-1 flex-col py-0.5">
+
+                          <div className="flex items-start justify-between gap-2">
+
+                            <span className="truncate text-sm font-medium">{ep.title}</span>
+
+                          </div>
+
+                          {ep.description && (
+
+                            <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-foreground-muted">
+
+                              {ep.description}
+
+                            </p>
+
+                          )}
+
+                        </div>
+
+                        {this.renderPlayProgress(pct)}
 
                       </button>
 

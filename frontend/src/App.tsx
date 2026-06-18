@@ -3,11 +3,13 @@ import { api } from "@/api/client";
 import { consumeReturnPath, currentPath, history, navigate, parseRoute, saveReturnPath, } from "@/lib/navigation";
 
 import { store } from "@/lib/store";
+import { isIOS } from "@/lib/platform";
 
 import { PWAInstallDesktop } from "@/components/layout/PWAInstallDesktop";
 import { PWAInstallGate } from "@/components/layout/PWAInstallGate";
 
 import { Component, lazy, Suspense, type ReactNode } from "react";
+import { MotionConfig } from "framer-motion";
 import type { Location } from "history";
 
 // Lazy loads pages for better performance.
@@ -214,7 +216,7 @@ export class App extends Component<object, AppState> {
 
     return (
 
-      <>
+      <MotionConfig reducedMotion={isIOS() ? "always" : "user"}>
 
         {this.renderPage()}
 
@@ -222,7 +224,7 @@ export class App extends Component<object, AppState> {
 
         <PWAInstallDesktop />
 
-      </>
+      </MotionConfig>
 
     );
 

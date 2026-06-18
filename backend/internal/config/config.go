@@ -38,9 +38,6 @@ type Config struct {
 	CatalogCacheFile string
 	SubtitleCacheTTL time.Duration
 
-	UpstreamMinInterval time.Duration
-	VODMinInterval time.Duration
-
 	StaticDir string
 
 }
@@ -75,9 +72,6 @@ func Load() (*Config, error) {
 		CatalogCacheTTL: durationOr("CATALOG_CACHE_TTL", time.Hour),
 		CatalogCacheFile: envOr("CATALOG_CACHE_FILE", "data/catalog.cache.json"),
 		SubtitleCacheTTL: durationOr("SUBTITLE_CACHE_TTL", 15*time.Minute),
-
-		UpstreamMinInterval: durationOr("UPSTREAM_MIN_INTERVAL", 1500*time.Millisecond),
-		VODMinInterval: durationOr("VOD_MIN_INTERVAL", 250*time.Millisecond),
 
 		StaticDir: envOr("STATIC_DIR", "../frontend/dist"),
 

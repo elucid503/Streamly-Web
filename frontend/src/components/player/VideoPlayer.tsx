@@ -128,6 +128,7 @@ interface VideoPlayerProps {
   onOpenSettings?: () => void;
   onDurationReady?: (durationMs: number) => void;
   onPlaybackError?: (positionMs: number) => void;
+  onFatalError?: () => void;
 
   seasons?: Season[];
   episodes?: Episode[];
@@ -343,7 +344,7 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
 
     this.setState({ loading: false, playing: false });
 
-    if (this.playbackErrorReported || !this.props.onPlaybackError) return;
+    if (this.playbackErrorReported) return;
 
     this.playbackErrorReported = true;
 
@@ -352,7 +353,16 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
     const currentMs = video && video.currentTime > 0 ? video.currentTime * 1000 : 0;
     const positionMs = currentMs || this.props.startPositionMs || 0;
 
-    this.props.onPlaybackError(positionMs);
+    // VOD recovers by stepping down quality; live (no onPlaybackError) has no fallback, so  surface a fatal error instead of leaving the player stuck in a paused state.
+    if (this.props.onPlaybackError) {
+
+      this.props.onPlaybackError(positionMs);
+
+      return;
+
+    }
+
+    this.props.onFatalError?.();
 
   };
 

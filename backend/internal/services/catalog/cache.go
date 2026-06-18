@@ -25,7 +25,6 @@ const (
 type Cache struct {
 
 	client *mediakit.Client
-	throttle *upstream.Throttle
 
 	cacheTTL  time.Duration
 	cacheFile string
@@ -36,14 +35,12 @@ type Cache struct {
 
 }
 
-// New builds a Cache. cacheTTL controls the refresh interval; cacheFile is the
-// optional path for disk persistence (empty disables disk caching).
-func New(client *mediakit.Client, throttle *upstream.Throttle, cacheTTL time.Duration, cacheFile string) *Cache {
+// New builds a Cache. cacheTTL controls the refresh interval; cacheFile is the optional path for disk persistence (empty disables disk caching).
+func New(client *mediakit.Client, cacheTTL time.Duration, cacheFile string) *Cache {
 
 	return &Cache{
 
 		client:   client,
-		throttle: throttle,
 
 		cacheTTL:  cacheTTL,
 		cacheFile: cacheFile,
@@ -223,10 +220,6 @@ func (c *Cache) refresh() {
 	start := time.Now()
 
 	log.Println("[catalog-cache] refresh started")
-
-	c.throttle.Begin()
-
-	defer c.throttle.End()
 
 	next := Snapshot{
 

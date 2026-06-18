@@ -40,7 +40,6 @@ type MediaService struct {
 	client *mediakit.Client
 	cfg *config.Config
 
-	upstream *upstream.Throttle
 	catalog  *catalog.Cache
 
 	search *search.Cache
@@ -147,23 +146,19 @@ func NewMediaService(cfg *config.Config) *MediaService {
 
 	client.Warmup()
 
-	throttle := upstream.New(cfg.UpstreamMinInterval)
-	vodThrottle := upstream.New(cfg.VODMinInterval)
-
-	cat := catalog.New(client, throttle, cfg.CatalogCacheTTL, cfg.CatalogCacheFile)
+	cat := catalog.New(client, cfg.CatalogCacheTTL, cfg.CatalogCacheFile)
 
 	return &MediaService{
 
 		client: client,
 		cfg: cfg,
 
-		upstream: throttle,
 		catalog: cat,
 
-		search: search.New(client, throttle, cat.Snapshot, cfg.CatalogCacheTTL),
+		search: search.New(client, cat.Snapshot, cfg.CatalogCacheTTL),
 		stream: stream.New(client),
 
-		vod: vod.New(client, vodThrottle),
+		vod: vod.New(client),
 
 		movieDetails: make(map[int]titleDetailsCacheEntry),
 		showDetails: make(map[int]titleDetailsCacheEntry),
@@ -411,8 +406,6 @@ func (s *MediaService) EpisodeIntro(showID, season, episode int, durationMs int6
 func (s *MediaService) NextEpisode(showID, season, episode int) (*NextEpisodeDTO, error) {
 
 	next, err := upstream.Retry(2, func() (*mediakit.Episode, error) {
-
-		s.upstream.Before()
 
 		return s.client.Show(showID).NextEpisode(season, episode)
 
