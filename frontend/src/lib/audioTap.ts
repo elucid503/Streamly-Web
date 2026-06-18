@@ -40,6 +40,8 @@ export class AudioTap {
   private chunks: TapChunk[] = [];
   private startPromise: Promise<void> | null = null;
 
+  private tappedCaptureStream = false;
+
   constructor(private video: HTMLVideoElement) { }
 
   start(): Promise<void> {
@@ -102,6 +104,8 @@ export class AudioTap {
 
       // captureStream() captures decoded audio output without a CORS error
 
+      this.tappedCaptureStream = true;
+
       this.source = this.context.createMediaStreamSource(captureStream);
 
       // Route through the processor for capture
@@ -135,6 +139,33 @@ export class AudioTap {
   stop() {
 
     this.chunks = []; // Clears chunks but keeps the context alive
+
+  }
+
+  release() {
+
+    this.chunks = [];
+
+    if (this.processor) {
+
+      this.processor.onaudioprocess = null;
+      this.processor.disconnect();
+
+    }
+
+    this.processor = null;
+    this.startPromise = null;
+
+    if (this.tappedCaptureStream) {
+
+      this.source?.disconnect();
+      this.source = null;
+
+      void this.context?.close().catch(() => undefined);
+
+      this.context = null;
+
+    }
 
   }
 

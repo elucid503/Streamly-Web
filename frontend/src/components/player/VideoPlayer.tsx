@@ -180,7 +180,6 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
   private hls: HLS | null = null;
 
   private controlsTimer: ReturnType<typeof setTimeout> | null = null;
-  private upNextTimer: ReturnType<typeof setInterval> | null = null;
   private waitingTimer: ReturnType<typeof setTimeout> | null = null;
   private feedbackTimer: ReturnType<typeof setTimeout> | null = null;
   private audioProbeTimer: ReturnType<typeof setTimeout> | null = null;
@@ -201,6 +200,8 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
   private static readonly MAX_HLS_RECOVERIES = 1;
   private static readonly SOURCE_READY_TIMEOUT_MS = 8_000;
   private static readonly HOLD_PAUSE_DELAY_MS = 220;
+  private static readonly UP_NEXT_VISIBLE_LEAD_MS = 150_000;
+  private static readonly UP_NEXT_COUNTDOWN_LEAD_MS = 60_000;
 
   state: VideoPlayerState = {
 
@@ -213,7 +214,7 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
     showEpisodes: false,
     showSkipIntro: false,
     showUpNext: false,
-    upNextCountdown: 10,
+    upNextCountdown: 0,
 
     fullscreen: false,
     loading: true,
@@ -564,7 +565,6 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
   clearTimers = () => {
 
     if (this.controlsTimer) clearTimeout(this.controlsTimer);
-    if (this.upNextTimer) clearInterval(this.upNextTimer);
     if (this.waitingTimer) clearTimeout(this.waitingTimer);
     if (this.feedbackTimer) clearTimeout(this.feedbackTimer);
     if (this.audioProbeTimer) clearTimeout(this.audioProbeTimer);
@@ -1049,45 +1049,37 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
 
   checkCredits = (currentMs: number, durationMs: number) => {
 
-    const { intro, nextEpisode, autoPlayNext } = this.props;
-    if (!autoPlayNext || !nextEpisode || this.state.showUpNext) return;
+    const { nextEpisode, autoPlayNext } = this.props;
 
-    const creditsStart = intro?.creditsStartMs;
-    const threshold = creditsStart && creditsStart > 0 ? creditsStart : durationMs - 30000;
+    if (!autoPlayNext || !nextEpisode || durationMs <= 0) return;
 
-    if (durationMs > 0 && currentMs >= threshold) {
+    const visibleAt = durationMs - VideoPlayer.UP_NEXT_VISIBLE_LEAD_MS;
+    const countdownAt = durationMs - VideoPlayer.UP_NEXT_COUNTDOWN_LEAD_MS;
 
-      this.triggerUpNext();
+    if (currentMs < visibleAt) {
+
+      if (this.state.showUpNext) this.setState({ showUpNext: false, upNextCountdown: 0 });
+
+      return;
 
     }
 
-  };
+    const inCountdown = currentMs >= countdownAt;
+    const secondsLeft = inCountdown ? Math.max(0, Math.ceil((durationMs - currentMs) / 1000)) : 0;
 
-  triggerUpNext = () => {
+    if (!this.state.showUpNext) {
 
-    this.setState({ showUpNext: true, upNextCountdown: 10 });
+      this.setState({ showUpNext: true, upNextCountdown: secondsLeft });
 
-    if (this.upNextTimer) clearInterval(this.upNextTimer);
+      return;
 
-    this.upNextTimer = setInterval(() => {
+    }
 
-      this.setState((s) => {
+    if (this.state.upNextCountdown !== secondsLeft) {
 
-        if (s.upNextCountdown <= 1) {
+      this.setState({ upNextCountdown: secondsLeft });
 
-          if (this.upNextTimer) clearInterval(this.upNextTimer);
-
-          this.props.onNextEpisode?.();
-
-          return { ...s, showUpNext: false };
-
-        }
-
-        return { ...s, upNextCountdown: s.upNextCountdown - 1 };
-
-      });
-
-    }, 1_000);
+    }
 
   };
 
@@ -1612,7 +1604,13 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
 
         {!live && showSkipIntro && (
 
-          <button onClick={this.skipIntro} className="absolute right-6 bottom-20 z-20 flex animate-fade-in items-center gap-2 rounded-md border border-border-subtle bg-surface/80 px-4 py-2 text-sm font-medium backdrop-blur-md transition-colors hover:bg-surface-overlay" >
+          <button onClick={(e) => {
+
+              e.stopPropagation();
+
+              this.skipIntro();
+
+            }} className="pointer-events-auto absolute right-6 bottom-20 z-40 flex animate-fade-in items-center gap-2 rounded-md border border-border-subtle bg-surface/80 px-4 py-2 text-sm font-medium backdrop-blur-md transition-colors hover:bg-surface-overlay" >
 
             <SkipForward size={14} />
 
@@ -1624,7 +1622,7 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
 
         {!live && showUpNext && nextEpisode && (
 
-          <div className="absolute right-6 bottom-28 z-20 w-72 animate-fade-in rounded-lg border border-border-subtle bg-surface/80 p-4 backdrop-blur-md">
+          <div className="pointer-events-auto absolute right-6 bottom-28 z-40 w-72 animate-fade-in rounded-lg border border-border-subtle bg-surface/80 p-4 backdrop-blur-md">
 
             <p className="text-[11px] tracking-wide text-foreground-faint uppercase">
 
@@ -1655,7 +1653,7 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
 
               <button onClick={() => this.props.onNextEpisode?.()} className="flex-1 rounded-md bg-foreground px-3 py-1.5 text-xs text-surface transition-colors hover:bg-accent" >
 
-                Play ({upNextCountdown})
+                {upNextCountdown > 0 ? `Play (${upNextCountdown})` : "Play"}
 
               </button>
 

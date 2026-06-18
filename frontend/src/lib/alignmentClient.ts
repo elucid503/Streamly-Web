@@ -7,6 +7,57 @@ interface PendingRequest {
 
 }
 
+const hasBrowserApis = () => typeof window !== "undefined" && typeof navigator !== "undefined";
+
+const isIos = () => {
+
+  if (!hasBrowserApis()) return false;
+
+  const ua = navigator.userAgent;
+
+  if (/iPhone|iPad|iPod/i.test(ua)) return true;
+
+  // iPadOS 13+ reports as MacIntel in desktop mode.
+  return navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1;
+
+};
+
+const hasAudioContext = () => hasBrowserApis() && (typeof AudioContext !== "undefined" || typeof window.webkitAudioContext !== "undefined");
+
+const hasModelRuntime = () => hasBrowserApis() && typeof Worker !== "undefined" && typeof WebAssembly !== "undefined" && typeof fetch !== "undefined";
+
+let unsupportedReason: string | null | undefined;
+
+const markUnsupported = (reason: string) => {
+
+  unsupportedReason = reason;
+
+};
+
+const detectUnsupportedReason = () => {
+
+  if (!hasBrowserApis()) return "browser lacks alignment runtime";
+
+  if (isIos()) return "iOS audio routing";
+
+  if (!hasModelRuntime()) return "browser lacks alignment runtime";
+
+  if (!hasAudioContext()) return "AudioContext not supported";
+
+  return null;
+
+};
+
+export const alignmentUnsupportedReason = () => {
+
+  if (unsupportedReason === undefined) unsupportedReason = detectUnsupportedReason();
+
+  return unsupportedReason;
+
+};
+
+export const isAlignmentSupported = () => alignmentUnsupportedReason() === null;
+
 let worker: Worker | null = null;
 
 let requestId = 0;
@@ -29,13 +80,25 @@ const notifyReady = () => {
 
 const getWorker = () => {
 
+  if (!isAlignmentSupported()) return null;
+
   if (worker) return worker;
 
-  worker = new Worker(new URL("../workers/alignment.worker.ts", import.meta.url), {
+  try {
 
-    type: "module",
+    worker = new Worker(new URL("../workers/alignment.worker.ts", import.meta.url), {
 
-  });
+      type: "module",
+
+    });
+
+  } catch {
+
+    markUnsupported("module workers not supported");
+
+    return null;
+
+  }
 
   worker.onmessage = (event: MessageEvent) => {
 
@@ -67,11 +130,19 @@ const getWorker = () => {
 
 export function warmupAligner() {
 
-  getWorker().postMessage({ type: "warmup" });
+  getWorker()?.postMessage({ type: "warmup" });
 
 }
 
 export function alignWords(input: { audio: Float32Array; words: string[]; start: number; end: number; }) {
+
+  const workerInstance = getWorker();
+
+  if (!workerInstance) {
+
+    return Promise.reject(new Error(alignmentUnsupportedReason() ?? "alignment not supported"));
+
+  }
 
   const id = ++requestId;
 
@@ -79,7 +150,7 @@ export function alignWords(input: { audio: Float32Array; words: string[]; start:
 
     pending.set(id, { resolve, reject });
 
-    getWorker().postMessage({ id, type: "align", ...input }, [input.audio.buffer]);
+    workerInstance.postMessage({ id, type: "align", ...input }, [input.audio.buffer]);
 
   });
 

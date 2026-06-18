@@ -1,5 +1,5 @@
 import { activeWordIndex, alignCue, mergeModelTimings, type AlignedSubtitleCue, } from "@/lib/subtitleAlignment";
-import { alignWords, isModelReady, warmupAligner } from "@/lib/alignmentClient";
+import { alignWords, alignmentUnsupportedReason, isAlignmentSupported, isModelReady, warmupAligner, } from "@/lib/alignmentClient";
 
 import { AudioTap } from "@/lib/audioTap";
 
@@ -73,7 +73,7 @@ export class SubtitleDisplay extends Component<SubtitleDisplayProps, SubtitleDis
   private lastAttempt = 0;
   private modelErrors = 0;
 
-  private modelDisabled = false;
+  private modelDisabled = !isAlignmentSupported();
 
   state: SubtitleDisplayState = {
 
@@ -114,9 +114,16 @@ export class SubtitleDisplay extends Component<SubtitleDisplayProps, SubtitleDis
     if (this.rafId !== null) cancelAnimationFrame(this.rafId);
     if (this.exitTimer !== null) window.clearTimeout(this.exitTimer);
 
-    this.tap?.stop();
+    this.releaseTap();
 
   }
+
+  private releaseTap = () => {
+
+    this.tap?.release();
+    this.tap = null;
+
+  };
 
   private loadTrack = async (track: SubtitleTrack | null) => {
 
@@ -133,7 +140,21 @@ export class SubtitleDisplay extends Component<SubtitleDisplayProps, SubtitleDis
 
     if (!track) return;
 
-    if (!this.modelDisabled) warmupAligner();
+    if (!this.modelDisabled) {
+
+      try {
+
+        warmupAligner();
+
+      } catch {
+
+        this.disableAlignment("alignment warmup failed");
+
+      }
+
+      if (!isAlignmentSupported()) this.modelDisabled = true;
+
+    }
 
     try {
 
@@ -204,7 +225,7 @@ export class SubtitleDisplay extends Component<SubtitleDisplayProps, SubtitleDis
 
     const cue = index >= 0 ? (this.refined.get(index)?.cue ?? this.cues[index]) : null;
 
-    const activeWord = cue ? activeWordIndex(cue, time) : -1;
+    const activeWord = cue && isAlignmentSupported() ? activeWordIndex(cue, time) : -1;
 
     if (cue !== this.state.cue || activeWord !== this.state.activeWord) {
 
@@ -222,7 +243,7 @@ export class SubtitleDisplay extends Component<SubtitleDisplayProps, SubtitleDis
 
   private maybeRefine(index: number, force = false) {
 
-    if (this.modelDisabled || this.aligning) return;
+    if (this.modelDisabled || !isAlignmentSupported() || this.aligning) return;
 
     if (this.refined.get(index)?.final) return;
 
@@ -252,6 +273,8 @@ export class SubtitleDisplay extends Component<SubtitleDisplayProps, SubtitleDis
 
     this.showExitingCue(index, nextIndex, time);
 
+    if (!isAlignmentSupported()) return;
+
     if (!this.refined.get(index)?.applied && !this.loggedFallback.has(index)) {
 
       // Suppress warnings while the model is still loading
@@ -265,7 +288,7 @@ export class SubtitleDisplay extends Component<SubtitleDisplayProps, SubtitleDis
         index,
         text: this.cues[index]?.text,
 
-        reason: this.skipReasons.get(index) ?? (this.modelDisabled ? "model alignment disabled" : "model result not ready in time"),
+        reason: this.skipReasons.get(index) ?? (this.modelDisabled ? (alignmentUnsupportedReason() ?? "model alignment disabled") : "model result not ready in time"),
 
       });
 
@@ -319,6 +342,18 @@ export class SubtitleDisplay extends Component<SubtitleDisplayProps, SubtitleDis
     return gap <= IMMEDIATE_NEXT_GAP_SECONDS && time >= previousCue.end - 0.08;
 
   }
+
+  private disableAlignment = (reason: string) => {
+
+    if (this.modelDisabled) return;
+
+    this.modelDisabled = true;
+
+    this.releaseTap();
+
+    console.warn("[subtitles] disabling model alignment", { reason });
+
+  };
 
   private markUnalignable(index: number, cue: AlignedSubtitleCue, reason: string) {
 
@@ -471,15 +506,9 @@ export class SubtitleDisplay extends Component<SubtitleDisplayProps, SubtitleDis
 
       this.skipReasons.set(index, error instanceof Error ? error.message : "alignment failed");
 
-      if (this.modelErrors >= MAX_MODEL_ERRORS && !this.modelDisabled) {
+      if (this.modelErrors >= MAX_MODEL_ERRORS) {
 
-        this.modelDisabled = true;
-
-        console.warn("[subtitles] disabling model alignment after repeated failures", {
-
-          lastError: this.skipReasons.get(index),
-
-        });
+        this.disableAlignment(this.skipReasons.get(index) ?? "alignment failed");
 
       }
 
@@ -518,21 +547,29 @@ export class SubtitleDisplay extends Component<SubtitleDisplayProps, SubtitleDis
 
       >
 
-        {displayCue.words.map((word, index) => (
+        {isAlignmentSupported() ? (
 
-          <span key={index}>
+          displayCue.words.map((word, index) => (
 
-            {word.lineBreakBefore ? <br /> : index > 0 ? " " : null}
+            <span key={index}>
 
-            <span className={ index <= displayActiveWord ? "text-white transition-colors duration-150" : "text-white/40 transition-colors duration-150" } >
+              {word.lineBreakBefore ? <br /> : index > 0 ? " " : null}
 
-              {word.text}
+              <span className={ index <= displayActiveWord ? "text-white transition-colors duration-150" : "text-white/40 transition-colors duration-150" } >
+
+                {word.text}
+
+              </span>
 
             </span>
 
-          </span>
+          ))
 
-        ))}
+        ) : (
+
+          <span className="whitespace-pre-line text-white">{displayCue.text}</span>
+
+        )}
       </p>
 
     );
