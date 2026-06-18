@@ -112,23 +112,116 @@ func (c *SubDLClient) ListTracks(ctx context.Context, query Query) ([]Track, err
 
 	}
 
-	response, err := c.search(ctx, query)
+	var tracks []Track
+	var firstErr error
+	seen := make(map[string]struct{})
 
-	if err != nil {
+	for _, candidate := range subdlQueryVariants(query) {
 
-		return nil, err
+		response, err := c.search(ctx, candidate)
+
+		if err != nil {
+
+			if firstErr == nil {
+
+				firstErr = err
+
+			}
+
+			continue
+
+		}
+
+		for _, track := range pickSubDLTracks(response, candidate.Season, candidate.Episode) {
+
+			key := strings.TrimSpace(track.Path)
+
+			if key == "" {
+
+				continue
+
+			}
+
+			if _, ok := seen[key]; ok {
+
+				continue
+
+			}
+
+			seen[key] = struct{}{}
+			tracks = append(tracks, track)
+
+		}
 
 	}
 
-	tracks := pickSubDLTracks(response, query.Season, query.Episode)
+	if len(tracks) > 0 {
 
-	if len(tracks) == 0 {
-
-		return nil, ErrNoSubtitle
+		return tracks, nil
 
 	}
 
-	return tracks, nil
+	if firstErr != nil {
+
+		return nil, firstErr
+
+	}
+
+	return nil, ErrNoSubtitle
+
+}
+
+func subdlQueryVariants(query Query) []Query {
+
+	var variants []Query
+	seen := make(map[string]struct{})
+
+	add := func(candidate Query) {
+
+		if strings.TrimSpace(candidate.IMDBId) == "" && candidate.TMDBId <= 0 {
+
+			return
+
+		}
+
+		key := strings.Join([]string{
+			strings.TrimSpace(candidate.IMDBId),
+			strconv.Itoa(candidate.TMDBId),
+			strings.TrimSpace(candidate.VideoName),
+			strconv.Itoa(candidate.Season),
+			strconv.Itoa(candidate.Episode),
+		}, "\x00")
+
+		if _, ok := seen[key]; ok {
+
+			return
+
+		}
+
+		seen[key] = struct{}{}
+		variants = append(variants, candidate)
+
+	}
+
+	add(query)
+
+	withoutName := query
+	withoutName.VideoName = ""
+	add(withoutName)
+
+	if query.IMDBId != "" && query.TMDBId > 0 {
+
+		tmdbQuery := query
+		tmdbQuery.IMDBId = ""
+		add(tmdbQuery)
+
+		tmdbWithoutName := tmdbQuery
+		tmdbWithoutName.VideoName = ""
+		add(tmdbWithoutName)
+
+	}
+
+	return variants
 
 }
 
@@ -651,6 +744,29 @@ func parseLeadingEpisode(label string) int {
 func (c *SubDLClient) downloadBytes(ctx context.Context, path string) ([]byte, error) {
 
 	path = strings.TrimSpace(path)
+
+	data, err := c.downloadURLBytes(ctx, path)
+	if err == nil {
+
+		return data, nil
+
+	}
+
+	if withoutQuery, _, ok := strings.Cut(path, "?"); ok && strings.TrimSpace(withoutQuery) != "" {
+
+		if fallback, fallbackErr := c.downloadURLBytes(ctx, withoutQuery); fallbackErr == nil {
+
+			return fallback, nil
+
+		}
+
+	}
+
+	return nil, err
+
+}
+
+func (c *SubDLClient) downloadURLBytes(ctx context.Context, path string) ([]byte, error) {
 
 	var downloadURL string
 
