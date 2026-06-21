@@ -98,14 +98,12 @@ export class TitleCard extends Component<TitleCardProps, TitleCardState> {
             compact ? "w-[120px] sm:w-[140px]" : "w-[140px] sm:w-[160px]"
 
           )}
-          whileHover={{ y: -4 }}
-          transition={{ type: "spring", stiffness: 400, damping: 25 }}
 
         >
 
           <button className="block w-full text-left" type="button" onClick={onClick}>
 
-            <div className="relative overflow-hidden rounded-md border border-border-subtle bg-surface-raised transition-colors group-hover:border-border">
+            <div className="relative overflow-hidden rounded-md border border-border-subtle bg-surface-raised transition-[filter,border-color] duration-300 group-hover:border-border group-hover:brightness-[1.15]">
 
               <PosterImage
 
@@ -151,26 +149,59 @@ export class TitleCard extends Component<TitleCardProps, TitleCardState> {
 
           </button>
 
-          {onFavoriteToggle && (
+          {(onFavoriteToggle || onResume) && (
 
-            <button
+            <div className="absolute right-2 top-2 z-10 flex gap-1">
 
-              className={cn(
+              {onResume && (
 
-                "absolute right-2 top-2 z-10 flex h-8 w-8 items-center justify-center rounded-full border border-border-subtle bg-surface/80 text-foreground shadow-sm backdrop-blur-md transition-colors hover:bg-surface-overlay",
-                menuPos && "bg-surface-overlay"
+                <button
+
+                  className="flex h-8 w-8 items-center justify-center rounded-full border border-border-subtle bg-surface/80 text-foreground shadow-sm backdrop-blur-md transition-colors hover:bg-surface-overlay"
+
+                  type="button"
+                  aria-label="Quick resume"
+
+                  onClick={(e) => {
+
+                    e.stopPropagation();
+
+                    onResume();
+
+                  }}
+
+                >
+
+                  <Play size={13} />
+
+                </button>
 
               )}
 
-              type="button"
-              aria-label="More options"
-              onClick={this.openMenu}
+              {onFavoriteToggle && (
 
-            >
+                <button
 
-              <MoreHorizontal size={15} />
+                  className={cn(
 
-            </button>
+                    "flex h-8 w-8 items-center justify-center rounded-full border border-border-subtle bg-surface/80 text-foreground shadow-sm backdrop-blur-md transition-colors hover:bg-surface-overlay",
+                    menuPos && "bg-surface-overlay"
+
+                  )}
+
+                  type="button"
+                  aria-label="More options"
+                  onClick={this.openMenu}
+
+                >
+
+                  <MoreHorizontal size={15} />
+
+                </button>
+
+              )}
+
+            </div>
 
           )}
 

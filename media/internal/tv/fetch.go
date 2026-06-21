@@ -3,27 +3,16 @@ package tv
 import (
 	_ "embed"
 	"encoding/json"
-	"errors"
 	"fmt"
-	"io"
 	"log"
 	"net/http"
-	"os"
-	"strings"
 	"time"
 )
 
 //go:embed data/tv-channels.json
-var embeddedCatalogJSON []byte // embedded fallback catalog, used on startup and if all providers fail
+var embeddedCatalogJSON []byte // seed catalog loaded on startup; replaced by live scrape on first successful refresh
 
 const catalogRefreshTimeout = 45 * time.Second
-
-type catalogProvider struct {
-
-	name string
-	url string
-
-}
 
 func seedEmbeddedCatalog(c *Client) {
 
@@ -98,237 +87,39 @@ func (c *Client) refreshCatalog() {
 func (c *Client) fetchCatalog(timeout time.Duration) (*ChannelCatalog, error) {
 
 	client := &http.Client{Timeout: timeout}
-	var errs []error
 
-	for _, provider := range c.catalogProviders() {
-
-		catalog, err := c.fetchFromProvider(client, provider)
-
-		if err == nil {
-
-			c.storeCatalog(catalog)
-			log.Printf("[tv] catalog refreshed from %s (%d channels)", provider.name, len(catalog.Channels))
-
-			return catalog, nil
-
-		}
-
-		log.Printf("[tv] catalog provider %s failed: %v", provider.name, err)
-		errs = append(errs, fmt.Errorf("%s: %w", provider.name, err))
-
-	}
-
-	return nil, errors.Join(errs...)
-
-}
-
-func (c *Client) fetchFromProvider(client *http.Client, provider catalogProvider) (*ChannelCatalog, error) {
-
-	request, err := http.NewRequest(http.MethodGet, provider.url, nil)
+	catalog, err := scrapeDLHDChannels(client)
 
 	if err != nil {
 
-		return nil, err
+		return nil, fmt.Errorf("dlhd.pk: %w", err)
 
 	}
 
-	referer := providerReferer(provider.url)
+	c.storeCatalog(catalog)
+	log.Printf("[tv] catalog refreshed from dlhd.pk (%d channels)", len(catalog.Channels))
 
-	request.Header.Set("User-Agent", browserUA)
-	request.Header.Set("Accept-Language", "en-US,en;q=0.9")
-	request.Header.Set("Referer", referer)
-	request.Header.Set("Accept-Encoding", "identity")
-
-	response, err := client.Do(request)
-
-	if err != nil {
-
-		return nil, err
-
-	}
-
-	defer response.Body.Close()
-
-	if response.StatusCode != http.StatusOK {
-
-		body, _ := io.ReadAll(io.LimitReader(response.Body, 512))
-		return nil, fmt.Errorf("status %d: %s", response.StatusCode, strings.TrimSpace(string(body)))
-
-	}
-
-	body, err := io.ReadAll(io.LimitReader(response.Body, 4<<20))
-
-	if err != nil {
-
-		return nil, err
-
-	}
-
-	return parseCatalogJSON(body)
-
-}
-
-func (c *Client) catalogProviders() []catalogProvider {
-
-	seen := make(map[string]struct{})
-	providers := make([]catalogProvider, 0, 4)
-
-	add := func(name, rawURL string) {
-
-		rawURL = strings.TrimSpace(rawURL)
-
-		if rawURL == "" {
-
-			return
-
-		}
-
-		url := normalizeCatalogURL(rawURL)
-
-		if _, ok := seen[url]; ok {
-
-			return
-
-		}
-
-		seen[url] = struct{}{}
-
-		if name == "" {
-
-			name = url
-
-		}
-
-		providers = append(providers, catalogProvider{name: name, url: url})
-
-	}
-
-	for index, rawURL := range catalogURLCandidates() {
-
-		add(fmt.Sprintf("catalog-%d", index+1), rawURL)
-
-	}
-
-	return providers
-
-}
-
-func catalogURLCandidates() []string {
-
-	if urls := strings.TrimSpace(os.Getenv("TV_CATALOG_URLS")); urls != "" {
-
-		parts := strings.Split(urls, ",")
-		candidates := make([]string, 0, len(parts))
-
-		for _, part := range parts {
-
-			if trimmed := strings.TrimSpace(part); trimmed != "" {
-
-				candidates = append(candidates, trimmed)
-
-			}
-
-		}
-
-		if len(candidates) > 0 {
-
-			return candidates
-
-		}
-
-	}
-
-	if base := strings.TrimSpace(os.Getenv("TV_BASE_URL")); base != "" {
-
-		return []string{base}
-
-	}
-
-	return []string{defaultBaseURL}
-
-}
-
-func normalizeCatalogURL(rawURL string) string {
-
-	rawURL = strings.TrimSpace(rawURL)
-
-	if strings.Contains(rawURL, "tv-channels.json") {
-
-		return rawURL
-
-	}
-
-	return strings.TrimRight(rawURL, "/") + channelsPath
-
-}
-
-func providerReferer(rawURL string) string {
-
-	if strings.Contains(rawURL, "://") {
-
-		parts := strings.SplitN(strings.TrimPrefix(rawURL, "https://"), "/", 2)
-
-		if len(parts) > 0 && parts[0] != "" {
-
-			return "https://" + parts[0] + "/"
-
-		}
-
-	}
-
-	return defaultBaseURL + "/"
-
-}
-
-func parseCatalogJSON(body []byte) (*ChannelCatalog, error) {
-
-	var catalog ChannelCatalog
-
-	if err := json.Unmarshal(body, &catalog); err != nil {
-
-		return nil, fmt.Errorf("decode channels: %w", err)
-
-	}
-
-	if len(catalog.Channels) == 0 {
-
-		return nil, fmt.Errorf("decode channels: empty catalog")
-
-	}
-
-	// The dlhd/tv247 resolvers expect daddylive premium ids. The cdnlivetv provider numbers channels with its own sequential index (e.g. ABC=1)
-
-	if isCDNLiveTVCatalog(catalog.Channels) {
-
-		return nil, fmt.Errorf("decode channels: incompatible cdnlivetv id space")
-
-	}
-
-	return &catalog, nil
-
-}
-
-func isCDNLiveTVCatalog(channels []Channel) bool {
-
-	cdn := 0
-
-	for _, ch := range channels {
-
-		if strings.EqualFold(strings.TrimSpace(ch.Source), "cdnlivetv") {
-
-			cdn++
-
-		}
-
-	}
-
-	return cdn*2 > len(channels)
+	return catalog, nil
 
 }
 
 func embeddedCatalog() (*ChannelCatalog, error) {
 
-	return parseCatalogJSON(embeddedCatalogJSON)
+	var catalog ChannelCatalog
+
+	if err := json.Unmarshal(embeddedCatalogJSON, &catalog); err != nil {
+
+		return nil, fmt.Errorf("decode embedded catalog: %w", err)
+
+	}
+
+	if len(catalog.Channels) == 0 {
+
+		return nil, fmt.Errorf("embedded catalog is empty")
+
+	}
+
+	return &catalog, nil
 
 }
 

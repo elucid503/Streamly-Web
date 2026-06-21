@@ -105,7 +105,7 @@ type Channel struct {
 
 }
 
-// UnmarshalJSON tolerates provider schema drift: newer catalogs name the logo field "image" and omit "id", so we accept both logo keys and synthesize an id from daddyId.
+// UnmarshalJSON tolerates provider schema drift: newer catalogs name the logo field "image", omit "id", or send "id" as a number, so we accept both logo keys, coerce numeric ids to strings, and synthesize an id from daddyId when absent.
 func (c *Channel) UnmarshalJSON(data []byte) error {
 
 	type channelAlias Channel
@@ -113,6 +113,9 @@ func (c *Channel) UnmarshalJSON(data []byte) error {
 	var raw struct {
 
 		channelAlias
+
+		// RawID shadows channelAlias.ID so we can accept string or number.
+		RawID json.RawMessage `json:"id"`
 
 		Image string `json:"image"`
 
@@ -125,6 +128,23 @@ func (c *Channel) UnmarshalJSON(data []byte) error {
 	}
 
 	*c = Channel(raw.channelAlias)
+
+	if len(raw.RawID) > 0 {
+
+		var s string
+
+		if err := json.Unmarshal(raw.RawID, &s); err == nil {
+
+			c.ID = s
+
+		} else {
+
+			// numeric id — use the raw digits as the string value
+			c.ID = strings.TrimSpace(string(raw.RawID))
+
+		}
+
+	}
 
 	if c.Logo == "" {
 

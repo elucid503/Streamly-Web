@@ -152,6 +152,7 @@ interface VideoPlayerState {
   showEpisodes: boolean;
   showSkipIntro: boolean;
   showUpNext: boolean;
+  showUpNextMini: boolean;
   upNextCountdown: number;
 
   fullscreen: boolean;
@@ -215,6 +216,7 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
     showEpisodes: false,
     showSkipIntro: false,
     showUpNext: false,
+    showUpNextMini: false,
     upNextCountdown: 0,
 
     fullscreen: false,
@@ -821,6 +823,7 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
       loading: true,
 
       showUpNext: false,
+      showUpNextMini: false,
       showSkipIntro: false,
 
       seeking: false,
@@ -1059,7 +1062,7 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
 
   checkCredits = (currentMs: number, durationMs: number) => {
 
-    const { nextEpisode, autoPlayNext } = this.props;
+    const { nextEpisode, autoPlayNext, intro } = this.props;
 
     if (!autoPlayNext || !nextEpisode || durationMs <= 0) return;
 
@@ -1068,26 +1071,42 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
 
     if (currentMs < visibleAt) {
 
-      if (this.state.showUpNext) this.setState({ showUpNext: false, upNextCountdown: 0 });
+      if (this.state.showUpNext || this.state.showUpNextMini) {
+
+        this.setState({ showUpNext: false, showUpNextMini: false, upNextCountdown: 0 });
+
+      }
 
       return;
 
     }
 
+    const creditsStartMs = intro?.creditsStartMs;
+    const inCredits = creditsStartMs != null && currentMs >= creditsStartMs;
     const inCountdown = currentMs >= countdownAt;
-    const secondsLeft = inCountdown ? Math.max(0, Math.ceil((durationMs - currentMs) / 1000)) : 0;
+    const showFull = inCredits || inCountdown;
 
-    if (!this.state.showUpNext) {
+    if (showFull) {
 
-      this.setState({ showUpNext: true, upNextCountdown: secondsLeft });
+      const secondsLeft = inCountdown ? Math.max(0, Math.ceil((durationMs - currentMs) / 1000)) : 0;
 
-      return;
+      if (!this.state.showUpNext) {
 
-    }
+        this.setState({ showUpNext: true, showUpNextMini: false, upNextCountdown: secondsLeft });
 
-    if (this.state.upNextCountdown !== secondsLeft) {
+      } else if (this.state.upNextCountdown !== secondsLeft) {
 
-      this.setState({ upNextCountdown: secondsLeft });
+        this.setState({ upNextCountdown: secondsLeft });
+
+      }
+
+    } else {
+
+      if (!this.state.showUpNextMini) {
+
+        this.setState({ showUpNextMini: true, showUpNext: false, upNextCountdown: 0 });
+
+      }
 
     }
 
@@ -1471,7 +1490,7 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
   render() {
 
     const { title, subtitle, episodeTitle, description, poster, qualities = [], selectedHeight = 1080, preferredHeight, nextEpisode, onBack, ambienceEnabled, live, onQualityChange, onOpenSettings, seasons, episodes, currentSeason, currentEpisode, menuSeason, episodesLoading, onSeasonChange, onEpisodeSelect, } = this.props;
-    const { playing, muted, volume, showControls, showOptions, showEpisodes, showSkipIntro, showUpNext, upNextCountdown, fullscreen, loading, seeking, holdPauseActive, activeSubtitleId, actionFeedback, hdrHeights, } = this.state;
+    const { playing, muted, volume, showControls, showOptions, showEpisodes, showSkipIntro, showUpNext, showUpNextMini, upNextCountdown, fullscreen, loading, seeking, holdPauseActive, activeSubtitleId, actionFeedback, hdrHeights, } = this.state;
 
     const showPauseOverlay = !playing && !loading && !seeking && !holdPauseActive && !showEpisodes;
 
@@ -1482,7 +1501,7 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
 
     return (
 
-      <div className="relative flex h-full w-full flex-col overflow-hidden bg-black"
+      <div className="relative flex h-full w-full flex-col bg-black"
 
         ref={this.containerRef}
         onMouseMove={this.showControlsTemporarily}
@@ -1561,7 +1580,7 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
 
         <div className={cn(
 
-            "absolute top-4 right-4 left-4 z-30 flex items-start justify-between gap-4 transition-all duration-300",
+            "absolute top-4 right-4 left-4 z-30 flex items-start justify-between gap-4 transition-opacity duration-300",
             showControls ? "opacity-100" : "pointer-events-none opacity-0"
 
           )}
@@ -1630,6 +1649,24 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
 
         )}
 
+        {!live && showUpNextMini && !showUpNext && nextEpisode && (
+
+          <button onClick={(e) => {
+
+              e.stopPropagation();
+
+              this.props.onNextEpisode?.();
+
+            }} className="pointer-events-auto absolute right-6 bottom-28 z-40 flex animate-fade-in items-center gap-2 rounded-md border border-border-subtle bg-surface/80 px-4 py-2 text-sm font-medium backdrop-blur-md transition-colors hover:bg-surface-overlay" >
+
+            <SkipForward size={14} />
+
+            {nextEpisode.season !== currentSeason ? "Next Season" : "Next Episode"}
+
+          </button>
+
+        )}
+
         {!live && showUpNext && nextEpisode && (
 
           <div className="pointer-events-auto absolute right-6 bottom-28 z-40 w-72 animate-fade-in rounded-lg border border-border-subtle bg-surface/80 p-4 backdrop-blur-md">
@@ -1655,7 +1692,7 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
 
             <div className="mt-3 flex gap-2">
 
-              <button onClick={() => this.setState({ showUpNext: false })} className="flex-1 rounded-md border border-border px-3 py-1.5 text-xs transition-colors hover:bg-surface-overlay" >
+              <button onClick={() => this.setState({ showUpNext: false, showUpNextMini: false })} className="flex-1 rounded-md border border-border px-3 py-1.5 text-xs transition-colors hover:bg-surface-overlay" >
 
                 Cancel
 
@@ -1676,7 +1713,8 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
         <div className={cn(
 
             "absolute inset-x-0 bottom-0 z-20 px-4 pb-4 transition-opacity duration-300 sm:px-6",
-            showEpisodes ? "bg-gradient-to-t from-black/90 from-35% via-black/75 to-transparent pt-2" : "bg-gradient-to-t from-black/90 via-black/50 to-transparent pt-10", showControls || showEpisodes ? "opacity-100" : "pointer-events-none opacity-0"
+            showEpisodes ? "pt-2" : "pt-10",
+            showControls || showEpisodes ? "opacity-100" : "pointer-events-none opacity-0"
 
         )}
 

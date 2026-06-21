@@ -17,10 +17,9 @@ const (
 	defaultBaseURL = "https://dami-tv.pro"
 	defaultStreamAPI = "https://chat.cfbu247.sbs/api/resolve-dlstream/"
 
-	channelsPath = "/data/tv-channels.json?v=302"
 	legacyResolvePath = "/papi/tv/resolve/"
 
-	catalogTTL = 15 * time.Minute
+	catalogTTL = 120 * time.Minute // 2 hours
 
 )
 
