@@ -11,6 +11,7 @@ import { PlayerOptionsMenu } from "@/components/player/PlayerOptionsMenu";
 import { SubtitleDisplay } from "@/components/player/SubtitleDisplay";
 import { ControlButton, VolumeControl } from "@/components/player/VolumeControl";
 
+import { store } from "@/lib/store";
 import { hasIntroWindow, isInIntroWindow } from "@/lib/intro";
 import { isProxiedStream, isWebPlayableUrl } from "@/lib/streamClient";
 import { cn, formatDuration } from "@/lib/utils";
@@ -165,8 +166,7 @@ interface VideoPlayerState {
 
   actionFeedback: PlayerActionFeedback | null;
 
-  // Heights (in px) for which HDR content has been detected. Persists across
-  // quality switches within the same content so the menu can label them.
+  // Heights (in px) for which HDR content has been detected. Persists across  quality switches.
   hdrHeights: Set<number>;
 
 }
@@ -249,11 +249,7 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
 
   componentDidUpdate(prev: VideoPlayerProps) {
 
-    if (
-      prev.src !== this.props.src ||
-      prev.isHls !== this.props.isHls ||
-      (this.props.isHls && prev.selectedHeight !== this.props.selectedHeight)
-    ) {
+    if (prev.src !== this.props.src || prev.isHls !== this.props.isHls || (this.props.isHls && prev.selectedHeight !== this.props.selectedHeight)) {
 
       this.unbindVideoEvents();
 
@@ -862,8 +858,7 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
       video.volume = this.state.volume;
       video.muted = this.state.muted;
 
-      // Don't mark loading:false here — onCanPlay/onPlaying handle that so the
-      // spinner stays visible through any initial seek without oscillating.
+      // Don't mark loading:false here — onCanPlay/onPlaying handle that so the spinner stays visible through any initial seek without oscillating.
       video.play().catch(() => this.setState({ loading: false, playing: false }));
 
       this.onLoadedMetadata();
@@ -1492,7 +1487,7 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
     const { title, subtitle, episodeTitle, description, poster, qualities = [], selectedHeight = 1080, preferredHeight, nextEpisode, onBack, ambienceEnabled, live, onQualityChange, onOpenSettings, seasons, episodes, currentSeason, currentEpisode, menuSeason, episodesLoading, onSeasonChange, onEpisodeSelect, } = this.props;
     const { playing, muted, volume, showControls, showOptions, showEpisodes, showSkipIntro, showUpNext, showUpNextMini, upNextCountdown, fullscreen, loading, seeking, holdPauseActive, activeSubtitleId, actionFeedback, hdrHeights, } = this.state;
 
-    const showPauseOverlay = !playing && !loading && !seeking && !holdPauseActive && !showEpisodes;
+    const showPauseOverlay = !playing && !loading && !seeking && !holdPauseActive && !showEpisodes && store.settings?.disablePauseOverlay !== true;
 
     const qualityEnabled = !live && qualities.length > 0 && !!onQualityChange;
     const episodesEnabled = !live && !!onEpisodeSelect && !!onSeasonChange;

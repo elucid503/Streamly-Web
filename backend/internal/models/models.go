@@ -37,6 +37,7 @@ type UserSettings struct {
 	PreferredHeight  int  `bson:"preferredHeight" json:"preferredHeight"`
 	AutoPlayNext     bool `bson:"autoPlayNext" json:"autoPlayNext"`
 	SkipIntro        bool `bson:"skipIntro" json:"skipIntro"`
+	DisablePauseOverlay bool `bson:"disablePauseOverlay" json:"disablePauseOverlay"`
 	AmbienceEnabled  bool `bson:"ambienceEnabled" json:"ambienceEnabled"`
 	SubtitlesEnabled bool `bson:"subtitlesEnabled" json:"subtitlesEnabled"`
 
@@ -77,4 +78,3 @@ type FavoriteItem struct {
 
 	CreatedAt time.Time `bson:"createdAt" json:"createdAt"`
 }
-

@@ -113,6 +113,15 @@ export class SettingsPanel extends Component<SettingsPanelProps, SettingsPanelSt
 
           <Switch
 
+            label="Disable pause overlay"
+            checked={settings.disablePauseOverlay}
+
+            onChange={(v) => this.update({ disablePauseOverlay: v })}
+
+          />
+
+          <Switch
+
             label="Subtitles on by default"
             checked={settings.subtitlesEnabled ?? false}
 

@@ -50,6 +50,7 @@ func (s *SettingsService) Get(ctx context.Context, userID string) (*models.UserS
 			AutoPlayNext:     true,
 			SkipIntro:        true,
 			AmbienceEnabled:  true,
+			DisablePauseOverlay: false,
 			SubtitlesEnabled: true,
 			UpdatedAt:        now,
 
@@ -85,6 +86,7 @@ type SettingsUpdate struct {
 	AutoPlayNext     *bool `json:"autoPlayNext"`
 	SkipIntro        *bool `json:"skipIntro"`
 	AmbienceEnabled  *bool `json:"ambienceEnabled"`
+	DisablePauseOverlay *bool `json:"disablePauseOverlay"`
 	SubtitlesEnabled *bool `json:"subtitlesEnabled"`
 
 }
@@ -138,6 +140,14 @@ func (s *SettingsService) Update(ctx context.Context, userID string, update Sett
 		set["subtitlesEnabled"] = *update.SubtitlesEnabled
 
 		settings.SubtitlesEnabled = *update.SubtitlesEnabled
+
+	}
+
+	if update.DisablePauseOverlay != nil {
+
+		set["disablePauseOverlay"] = *update.DisablePauseOverlay
+
+		settings.DisablePauseOverlay = *update.DisablePauseOverlay
 
 	}
 
