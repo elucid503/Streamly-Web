@@ -153,7 +153,7 @@ func (m *Movie) Qualities() ([]quality.Quality, error) {
 
 		if len(seasons) == 0 {
 
-			return nil, fmt.Errorf("movie %d: no playable file found", m.id)
+			return []quality.Quality{}, nil
 
 		}
 
@@ -171,7 +171,7 @@ func (m *Movie) Qualities() ([]quality.Quality, error) {
 
 	if len(direct) == 0 {
 
-		return nil, fmt.Errorf("movie %d: no playable file found", m.id)
+		return []quality.Quality{}, nil
 
 	}
 

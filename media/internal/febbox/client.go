@@ -300,6 +300,12 @@ func (c *Client) doFetchJSON(url, shareKey, cookie string, dest any) error {
 
 	}
 
+	if len(body) == 0 {
+
+		return nil
+
+	}
+
 	return json.Unmarshal(body, dest)
 
 }
@@ -345,6 +351,12 @@ func (c *Client) doFetchFormJSON(endpoint, shareKey, cookie string, form url.Val
 	if err != nil {
 
 		return err
+
+	}
+
+	if len(body) == 0 {
+
+		return nil
 
 	}
 

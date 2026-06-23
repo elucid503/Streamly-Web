@@ -421,6 +421,12 @@ func (c *Client) GetFebBoxID(id int, boxType BoxType) (string, error) {
 
 	}
 
+	if len(body) == 0 {
+
+		return "", nil
+
+	}
+
 	if err := json.Unmarshal(body, &parsed); err != nil {
 
 		return "", err

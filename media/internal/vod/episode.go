@@ -185,7 +185,7 @@ func (e *Episode) Qualities() ([]quality.Quality, error) {
 
 	if len(files) == 0 {
 
-		return nil, fmt.Errorf("episode S%02dE%02d not found", e.season, e.episode)
+		return []quality.Quality{}, nil
 
 	}
 
