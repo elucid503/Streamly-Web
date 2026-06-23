@@ -63,6 +63,17 @@ type WatchHistoryItem struct {
 	UpdatedAt time.Time `bson:"updatedAt" json:"updatedAt"`
 }
 
+type ServiceInterruption struct {
+
+	ID      primitive.ObjectID `bson:"_id,omitempty" json:"id"`
+	Enabled bool               `bson:"enabled" json:"enabled"`
+	Title   string             `bson:"title" json:"title"`
+	Message string             `bson:"message" json:"message"`
+
+	UpdatedAt time.Time `bson:"updatedAt" json:"updatedAt"`
+
+}
+
 type FavoriteItem struct {
 	ID        primitive.ObjectID `bson:"_id,omitempty" json:"id"`
 	UserID    primitive.ObjectID `bson:"userId" json:"userId"`

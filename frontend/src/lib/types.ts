@@ -198,4 +198,14 @@ export interface ChannelGuideEntry {
 
 }
 
+export interface ServiceInterruption {
+
+  id?: string;
+  enabled: boolean;
+  title: string;
+  message: string;
+  updatedAt?: string;
+
+}
+
 export type MainView = "shows" | "movies" | "live";

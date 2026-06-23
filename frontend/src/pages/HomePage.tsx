@@ -12,12 +12,14 @@ import { ViewCarousel } from "@/components/layout/ViewCarousel";
 import type { ContextActionId } from "@/components/layout/ViewContextBar";
 import { AdminPanel } from "@/pages/AdminPanel";
 import { SettingsPanel } from "@/pages/SettingsPanel";
+import { Modal } from "@/components/ui/Modal";
+import { Button } from "@/components/ui/Button";
 
 import type { NavigateFn } from "@/lib/navigation";
 import { lastWatched, lastWatchedPath, resumePath, showResumeItem } from "@/lib/history";
 import { store } from "@/lib/store";
 
-import type { FavoriteItem, LiveChannel, MainView, SearchHit, WatchHistoryItem } from "@/lib/types";
+import type { FavoriteItem, LiveChannel, MainView, SearchHit, ServiceInterruption, WatchHistoryItem } from "@/lib/types";
 
 import { Component } from "react";
 
@@ -46,6 +48,9 @@ interface HomePageState {
 
   settingsOpen: boolean;
   adminOpen: boolean;
+
+  interruption: ServiceInterruption | null;
+  interruptionOpen: boolean;
 
   contextLoading: ContextActionId | null;
 
@@ -77,6 +82,9 @@ export class HomePage extends Component<HomePageProps, HomePageState> {
     settingsOpen: false,
     adminOpen: false,
 
+    interruption: null,
+    interruptionOpen: false,
+
     contextLoading: null,
 
   };
@@ -86,6 +94,7 @@ export class HomePage extends Component<HomePageProps, HomePageState> {
     this.unsubscribe = store.subscribe(() => this.forceUpdate());
 
     this.loadHomeData();
+    this.checkServiceInterruption();
 
   }
 
@@ -96,6 +105,42 @@ export class HomePage extends Component<HomePageProps, HomePageState> {
     if (this.searchDebounce) clearTimeout(this.searchDebounce);
 
   }
+
+  checkServiceInterruption = async () => {
+
+    try {
+
+      const data = await api.getServiceInterruption();
+
+      if (!data.enabled) return;
+
+      const seenAt = localStorage.getItem("streamly:service-interruption-seen");
+
+      if (seenAt === data.updatedAt) return;
+
+      this.setState({ interruption: data, interruptionOpen: true });
+
+    } catch {
+
+      /* ignore */
+
+    }
+
+  };
+
+  dismissInterruption = () => {
+
+    const { interruption } = this.state;
+
+    if (interruption?.updatedAt) {
+
+      localStorage.setItem("streamly:service-interruption-seen", interruption.updatedAt);
+
+    }
+
+    this.setState({ interruptionOpen: false });
+
+  };
 
   loadHomeData = async () => {
 
@@ -620,7 +665,7 @@ export class HomePage extends Component<HomePageProps, HomePageState> {
 
   render() {
 
-    const { view, searchQuery, searchKind, searchYear, searchRating, searchProgress, history, favorites, settingsOpen, adminOpen, contextLoading } = this.state;
+    const { view, searchQuery, searchKind, searchYear, searchRating, searchProgress, history, favorites, settingsOpen, adminOpen, interruption, interruptionOpen, contextLoading } = this.state;
 
     const showSearch = searchQuery.trim().length > 0 && view !== "live";
 
@@ -714,6 +759,22 @@ export class HomePage extends Component<HomePageProps, HomePageState> {
         <SettingsPanel open={settingsOpen} onClose={() => this.setState({ settingsOpen: false })} />
 
         <AdminPanel open={adminOpen} onClose={() => this.setState({ adminOpen: false })} />
+
+        {interruption && (
+
+          <Modal open={interruptionOpen} onClose={this.dismissInterruption} title={interruption.title || "Service Interruption"}>
+
+            <p className="mb-5 text-sm text-foreground-muted">{interruption.message}</p>
+
+            <Button onClick={this.dismissInterruption} className="w-full">
+
+              Dismiss
+
+            </Button>
+
+          </Modal>
+
+        )}
 
         <HomeBottomBar
 

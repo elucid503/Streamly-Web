@@ -3,8 +3,9 @@ import { api } from "@/api/client";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
+import { Switch } from "@/components/ui/Switch";
 
-import type { AccessCode } from "@/lib/types";
+import type { AccessCode, ServiceInterruption } from "@/lib/types";
 
 import { Component } from "react";
 import { Copy, Trash2 } from "lucide-react";
@@ -29,6 +30,9 @@ interface AdminPanelState {
 
   copied: string;
 
+  interruption: ServiceInterruption;
+  interruptionSaving: boolean;
+
 }
 
 export class AdminPanel extends Component<AdminPanelProps, AdminPanelState> {
@@ -44,6 +48,9 @@ export class AdminPanel extends Component<AdminPanelProps, AdminPanelState> {
     creating: false,
 
     copied: "",
+
+    interruption: { enabled: false, title: "", message: "" },
+    interruptionSaving: false,
 
   };
 
@@ -63,13 +70,44 @@ export class AdminPanel extends Component<AdminPanelProps, AdminPanelState> {
 
     try {
 
-      const codes = await api.listAccessCodes();
+      const [codes, interruption] = await Promise.all([
 
-      this.setState({ codes, loading: false });
+        api.listAccessCodes(),
+        api.getAdminServiceInterruption().catch(() => ({ enabled: false, title: "", message: "" } as ServiceInterruption)),
+
+      ]);
+
+      this.setState({ codes, loading: false, interruption });
 
     } catch {
 
       this.setState({ loading: false });
+
+    }
+
+  };
+
+  saveInterruption = async () => {
+
+    const { interruption } = this.state;
+
+    this.setState({ interruptionSaving: true });
+
+    try {
+
+      const saved = await api.updateServiceInterruption({
+
+        enabled: interruption.enabled,
+        title: interruption.title,
+        message: interruption.message,
+
+      });
+
+      this.setState({ interruption: saved });
+
+    } finally {
+
+      this.setState({ interruptionSaving: false });
 
     }
 
@@ -117,11 +155,11 @@ export class AdminPanel extends Component<AdminPanelProps, AdminPanelState> {
 
     const { open, onClose } = this.props;
 
-    const { codes, maxUses, expiresIn, loading, creating, copied } = this.state;
+    const { codes, maxUses, expiresIn, loading, creating, copied, interruption, interruptionSaving } = this.state;
 
     return (
 
-      <Modal open={open} onClose={onClose} title="Access Codes" className="max-w-lg">
+      <Modal open={open} onClose={onClose} title="Admin" className="max-w-lg">
 
         <div className="mb-6 space-y-3">
 
@@ -229,6 +267,47 @@ export class AdminPanel extends Component<AdminPanelProps, AdminPanelState> {
           <p className="mt-3 text-center text-xs text-foreground-muted">Copied to clipboard</p>
 
         )}
+
+        <div className="mt-6 border-t border-border-subtle pt-5">
+
+          <p className="mb-3 text-sm font-medium">Service Interruption</p>
+
+          <Switch
+
+            label="Show interruption dialog to all users"
+            checked={interruption.enabled}
+            onChange={(v) => this.setState({ interruption: { ...interruption, enabled: v } })}
+
+          />
+
+          <div className="mt-3 space-y-2">
+
+            <Input
+
+              placeholder="Title"
+              value={interruption.title}
+              onChange={(e) => this.setState({ interruption: { ...interruption, title: e.target.value } })}
+
+            />
+
+            <textarea
+
+              className="field-focus min-h-[80px] w-full rounded-md border border-border bg-surface-raised px-3 py-2 text-sm text-foreground placeholder:text-foreground-faint focus:border-border resize-none"
+              placeholder="Message"
+              value={interruption.message}
+              onChange={(e) => this.setState({ interruption: { ...interruption, message: e.target.value } })}
+
+            />
+
+          </div>
+
+          <Button onClick={this.saveInterruption} disabled={interruptionSaving} className="mt-3 w-full">
+
+            {interruptionSaving ? "Saving..." : "Save"}
+
+          </Button>
+
+        </div>
 
       </Modal>
 

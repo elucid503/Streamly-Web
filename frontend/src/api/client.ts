@@ -1,4 +1,4 @@
-import type { AccessCode, Category, ChannelGuideEntry, Episode, FavoriteItem, IntroInfo, LiveChannel, NextEpisode, SearchHit, Season, StreamQuality, SubtitleTrack, TitleDetails, User, UserSettings, WatchHistoryItem, } from "@/lib/types";
+import type { AccessCode, Category, ChannelGuideEntry, Episode, FavoriteItem, IntroInfo, LiveChannel, NextEpisode, SearchHit, Season, ServiceInterruption, StreamQuality, SubtitleTrack, TitleDetails, User, UserSettings, WatchHistoryItem, } from "@/lib/types";
 
 export class ApiError extends Error {
 
@@ -408,6 +408,29 @@ export const api = {
   getVersion() {
 
     return request<{ version: string }>("/api/version");
+
+  },
+
+  getServiceInterruption() {
+
+    return request<ServiceInterruption>("/api/service-interruption");
+
+  },
+
+  getAdminServiceInterruption() {
+
+    return request<ServiceInterruption>("/api/admin/service-interruption");
+
+  },
+
+  updateServiceInterruption(data: Pick<ServiceInterruption, "enabled" | "title" | "message">) {
+
+    return request<ServiceInterruption>("/api/admin/service-interruption", {
+
+      method: "PUT",
+      body: JSON.stringify(data),
+
+    });
 
   },
 

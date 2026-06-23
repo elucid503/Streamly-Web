@@ -70,7 +70,7 @@ func main() {
 	catalogHandler := handlers.NewCatalogHandler(mediaSvc)
 	streamHandler := handlers.NewStreamHandler(mediaSvc, proxySvc, subtitleSvc)
 	proxyHandler := handlers.NewProxyHandler(proxySvc)
-	adminHandler := handlers.NewAdminHandler(authSvc)
+	adminHandler := handlers.NewAdminHandler(authSvc, db)
 
 	gin.SetMode(gin.ReleaseMode)
 
@@ -186,6 +186,11 @@ func main() {
 	admin.POST("/access-codes", adminHandler.CreateAccessCode)
 	admin.GET("/access-codes", adminHandler.ListAccessCodes)
 	admin.DELETE("/access-codes/:code", adminHandler.DeleteAccessCode)
+
+	admin.GET("/service-interruption", adminHandler.GetServiceInterruption)
+	admin.PUT("/service-interruption", adminHandler.UpdateServiceInterruption)
+
+	protected.GET("/service-interruption", adminHandler.GetServiceInterruption)
 
 	// Proxy
 

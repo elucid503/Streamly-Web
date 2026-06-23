@@ -84,6 +84,12 @@ func (d *DB) Favorites() *mongo.Collection {
 
 }
 
+func (d *DB) ServiceInterruption() *mongo.Collection {
+
+	return d.db.Collection("service_interruption")
+
+}
+
 func (d *DB) ensureIndexes(ctx context.Context) error {
 
 	indexes := []struct {
