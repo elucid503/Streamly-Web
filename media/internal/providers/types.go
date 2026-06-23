@@ -31,13 +31,23 @@ func (s Stream) ToQuality() quality.Quality {
 
 	height := parseStreamHeight(s.Quality)
 
+	isHLS := s.IsHLS || quality.IsHLSURL(s.URL)
+
+	// Adaptive HLS streams that don't declare a resolution are assumed 1080p
+	// so the frontend quality picker can treat them as a valid selection.
+	if height == 0 && isHLS {
+
+		height = 1080
+
+	}
+
 	return quality.Quality{
 
 		URL:   s.URL,
 		Label: streamLabel(s.Provider, s.Quality, height),
 
 		Height: height,
-		IsHLS:  s.IsHLS || quality.IsHLSURL(s.URL),
+		IsHLS:  isHLS,
 
 		Headers: s.Headers,
 
@@ -66,6 +76,14 @@ func streamLabel(provider, qual string, height int) string {
 
 	}
 
+	q := strings.TrimSpace(qual)
+
+	if q == "" || strings.EqualFold(q, "Auto") {
+
+		return provider
+
+	}
+
 	var suffix string
 
 	switch height {
@@ -87,11 +105,7 @@ func streamLabel(provider, qual string, height int) string {
 
 	default:
 
-		if q := strings.TrimSpace(qual); q != "" && q != "Auto" {
-
-			suffix = fmt.Sprintf(" %s", q)
-
-		}
+		suffix = fmt.Sprintf(" %s", q)
 
 	}
 
