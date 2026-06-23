@@ -41,6 +41,22 @@ type EpisodeMeta struct {
 
 }
 
+// SeasonSummary is a brief season descriptor from the TMDB TV details response.
+type SeasonSummary struct {
+
+	Number       int
+	EpisodeCount int
+	Name         string
+
+}
+
+type tvSeasonsEntry struct {
+
+	summaries []SeasonSummary
+	expiry    time.Time
+
+}
+
 // Client fetches metadata from the TMDB API using an IMDb ID as the lookup key.
 type Client struct {
 
@@ -49,10 +65,11 @@ type Client struct {
 
 	mu sync.Mutex
 
-	idMap  map[string]int         // imdbID → tmdbID
-	series map[string]seriesEntry // imdbID → series metadata
-	movies map[string]movieEntry  // imdbID → movie metadata
-	seasons map[string]seasonEntry // "imdbID:season" → episodes
+	idMap     map[string]int         // imdbID → tmdbID
+	series    map[string]seriesEntry // imdbID → series metadata
+	movies    map[string]movieEntry  // imdbID → movie metadata
+	seasons   map[string]seasonEntry // "imdbID:season" → episodes
+	tvSeasons map[int]tvSeasonsEntry // tmdbID → season summaries
 
 }
 
@@ -77,14 +94,78 @@ func New(apiKey string) *Client {
 
 	return &Client{
 
-		apiKey:  apiKey,
-		http:    &http.Client{Timeout: 8 * time.Second},
-		idMap:   make(map[string]int),
-		series:  make(map[string]seriesEntry),
-		movies:  make(map[string]movieEntry),
-		seasons: make(map[string]seasonEntry),
+		apiKey:    apiKey,
+		http:      &http.Client{Timeout: 8 * time.Second},
+		idMap:     make(map[string]int),
+		series:    make(map[string]seriesEntry),
+		movies:    make(map[string]movieEntry),
+		seasons:   make(map[string]seasonEntry),
+		tvSeasons: make(map[int]tvSeasonsEntry),
 
 	}
+
+}
+
+// ShowSeasonsByTMDBID returns season summaries for a TV show identified by its TMDB integer ID.
+func (c *Client) ShowSeasonsByTMDBID(tmdbID int) ([]SeasonSummary, error) {
+
+	if c.apiKey == "" {
+
+		return nil, fmt.Errorf("tmdb: no api key")
+
+	}
+
+	if tmdbID <= 0 {
+
+		return nil, fmt.Errorf("tmdb: invalid tmdb id %d", tmdbID)
+
+	}
+
+	c.mu.Lock()
+
+	if entry, ok := c.tvSeasons[tmdbID]; ok && time.Now().Before(entry.expiry) {
+
+		out := append([]SeasonSummary(nil), entry.summaries...)
+		c.mu.Unlock()
+		return out, nil
+
+	}
+
+	c.mu.Unlock()
+
+	var raw tmdbTV
+
+	if err := c.getJSON(fmt.Sprintf("%s/tv/%d", tmdbBaseURL, tmdbID), &raw); err != nil {
+
+		return nil, err
+
+	}
+
+	summaries := make([]SeasonSummary, 0, len(raw.Seasons))
+
+	for _, s := range raw.Seasons {
+
+		if s.SeasonNumber > 0 {
+
+			name := strings.TrimSpace(s.Name)
+
+			summaries = append(summaries, SeasonSummary{
+
+				Number:       s.SeasonNumber,
+				EpisodeCount: s.EpisodeCount,
+				Name:         name,
+
+			})
+
+		}
+
+	}
+
+	c.mu.Lock()
+	c.tvSeasons[tmdbID] = tvSeasonsEntry{summaries: summaries, expiry: time.Now().Add(cacheTTL)}
+	c.mu.Unlock()
+
+	return summaries, nil
 
 }
 
@@ -415,6 +496,14 @@ type tmdbFindResponse struct {
 
 }
 
+type tmdbSeasonSummaryRaw struct {
+
+	SeasonNumber int    `json:"season_number"`
+	EpisodeCount int    `json:"episode_count"`
+	Name         string `json:"name"`
+
+}
+
 type tmdbTV struct {
 
 	Name         string  `json:"name"`
@@ -423,6 +512,8 @@ type tmdbTV struct {
 	BackdropPath string  `json:"backdrop_path"`
 	Overview     string  `json:"overview"`
 	VoteAverage  float64 `json:"vote_average"`
+
+	Seasons []tmdbSeasonSummaryRaw `json:"seasons"`
 
 }
 

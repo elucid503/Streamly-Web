@@ -53,6 +53,8 @@ func (h *StreamHandler) MovieStream(c *gin.Context) {
 
 	}
 
+	stream.Qualities = h.proxyHeaderQualities(c, stream.Qualities)
+
 	c.JSON(http.StatusOK, stream)
 
 }
@@ -118,6 +120,8 @@ func (h *StreamHandler) EpisodeStream(c *gin.Context) {
 		return
 
 	}
+
+	stream.Qualities = h.proxyHeaderQualities(c, stream.Qualities)
 
 	c.JSON(http.StatusOK, stream)
 
@@ -320,5 +324,37 @@ func (h *StreamHandler) LiveStream(c *gin.Context) {
 		"channel": channel,
 
 	})
+
+}
+
+// proxyHeaderQualities replaces any quality that carries request headers with a
+// proxy URL so the browser never needs to set Referer/Origin directly. Qualities
+// without headers are returned as-is (they are browser-safe already).
+func (h *StreamHandler) proxyHeaderQualities(c *gin.Context, qualities []services.QualityDTO) []services.QualityDTO {
+
+	base := baseURL(c)
+
+	out := make([]services.QualityDTO, 0, len(qualities))
+
+	for _, q := range qualities {
+
+		if len(q.Headers) > 0 {
+
+			referer, _ := q.Headers["Referer"]
+
+			if session, err := h.proxy.CreateSession(c.Request.Context(), q.URL, referer, q.IsHLS); err == nil {
+
+				q.URL = base + session.ProxyPath
+				q.Headers = nil
+
+			}
+
+		}
+
+		out = append(out, q)
+
+	}
+
+	return out
 
 }

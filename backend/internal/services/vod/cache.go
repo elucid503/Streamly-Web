@@ -2,6 +2,7 @@ package vod
 
 import (
 	"fmt"
+	"sort"
 	"sync"
 	"time"
 
@@ -207,6 +208,36 @@ func (c *Cache) pruneLocked() {
 
 func (c *Cache) fetchShowSeasons(id int) ([]SeasonDTO, error) {
 
+	details, err := c.client.GetShowDetails(id)
+
+	if err == nil && details.TMDBId > 0 {
+
+		tmdbSeasons, tmdbErr := c.client.GetShowSeasonsByTMDB(details.TMDBId)
+
+		if tmdbErr == nil && len(tmdbSeasons) > 0 {
+
+			out := make([]SeasonDTO, 0, len(tmdbSeasons))
+
+			for _, sn := range tmdbSeasons {
+
+				label := sn.Name
+
+				if label == "" {
+
+					label = fmt.Sprintf("Season %d", sn.Number)
+
+				}
+
+				out = append(out, SeasonDTO{Number: sn.Number, Label: label})
+
+			}
+
+			return out, nil
+
+		}
+
+	}
+
 	seasons, err := c.client.Show(id).Seasons()
 
 	if err != nil {
@@ -231,42 +262,48 @@ func (c *Cache) fetchSeasonEpisodes(showID, season int) ([]EpisodeDTO, error) {
 
 	show := c.client.Show(showID)
 
-	var eps []*mediakit.Episode
-	var epsErr error
+	details, detailsErr := show.Details()
 
-	var wg sync.WaitGroup
-	wg.Add(2)
+	if detailsErr == nil && details.IMDBId != "" {
 
-	go func() {
+		tmdbEps := c.client.GetSeasonEpisodes(details.IMDBId, season)
 
-		defer wg.Done()
+		if len(tmdbEps) > 0 {
 
-		eps, epsErr = show.Season(season).Episodes()
+			out := make([]EpisodeDTO, 0, len(tmdbEps))
 
-	}()
+			for num, info := range tmdbEps {
 
-	// Pre-warm TMDB season cache concurrently with the Febbox file listing.
-	go func() {
+				out = append(out, EpisodeDTO{
 
-		defer wg.Done()
+					Season:  season,
+					Episode: num,
 
-		details, err := show.Details()
+					Title:       info.Title,
+					Description: info.Description,
 
-		if err != nil || details.IMDBId == "" {
+					Poster: info.Poster,
+				})
 
-			return
+			}
+
+			sort.Slice(out, func(i, j int) bool {
+
+				return out[i].Episode < out[j].Episode
+
+			})
+
+			return out, nil
 
 		}
 
-		c.client.GetSeasonEpisodes(details.IMDBId, season)
+	}
 
-	}()
+	eps, err := show.Season(season).Episodes()
 
-	wg.Wait()
+	if err != nil {
 
-	if epsErr != nil {
-
-		return nil, epsErr
+		return nil, err
 
 	}
 
@@ -278,8 +315,13 @@ func (c *Cache) fetchSeasonEpisodes(showID, season int) ([]EpisodeDTO, error) {
 
 	}
 
-	// Details and TMDB season are now cached, so EpisodeListInfo returns immediately.
-	metaByEpisode := show.EpisodeListInfo(season, numbers)
+	var metaByEpisode map[int]mediakit.EpisodeInfo
+
+	if detailsErr == nil && details.IMDBId != "" {
+
+		metaByEpisode = show.EpisodeListInfo(season, numbers)
+
+	}
 
 	out := make([]EpisodeDTO, len(eps))
 

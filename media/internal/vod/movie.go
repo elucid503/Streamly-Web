@@ -11,7 +11,6 @@ import (
 	"mediakit/internal/introdb"
 	"mediakit/internal/meta"
 	"mediakit/internal/quality"
-	"mediakit/internal/subtitle"
 )
 
 // Movie is a chainable handle for a film.
@@ -127,7 +126,75 @@ func (m *Movie) File() (*MediaFile, error) {
 }
 
 // Qualities lists available download renditions for this movie.
+// Showbox/Febbox and the multi-provider resolver run concurrently; the first
+// to return a non-empty result wins.
 func (m *Movie) Qualities() ([]quality.Quality, error) {
+
+	details, detailsErr := m.Details()
+
+	type result struct {
+		qs  []quality.Quality
+		err error
+	}
+
+	ch := make(chan result, 2)
+
+	go func() {
+
+		qs, err := m.showboxQualities()
+		ch <- result{qs, err}
+
+	}()
+
+	hasTMDB := detailsErr == nil && details.TMDBId > 0
+
+	if hasTMDB {
+
+		go func() {
+
+			qs, err := m.deps.ResolveProviderStreams(details.TMDBId, "movie", 0, 0)
+			ch <- result{qs, err}
+
+		}()
+
+	}
+
+	total := 1
+	if hasTMDB {
+		total = 2
+	}
+
+	var lastErr error
+
+	for i := 0; i < total; i++ {
+
+		r := <-ch
+
+		if len(r.qs) > 0 {
+
+			return r.qs, nil
+
+		}
+
+		if r.err != nil {
+
+			lastErr = r.err
+
+		}
+
+	}
+
+	if lastErr != nil {
+
+		return nil, lastErr
+
+	}
+
+	return []quality.Quality{}, nil
+
+}
+
+func (m *Movie) showboxQualities() ([]quality.Quality, error) {
 
 	shareKey, err := m.ShareKey()
 
@@ -175,7 +242,7 @@ func (m *Movie) Qualities() ([]quality.Quality, error) {
 
 	}
 
-	file := fileparser.BestSourceFile(direct) // Pick the highest-resolution source file.
+	file := fileparser.BestSourceFile(direct)
 	items, err := m.deps.GetLinks(shareKey, file.FID, "")
 
 	if err != nil {
@@ -207,89 +274,6 @@ func (m *Movie) Qualities() ([]quality.Quality, error) {
 	}
 
 	return qualities, nil
-
-}
-
-// Subtitles lists external subtitle files found alongside the movie video.
-func (m *Movie) Subtitles() ([]subtitle.Subtitle, error) {
-
-	shareKey, err := m.ShareKey()
-
-	if err != nil {
-
-		return nil, err
-
-	}
-
-	siblings, video, err := m.listSiblingFiles()
-
-	if err != nil {
-
-		return nil, err
-
-	}
-
-	return subtitle.CollectSubtitles(shareKey, siblings, video), nil
-
-}
-
-func (m *Movie) listSiblingFiles() ([]febbox.File, *febbox.File, error) {
-
-	video, err := m.resolveFile()
-
-	if err != nil {
-
-		return nil, nil, err
-
-	}
-
-	if video == nil {
-
-		return nil, nil, fmt.Errorf("movie %d: no playable file found", m.id)
-
-	}
-
-	shareKey, err := m.ShareKey()
-
-	if err != nil {
-
-		return nil, nil, err
-
-	}
-
-	root, err := m.deps.ListFiles(shareKey, 0, "")
-
-	if err != nil {
-
-		return nil, nil, err
-
-	}
-
-	direct := fileparser.FilesOnly(root)
-
-	if len(direct) > 0 {
-
-		return direct, video, nil
-
-	}
-
-	seasons := fileparser.SeasonsOnly(root)
-
-	if len(seasons) == 0 {
-
-		return direct, video, nil
-
-	}
-
-	children, err := m.deps.ListFiles(shareKey, seasons[0].FID, "")
-
-	if err != nil {
-
-		return nil, nil, err
-
-	}
-
-	return fileparser.FilesOnly(children), video, nil
 
 }
 

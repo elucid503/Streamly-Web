@@ -21,7 +21,12 @@ import (
 	"golang.org/x/sync/singleflight"
 )
 
-var hlsURIAttr = regexp.MustCompile(`URI="([^"]+)"`)
+var (
+	hlsURIAttr      = regexp.MustCompile(`URI="([^"]+)"`)
+	hlsAudioLangRE  = regexp.MustCompile(`(?i)LANGUAGE="([^"]+)"`)
+	hlsDefaultRE    = regexp.MustCompile(`(?i)(DEFAULT=)(YES|NO)`)
+	hlsAutoselectRE = regexp.MustCompile(`(?i)(AUTOSELECT=)(YES|NO)`)
+)
 
 const proxyTokenCacheMax = 4096
 
@@ -243,7 +248,21 @@ func (s *ProxyService) RewritePlaylist(body []byte, entry *ProxyEntry, baseProxy
 
 		if strings.HasPrefix(trimmed, "#") {
 
-			rewritten := hlsURIAttr.ReplaceAllStringFunc(line, func(match string) string {
+			if strings.Contains(trimmed, "EXT-X-MEDIA") && strings.Contains(trimmed, "TYPE=SUBTITLES") {
+
+				continue
+
+			}
+
+			rewritten := line
+
+			if strings.Contains(trimmed, "EXT-X-MEDIA") && strings.Contains(trimmed, "TYPE=AUDIO") {
+
+				rewritten = rewriteAudioDefault(rewritten)
+
+			}
+
+			rewritten = hlsURIAttr.ReplaceAllStringFunc(rewritten, func(match string) string {
 
 				parts := hlsURIAttr.FindStringSubmatch(match)
 
@@ -559,5 +578,48 @@ func IsM3U8Body(body []byte) bool {
 	trimmed := strings.TrimSpace(string(body))
 
 	return strings.HasPrefix(trimmed, "#EXTM3U")
+
+}
+
+// rewriteAudioDefault sets DEFAULT=YES/AUTOSELECT=YES for English audio tracks
+// and DEFAULT=NO for all others, so players default to English automatically.
+func rewriteAudioDefault(line string) string {
+
+	langMatch := hlsAudioLangRE.FindStringSubmatch(line)
+
+	if len(langMatch) < 2 {
+
+		return line
+
+	}
+
+	isEnglish := isEnglishAudioLang(langMatch[1])
+
+	want := "NO"
+
+	if isEnglish {
+
+		want = "YES"
+
+	}
+
+	line = hlsDefaultRE.ReplaceAllString(line, "${1}"+want)
+	line = hlsAutoselectRE.ReplaceAllString(line, "${1}"+want)
+
+	return line
+
+}
+
+func isEnglishAudioLang(lang string) bool {
+
+	switch strings.ToLower(strings.TrimSpace(lang)) {
+
+	case "en", "eng", "english":
+
+		return true
+
+	}
+
+	return false
 
 }

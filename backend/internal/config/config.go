@@ -22,11 +22,11 @@ type Config struct {
 	CookieDomain string
 	FrontendOrigin string
 
-	FebboxCookie string
-	IntroDBKey string
-	TMDBAPIKey string
-	SubDLAPIKey  string
-	TVBaseURL string
+	FebboxCookie        string
+	IntroDBKey          string
+	TMDBAPIKey          string
+	OpenSubtitlesAPIKey string
+	TVBaseURL           string
 
 	ChildMode string
 
@@ -57,11 +57,11 @@ func Load() (*Config, error) {
 		CookieDomain: os.Getenv("COOKIE_DOMAIN"),
 		FrontendOrigin: envOr("FRONTEND_ORIGIN", "http://localhost:5173"),
 
-		FebboxCookie: os.Getenv("FEBBOX_UI_COOKIE"),
-		IntroDBKey: os.Getenv("INTRODB_API_KEY"),
-		TMDBAPIKey: os.Getenv("TMDB_API_KEY"),
-		SubDLAPIKey: os.Getenv("SUBDL_API_KEY"),
-		TVBaseURL: os.Getenv("TV_BASE_URL"),
+		FebboxCookie:        os.Getenv("FEBBOX_UI_COOKIE"),
+		IntroDBKey:          os.Getenv("INTRODB_API_KEY"),
+		TMDBAPIKey:          os.Getenv("TMDB_API_KEY"),
+		OpenSubtitlesAPIKey: os.Getenv("OPENSUBTITLES_API_KEY"),
+		TVBaseURL:           os.Getenv("TV_BASE_URL"),
 
 		ChildMode: envOr("CHILD_MODE", "0"),
 

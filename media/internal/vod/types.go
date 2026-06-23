@@ -25,3 +25,12 @@ type EpisodeInfo struct {
 	Poster string
 
 }
+
+// ShowSeasonInfo is a summary of one TV season from TMDB.
+type ShowSeasonInfo struct {
+
+	Number int
+	EpisodeCount int
+	Name string
+
+}

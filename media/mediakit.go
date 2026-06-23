@@ -10,7 +10,6 @@ import (
 	"mediakit/internal/live"
 	"mediakit/internal/meta"
 	"mediakit/internal/quality"
-	"mediakit/internal/subtitle"
 	"mediakit/internal/vod"
 )
 
@@ -52,11 +51,11 @@ type MediaFile = vod.MediaFile
 // EpisodeInfo is display metadata for one episode.
 type EpisodeInfo = vod.EpisodeInfo
 
+// ShowSeasonInfo is a summary of one TV season from TMDB.
+type ShowSeasonInfo = vod.ShowSeasonInfo
+
 // Quality is one downloadable rendition of a video file.
 type Quality = quality.Quality
-
-// Subtitle describes an external subtitle file discovered alongside the video.
-type Subtitle = subtitle.Subtitle
 
 // IntroData is normalized intro timing from TheIntroDB.
 type IntroData = intro.Data

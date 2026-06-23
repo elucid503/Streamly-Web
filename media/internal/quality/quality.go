@@ -32,6 +32,9 @@ type Quality struct {
 
 	IsHLS bool
 
+	// Headers are optional playback headers required by some stream providers (e.g. Referer).
+	Headers map[string]string
+
 }
 
 // IsHLSURL reports whether a URL points at an HLS playlist.

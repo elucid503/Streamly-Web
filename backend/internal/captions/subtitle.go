@@ -9,7 +9,7 @@ import (
 	"unicode/utf8"
 )
 
-// Track describes a remote subtitle candidate from SubDL.
+// Track describes a remote subtitle candidate.
 type Track struct {
 
 	Path string

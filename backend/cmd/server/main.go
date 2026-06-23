@@ -60,8 +60,8 @@ func main() {
 	defer mediaSvc.StopCatalogCache()
 
 	proxySvc := services.NewProxyService(cfg)
-	subdlClient := captions.NewSubDLClient(captions.SubDLOptions{APIKey: cfg.SubDLAPIKey})
-	subtitleSvc := services.NewSubtitleResolver(mediaSvc, subdlClient, cfg)
+	opensubsClient := captions.NewOpenSubsClient(captions.OpenSubsOptions{APIKey: cfg.OpenSubtitlesAPIKey})
+	subtitleSvc := services.NewSubtitleResolver(mediaSvc, opensubsClient, cfg)
 
 	authHandler := handlers.NewAuthHandler(authSvc)
 	settingsHandler := handlers.NewSettingsHandler(settingsSvc)

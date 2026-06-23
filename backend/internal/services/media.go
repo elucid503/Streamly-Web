@@ -12,7 +12,6 @@ import (
 	"streamly/internal/services/catalog"
 	"streamly/internal/services/search"
 	"streamly/internal/services/stream"
-	"streamly/internal/services/upstream"
 	"streamly/internal/services/vod"
 
 	"golang.org/x/sync/singleflight"
@@ -88,6 +87,8 @@ type QualityDTO struct {
 	IsHLS bool `json:"isHls"`
 
 	URL string `json:"url"`
+
+	Headers map[string]string `json:"headers,omitempty"`
 
 }
 
@@ -329,18 +330,6 @@ func (s *MediaService) MovieQualities(id int) ([]mediakit.Quality, error) {
 
 }
 
-func (s *MediaService) MovieSubtitles(id int) ([]mediakit.Subtitle, error) {
-
-	return s.client.Movie(id).Subtitles()
-
-}
-
-func (s *MediaService) EpisodeSubtitles(showID, season, episode int) ([]mediakit.Subtitle, error) {
-
-	return s.client.Show(showID).Episode(season, episode).Subtitles()
-
-}
-
 func (s *MediaService) EpisodeQualities(showID, season, episode int) ([]mediakit.Quality, error) {
 
 	return s.stream.EpisodeQualities(showID, season, episode)
@@ -405,11 +394,7 @@ func (s *MediaService) EpisodeIntro(showID, season, episode int, durationMs int6
 
 func (s *MediaService) NextEpisode(showID, season, episode int) (*NextEpisodeDTO, error) {
 
-	next, err := upstream.Retry(2, func() (*mediakit.Episode, error) {
-
-		return s.client.Show(showID).NextEpisode(season, episode)
-
-	})
+	details, err := s.client.GetShowDetails(showID)
 
 	if err != nil {
 
@@ -417,19 +402,72 @@ func (s *MediaService) NextEpisode(showID, season, episode int) (*NextEpisodeDTO
 
 	}
 
-	if next == nil {
+	if details.TMDBId <= 0 {
 
 		return nil, nil
 
 	}
 
-	title, _ := next.Title()
+	tmdbSeasons, err := s.client.GetShowSeasonsByTMDB(details.TMDBId)
+
+	if err != nil {
+
+		return nil, err
+
+	}
+
+	var currentEpisodeCount, nextSeasonNum int
+
+	for _, sn := range tmdbSeasons {
+
+		if sn.Number == season {
+
+			currentEpisodeCount = sn.EpisodeCount
+
+		}
+
+		if sn.Number > season && (nextSeasonNum == 0 || sn.Number < nextSeasonNum) {
+
+			nextSeasonNum = sn.Number
+
+		}
+
+	}
+
+	var nextSzn, nextEp int
+
+	if episode < currentEpisodeCount {
+
+		nextSzn, nextEp = season, episode+1
+
+	} else if nextSeasonNum > 0 {
+
+		nextSzn, nextEp = nextSeasonNum, 1
+
+	} else {
+
+		return nil, nil
+
+	}
+
+	var title string
+
+	if details.IMDBId != "" {
+
+		if info, ok := s.client.GetEpisodeMeta(details.IMDBId, nextSzn, nextEp); ok {
+
+			title = info.Title
+
+		}
+
+	}
 
 	return &NextEpisodeDTO{
 
-		Season:  next.SeasonNumber(),
-		Episode: next.Number(),
+		Season:  nextSzn,
+		Episode: nextEp,
 		Title:   title,
+
 	}, nil
 
 }
@@ -477,14 +515,17 @@ func QualitiesToDTO(items []mediakit.Quality) []QualityDTO {
 
 		}
 
-		out = append(out, QualityDTO{
+		dto := QualityDTO{
 
-			Label: q.Label,
-			Height: q.Height,
-			IsHLS: q.IsHLS,
-			URL: q.URL,
+			Label:   q.Label,
+			Height:  q.Height,
+			IsHLS:   q.IsHLS,
+			URL:     q.URL,
+			Headers: q.Headers,
 
-		})
+		}
+
+		out = append(out, dto)
 
 	}
 

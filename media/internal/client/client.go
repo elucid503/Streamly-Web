@@ -12,6 +12,8 @@ import (
 	"mediakit/internal/introdb"
 	"mediakit/internal/live"
 	"mediakit/internal/meta"
+	"mediakit/internal/providers"
+	"mediakit/internal/quality"
 	"mediakit/internal/showbox"
 	"mediakit/internal/tv"
 	"mediakit/internal/vod"
@@ -143,11 +145,12 @@ type shareKeyCacheEntry struct {
 
 // Client is the entry point for catalogue search, VOD browsing, and live TV.
 type Client struct {
-	showbox *showbox.Client
-	febbox  febboxBrowser
-	tv      *tv.Client
-	imdb    *imdb.Client
-	intro   introFetcher
+	showbox   *showbox.Client
+	febbox    febboxBrowser
+	tv        *tv.Client
+	imdb      *imdb.Client
+	intro     introFetcher
+	resolver  *providers.Resolver
 
 	titleMu     sync.Mutex
 	titleGroup  singleflight.Group
@@ -186,11 +189,12 @@ func New(opts ...Option) *Client {
 
 	return &Client{
 
-		showbox: showbox.New(showbox.Options{ChildMode: cfg.childMode}),
-		febbox:  febbox.NewCached(febboxClient),
-		tv:      tv.New(tv.Options{BaseURL: cfg.tvBaseURL}),
-		imdb:    imdb.New(cfg.tmdbAPIKey),
-		intro:   intro,
+		showbox:  showbox.New(showbox.Options{ChildMode: cfg.childMode}),
+		febbox:   febbox.NewCached(febboxClient),
+		tv:       tv.New(tv.Options{BaseURL: cfg.tvBaseURL}),
+		imdb:     imdb.New(cfg.tmdbAPIKey),
+		intro:    intro,
+		resolver: providers.New(cfg.tmdbAPIKey),
 
 		showTitles:  make(map[int]titleCacheEntry),
 		movieTitles: make(map[int]titleCacheEntry),
@@ -562,6 +566,40 @@ func (c *Client) GetDownloadURL(shareKey string, fid any, cookie string) (string
 func (c *Client) GetIntro(query introdb.MediaQuery) (*introdb.MediaRecord, error) {
 
 	return c.intro.GetMedia(query)
+
+}
+
+func (c *Client) GetShowSeasonsByTMDB(tmdbID int) ([]vod.ShowSeasonInfo, error) {
+
+	summaries, err := c.imdb.ShowSeasonsByTMDBID(tmdbID)
+
+	if err != nil {
+
+		return nil, err
+
+	}
+
+	out := make([]vod.ShowSeasonInfo, len(summaries))
+
+	for i, s := range summaries {
+
+		out[i] = vod.ShowSeasonInfo{
+
+			Number:       s.Number,
+			EpisodeCount: s.EpisodeCount,
+			Name:         s.Name,
+
+		}
+
+	}
+
+	return out, nil
+
+}
+
+func (c *Client) ResolveProviderStreams(tmdbID int, mediaType string, season, episode int) ([]quality.Quality, error) {
+
+	return c.resolver.Resolve(tmdbID, mediaType, season, episode)
 
 }
 

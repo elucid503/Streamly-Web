@@ -10,7 +10,6 @@ import (
 	"mediakit/internal/introdb"
 	"mediakit/internal/meta"
 	"mediakit/internal/quality"
-	"mediakit/internal/subtitle"
 )
 
 // Episode is a chainable handle for one episode of a TV show.
@@ -162,7 +161,75 @@ func (e *Episode) File() (*MediaFile, error) {
 }
 
 // Qualities lists available download renditions for this episode.
+// Showbox/Febbox and the multi-provider resolver run concurrently; the first
+// to return a non-empty result wins.
 func (e *Episode) Qualities() ([]quality.Quality, error) {
+
+	details, detailsErr := e.show.Details()
+
+	type result struct {
+		qs  []quality.Quality
+		err error
+	}
+
+	ch := make(chan result, 2)
+
+	go func() {
+
+		qs, err := e.showboxQualities()
+		ch <- result{qs, err}
+
+	}()
+
+	hasTMDB := detailsErr == nil && details.TMDBId > 0
+
+	if hasTMDB {
+
+		go func() {
+
+			qs, err := e.show.deps.ResolveProviderStreams(details.TMDBId, "tv", e.season, e.episode)
+			ch <- result{qs, err}
+
+		}()
+
+	}
+
+	total := 1
+	if hasTMDB {
+		total = 2
+	}
+
+	var lastErr error
+
+	for i := 0; i < total; i++ {
+
+		r := <-ch
+
+		if len(r.qs) > 0 {
+
+			return r.qs, nil
+
+		}
+
+		if r.err != nil {
+
+			lastErr = r.err
+
+		}
+
+	}
+
+	if lastErr != nil {
+
+		return nil, lastErr
+
+	}
+
+	return []quality.Quality{}, nil
+
+}
+
+func (e *Episode) showboxQualities() ([]quality.Quality, error) {
 
 	shareKey, err := e.show.ShareKey()
 
@@ -172,9 +239,6 @@ func (e *Episode) Qualities() ([]quality.Quality, error) {
 
 	}
 
-	// Collect all source files matching this episode number, then pick the
-	// highest-resolution one. Febbox transcodes a source to all lower resolutions,
-	// so the 4K source's quality list is a superset of a 1080p source's list.
 	files, err := e.allEpisodeFiles(shareKey)
 
 	if err != nil {
@@ -260,77 +324,6 @@ func (e *Episode) allEpisodeFiles(shareKey string) ([]febbox.File, error) {
 	}
 
 	return fileparser.AllEpisodeFiles(allFiles, e.season, e.episode), nil
-
-}
-
-// Subtitles lists external subtitle files found alongside the episode video.
-func (e *Episode) Subtitles() ([]subtitle.Subtitle, error) {
-
-	shareKey, err := e.show.ShareKey()
-
-	if err != nil {
-
-		return nil, err
-
-	}
-
-	siblings, video, err := e.listSiblingFiles()
-
-	if err != nil {
-
-		return nil, err
-
-	}
-
-	return subtitle.CollectSubtitles(shareKey, siblings, video), nil
-
-}
-
-func (e *Episode) listSiblingFiles() ([]febbox.File, *febbox.File, error) {
-
-	video, err := e.resolveFile()
-
-	if err != nil {
-
-		return nil, nil, err
-
-	}
-
-	shareKey, err := e.show.ShareKey()
-
-	if err != nil {
-
-		return nil, nil, err
-
-	}
-
-	season := e.show.Season(e.season)
-
-	folder, err := season.resolveFolder(shareKey)
-
-	if err != nil {
-
-		root, listErr := e.show.listFiles(shareKey, 0)
-
-		if listErr != nil {
-
-			return nil, nil, err
-
-		}
-
-		return fileparser.FilesOnly(root), video, nil
-
-	}
-
-	children, err := e.show.listFiles(shareKey, folder.FID)
-
-	if err != nil {
-
-		return nil, nil, err
-
-	}
-
-	return fileparser.FilesOnly(children), video, nil
 
 }
 
