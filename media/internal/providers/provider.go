@@ -35,6 +35,12 @@ func New(_ string) *Resolver {
 // Resolve returns playable qualities from Vixsrc for the given TMDB title.
 func (r *Resolver) Resolve(tmdbID int, mediaType string, season, episode int) ([]quality.Quality, error) {
 
+	if !vixsrcServerEnabled() {
+
+		return nil, fmt.Errorf("providers: vixsrc server resolution disabled")
+
+	}
+
 	streams, err := r.provider.Fetch(tmdbID, mediaType, season, episode)
 
 	if err != nil {

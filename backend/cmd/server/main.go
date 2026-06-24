@@ -79,6 +79,18 @@ func main() {
 
 	subtitleSvc := services.NewSubtitleResolver(mediaSvc, subdlClient, opensubsClient, cfg)
 
+	if cfg.VixsrcProxyURL != "" {
+
+		log.Println("vixsrc: proxy configured for vixsrc")
+
+	}
+
+	if !cfg.VixsrcServerEnabled {
+
+		log.Println("vixsrc: server resolution disabled (VIXSRC_SERVER=0); using Febbox fallback only")
+
+	}
+
 	authHandler := handlers.NewAuthHandler(authSvc)
 	settingsHandler := handlers.NewSettingsHandler(settingsSvc)
 	historyHandler := handlers.NewHistoryHandler(historySvc)

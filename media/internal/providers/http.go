@@ -6,12 +6,11 @@ import (
 	"io"
 	"net/http"
 	"regexp"
-	"time"
 )
 
 const providerUA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36"
 
-var httpClient = &http.Client{Timeout: 15 * time.Second}
+var httpClient = providerHTTPClient()
 
 func getText(url string, extraHeaders map[string]string) (string, error) {
 

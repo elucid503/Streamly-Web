@@ -28,6 +28,9 @@ type Config struct {
 	TMDBAPIKey          string
 	SubDLAPIKey         string
 	OpenSubtitlesAPIKey string
+
+	VixsrcServerEnabled bool
+	VixsrcProxyURL      string
 	TVBaseURL           string
 
 	ChildMode string
@@ -64,7 +67,11 @@ func Load() (*Config, error) {
 		TMDBAPIKey:          os.Getenv("TMDB_API_KEY"),
 		SubDLAPIKey:         os.Getenv("SUBDL_API_KEY"),
 		OpenSubtitlesAPIKey: os.Getenv("OPENSUBTITLES_API_KEY"),
-		TVBaseURL:           os.Getenv("TV_BASE_URL"),
+
+		VixsrcServerEnabled: !boolFalse("VIXSRC_SERVER"),
+		VixsrcProxyURL:      strings.TrimSpace(os.Getenv("VIXSRC_PROXY_URL")),
+
+		TVBaseURL: os.Getenv("TV_BASE_URL"),
 
 		ChildMode: envOr("CHILD_MODE", "0"),
 
@@ -158,6 +165,24 @@ func intOr(key string, fallback int) int {
 	}
 
 	return fallback
+
+}
+
+func boolFalse(key string) bool {
+
+	if v := strings.TrimSpace(os.Getenv(key)); v != "" {
+
+		switch strings.ToLower(v) {
+
+		case "0", "false", "no", "off":
+
+			return true
+
+		}
+
+	}
+
+	return false
 
 }
 

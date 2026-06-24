@@ -51,6 +51,7 @@ type ProxyService struct {
 
 	ttl time.Duration
 	client *http.Client
+	vixsrcProxy *url.URL
 
 	tokenMu sync.Mutex
 	tokenByKey map[string]proxyTokenCacheEntry
@@ -60,6 +61,18 @@ type ProxyService struct {
 }
 
 func NewProxyService(cfg *config.Config) *ProxyService {
+
+	var vixsrcProxy *url.URL
+
+	if proxyURL := strings.TrimSpace(cfg.VixsrcProxyURL); proxyURL != "" {
+
+		if parsed, err := url.Parse(proxyURL); err == nil {
+
+			vixsrcProxy = parsed
+
+		}
+
+	}
 
 	transport := &http.Transport{
 
@@ -76,6 +89,7 @@ func NewProxyService(cfg *config.Config) *ProxyService {
 	return &ProxyService{
 
 		ttl: cfg.ProxyTokenTTL,
+		vixsrcProxy: vixsrcProxy,
 
 		tokenByKey: make(map[string]proxyTokenCacheEntry),
 		entryByToken: make(map[string]ProxyEntry),
@@ -223,7 +237,56 @@ func (s *ProxyService) Fetch(ctx context.Context, entry *ProxyEntry, incoming ht
 
 	}
 
-	return s.client.Do(req)
+	return s.clientForTarget(entry.TargetURL).Do(req)
+
+}
+
+func (s *ProxyService) clientForTarget(targetURL string) *http.Client {
+
+	// Video segments are served from vix-content.net and stay on the VPS egress IP.
+	// Only vixsrc.to playlist/key traffic uses the outbound proxy (small metadata).
+	if s.vixsrcProxy == nil || !isVixsrcOriginHost(targetURL) {
+
+		return s.client
+
+	}
+
+	transport := &http.Transport{
+
+		Proxy: http.ProxyURL(s.vixsrcProxy),
+
+		MaxIdleConns:        64,
+		MaxIdleConnsPerHost: 16,
+
+		IdleConnTimeout:       90 * time.Second,
+		ResponseHeaderTimeout: 30 * time.Second,
+
+	}
+
+	return &http.Client{
+
+		Transport: transport,
+		Timeout:   0,
+
+		CheckRedirect: s.client.CheckRedirect,
+
+	}
+
+}
+
+func isVixsrcOriginHost(raw string) bool {
+
+	parsed, err := url.Parse(strings.TrimSpace(raw))
+
+	if err != nil {
+
+		return false
+
+	}
+
+	host := strings.ToLower(parsed.Hostname())
+
+	return host == "vixsrc.to" || strings.HasSuffix(host, ".vixsrc.to")
 
 }
 

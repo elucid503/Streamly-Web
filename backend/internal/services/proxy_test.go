@@ -48,3 +48,29 @@ func TestCreateSessionWithHeadersStoresOrigin(t *testing.T) {
 	}
 
 }
+
+func TestIsVixsrcOriginHost(t *testing.T) {
+
+	cases := []struct {
+		url  string
+		want bool
+	}{
+
+		{"https://vixsrc.to/playlist/1.m3u8", true},
+		{"https://vixsrc.to/api/movie/1", true},
+		{"https://sc-u5-01.vix-content.net/hls/seg.ts", false},
+		{"https://cdn.example.com/vixsrc-like/path.ts", false},
+
+	}
+
+	for _, tc := range cases {
+
+		if got := isVixsrcOriginHost(tc.url); got != tc.want {
+
+			t.Fatalf("%q: got %v want %v", tc.url, got, tc.want)
+
+		}
+
+	}
+
+}
