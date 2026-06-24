@@ -1,6 +1,6 @@
 import type HLS from "hls.js";
 import { Component, createRef, type PointerEvent as ReactPointerEvent, type RefObject } from "react";
-import { ArrowLeft, Clapperboard, Maximize, Minimize, Pause, Play, SkipForward } from "lucide-react";
+import { ArrowLeft, Clapperboard, FastForward, Maximize, Minimize, Pause, Play, Rewind, SkipForward } from "lucide-react";
 
 import { AmbienceLayer } from "@/components/player/AmbienceLayer";
 import { EpisodePickerPanel } from "@/components/player/EpisodePickerPanel";
@@ -166,10 +166,33 @@ interface VideoPlayerState {
 
   actionFeedback: PlayerActionFeedback | null;
 
+  showEndTime: boolean;
+
   // Heights (in px) for which HDR content has been detected. Persists across  quality switches.
   hdrHeights: Set<number>;
 
 }
+
+const readStoredVolume = (): { volume: number; muted: boolean } => {
+
+  try {
+
+    const v = parseFloat(localStorage.getItem("player:volume") ?? "");
+
+    return {
+
+      volume: Number.isFinite(v) && v >= 0 && v <= 1 ? v : 1,
+      muted: localStorage.getItem("player:muted") === "true",
+
+    };
+
+  } catch {
+
+    return { volume: 1, muted: false };
+
+  }
+
+};
 
 export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
 
@@ -208,8 +231,7 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
   state: VideoPlayerState = {
 
     playing: false,
-    muted: false,
-    volume: 1,
+    ...readStoredVolume(),
 
     showControls: true,
     showOptions: false,
@@ -228,6 +250,8 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
     hlsSubtitleTracks: [],
 
     actionFeedback: null,
+
+    showEndTime: false,
 
     hdrHeights: new Set(),
 
@@ -445,7 +469,19 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
 
     if (this.timeLabelRef.current) {
 
-      this.timeLabelRef.current.textContent = `${formatDuration(currentMs)} / ${formatDuration(durationMs)}`;
+      if (this.state.showEndTime && durationMs > 0) {
+
+        const remainingMs = Math.max(0, durationMs - currentMs);
+        const endTime = new Date(Date.now() + remainingMs);
+        const formatted = endTime.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+
+        this.timeLabelRef.current.textContent = `Done at ${formatted}`;
+
+      } else {
+
+        this.timeLabelRef.current.textContent = `${formatDuration(currentMs)} / ${formatDuration(durationMs)}`;
+
+      }
 
     }
 
@@ -572,6 +608,13 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
     const video = this.videoRef.current;
 
     if (!video) return;
+
+    try {
+
+      localStorage.setItem("player:volume", String(video.volume));
+      localStorage.setItem("player:muted", String(video.muted));
+
+    } catch { /* storage unavailable */ }
 
     this.setState({ volume: video.volume, muted: video.muted });
 
@@ -1293,6 +1336,22 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
 
   };
 
+  toggleTimeDisplay = () => {
+
+    this.setState(
+
+      (s) => ({ showEndTime: !s.showEndTime }),
+      () => {
+
+        const video = this.videoRef.current;
+        if (video) this.updateProgressUI(video.currentTime * 1000, this.durationMs);
+
+      },
+
+    );
+
+  };
+
   showActionFeedback = (feedback: Omit<PlayerActionFeedback, "id">) => {
 
     if (this.feedbackTimer) clearTimeout(this.feedbackTimer);
@@ -1794,7 +1853,7 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
 
           )}
 
-          <div className="flex items-center justify-between">
+          <div className="relative flex items-center justify-between">
 
             <div className="flex items-center gap-3">
 
@@ -1803,6 +1862,26 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
                 {playing ? <Pause size={18} /> : <Play size={18} />}
 
               </ControlButton>
+
+              {!live && (
+
+                <ControlButton onClick={() => this.seekBy(-10_000)} aria-label="Seek back 10 seconds">
+
+                  <Rewind size={18} />
+
+                </ControlButton>
+
+              )}
+
+              {!live && (
+
+                <ControlButton onClick={() => this.seekBy(10_000)} aria-label="Seek forward 10 seconds">
+
+                  <FastForward size={18} />
+
+                </ControlButton>
+
+              )}
 
               <VolumeControl
 
@@ -1814,7 +1893,7 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
 
               />
 
-              {live ? (
+              {live && (
 
                 <span className="flex items-center gap-1.5 text-[10px] font-medium tracking-wider text-red-400">
 
@@ -1830,17 +1909,19 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
 
                 </span>
 
-              ) : (
-
-                <span ref={this.timeLabelRef} className="text-xs text-foreground-muted tabular-nums" >
-
-                  0:00 / 0:00
-
-                </span>
-
               )}
 
             </div>
+
+            {!live && (
+
+              <span ref={this.timeLabelRef} className="pointer-events-auto absolute left-1/2 -translate-x-1/2 cursor-pointer select-none text-xs text-foreground-muted tabular-nums transition-colors hover:text-foreground" onClick={(e) => { e.stopPropagation(); this.toggleTimeDisplay(); }} >
+
+                0:00 / 0:00
+
+              </span>
+
+            )}
 
             <div className="flex items-center gap-1">
 
