@@ -31,7 +31,6 @@ func New(tmdbKey string) *Resolver {
 	r := &Resolver{}
 
 	r.providers = append(r.providers, newVixsrc())
-	r.providers = append(r.providers, newVidlink())
 	r.providers = append(r.providers, newVidsrc())
 
 	if tmdbKey != "" {
