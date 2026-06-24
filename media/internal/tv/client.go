@@ -2,6 +2,7 @@ package tv
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -15,7 +16,6 @@ import (
 const (
 
 	defaultBaseURL = "https://dami-tv.pro"
-	defaultStreamAPI = "https://chat.cfbu247.sbs/api/resolve-dlstream/"
 
 	legacyResolvePath = "/papi/tv/resolve/"
 
@@ -78,7 +78,9 @@ func New(options Options) *Client {
 
 }
 
-// ResolveStream turns a daddyId into a direct CDN playlist URL when possible.
+type streamResolver func(string) (ResolvedStream, error)
+
+// ResolveStream returns the first working HLS playlist for a catalog channel daddyId.
 func (c *Client) ResolveStream(daddyID string) (ResolvedStream, error) {
 
 	daddyID = strings.TrimSpace(daddyID)
@@ -89,42 +91,95 @@ func (c *Client) ResolveStream(daddyID string) (ResolvedStream, error) {
 
 	}
 
-	// dlhd is tried first: it returns the embed page as the Referer, which the segment CDN
+	var errs []error
 
-	if stream, err := c.resolveDLHD(daddyID); err == nil && stream.URL != "" {
+	for _, resolve := range c.streamResolvers() {
+
+		stream, err := resolve(daddyID)
+
+		if err != nil {
+
+			errs = append(errs, err)
+			continue
+
+		}
+
+		if !isHLSPlaylistURL(stream.URL) {
+
+			errs = append(errs, fmt.Errorf("tv: not an hls playlist: %s", stream.URL))
+			continue
+
+		}
 
 		return stream, nil
 
 	}
 
-	return c.resolveTV247(daddyID)
+	if len(errs) == 0 {
 
-}
-
-// ResolveHLS turns a daddyId into a full proxied m3u8 URL.
-func (c *Client) ResolveHLS(daddyID string) (string, error) {
-
-	stream, err := c.ResolveStream(daddyID)
-
-	if err != nil {
-
-		return "", err
+		return ResolvedStream{}, fmt.Errorf("tv: no stream resolvers configured")
 
 	}
 
-	return stream.URL, nil
+	return ResolvedStream{}, errors.Join(errs...)
 
 }
 
-func (c *Client) resolveTV247(daddyID string) (ResolvedStream, error) {
+func (c *Client) streamResolvers() []streamResolver {
 
-	resolveURL, referer, err := c.resolveEndpoint(daddyID)
+	resolvers := []streamResolver{
+
+		c.resolveLegacy,
+		c.resolveDLHD,
+
+	}
+
+	if api := strings.TrimSpace(os.Getenv("TV_STREAM_API")); api != "" {
+
+		resolvers = append([]streamResolver{c.resolveStreamAPI}, resolvers...)
+
+	}
+
+	return resolvers
+
+}
+
+// resolveLegacy asks the catalog origin for a proxied /papi/tv/resolve/ URL.
+func (c *Client) resolveLegacy(daddyID string) (ResolvedStream, error) {
+
+	referer := c.baseURL + "/"
+	resolveURL := c.baseURL + legacyResolvePath + url.PathEscape(daddyID)
+
+	return c.fetchResolvedStream(resolveURL, referer, c.baseURL)
+
+}
+
+// resolveStreamAPI resolves through a TV_STREAM_API override endpoint. cfbu247.sbs proxy playlist URLs are rejected because Cloudflare blocks server-side proxying.
+func (c *Client) resolveStreamAPI(daddyID string) (ResolvedStream, error) {
+
+	api := strings.TrimSpace(os.Getenv("TV_STREAM_API"))
+	resolveURL := joinStreamAPI(api, daddyID)
+	referer := streamAPIOrigin(api) + "/"
+
+	stream, err := c.fetchResolvedStream(resolveURL, referer, "")
 
 	if err != nil {
 
 		return ResolvedStream{}, err
 
 	}
+
+	if strings.Contains(stream.URL, "cfbu247.sbs") {
+
+		return ResolvedStream{}, fmt.Errorf("tv: cloudflare proxy playlists are not supported")
+
+	}
+
+	return stream, nil
+
+}
+
+func (c *Client) fetchResolvedStream(resolveURL, referer, origin string) (ResolvedStream, error) {
 
 	response, err := c.get(resolveURL, referer)
 
@@ -174,60 +229,58 @@ func (c *Client) resolveTV247(daddyID string) (ResolvedStream, error) {
 
 	if !strings.HasPrefix(streamURL, "http://") && !strings.HasPrefix(streamURL, "https://") {
 
+		if origin == "" {
+
+			return ResolvedStream{}, fmt.Errorf("tv: resolve failed: relative stream path without origin")
+
+		}
+
 		if !strings.HasPrefix(streamURL, "/") {
 
 			streamURL = "/" + streamURL
 
 		}
 
-		streamURL = c.baseURL + streamURL
+		streamURL = origin + streamURL
 
 	}
 
 	return ResolvedStream{
 
-		URL: streamURL,
+		URL:     streamURL,
 		Referer: referer,
 
 	}, nil
 
 }
 
-func (c *Client) resolveEndpoint(daddyID string) (resolveURL, referer string, err error) {
+func isHLSPlaylistURL(raw string) bool {
 
-	streamAPI := c.streamAPI()
+	lower := strings.ToLower(strings.TrimSpace(raw))
+	path := strings.SplitN(lower, "?", 2)[0]
 
-	if streamAPI != "" {
+	if strings.HasSuffix(path, ".m3u8") || strings.HasSuffix(path, ".m3u") {
 
-		resolveURL = joinStreamAPI(streamAPI, daddyID)
-		referer = streamAPIOrigin(streamAPI) + "/"
-
-		return resolveURL, referer, nil
+		return true
 
 	}
 
-	resolveURL = c.baseURL + legacyResolvePath + url.PathEscape(daddyID)
-	referer = c.baseURL + "/"
-
-	return resolveURL, referer, nil
+	return strings.Contains(path, "/papi/tv/playlist/") || strings.Contains(path, "/api/proxy/playlist")
 
 }
 
-func (c *Client) streamAPI() string {
+// ResolveHLS turns a daddyId into a full proxied m3u8 URL.
+func (c *Client) ResolveHLS(daddyID string) (string, error) {
 
-	if cached := c.cachedCatalog(); cached != nil && strings.TrimSpace(cached.StreamAPI) != "" {
+	stream, err := c.ResolveStream(daddyID)
 
-		return strings.TrimSpace(cached.StreamAPI)
+	if err != nil {
 
-	}
-
-	if override := strings.TrimSpace(os.Getenv("TV_STREAM_API")); override != "" {
-
-		return override
+		return "", err
 
 	}
 
-	return defaultStreamAPI
+	return stream.URL, nil
 
 }
 
@@ -371,7 +424,7 @@ func (c *Client) get(rawURL, referer string) (*http.Response, error) {
 
 	if referer == "" {
 
-		referer = streamAPIOrigin(c.streamAPI()) + "/"
+		referer = c.baseURL + "/"
 
 	}
 

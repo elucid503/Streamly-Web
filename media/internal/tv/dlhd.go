@@ -286,7 +286,6 @@ func parseDLHDChannelPage(body []byte) (*ChannelCatalog, error) {
 		Generated: time.Now().Format("2006-01-02"),
 		Total:     len(channels),
 		Source:    "tv247",
-		StreamAPI: defaultStreamAPI,
 
 		Channels: channels,
 
