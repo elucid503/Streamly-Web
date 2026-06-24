@@ -40,7 +40,61 @@ func (m *providerMockDeps) GetMovieDetails(id int) (meta.TitleDetails, error) {
 
 }
 
-func TestMovieQualitiesPrefersVixsrcProvider(t *testing.T) {
+func TestMovieQualitiesPrefersShareKey(t *testing.T) {
+
+	deps := &providerMockDeps{
+
+		providerQualities: []quality.Quality{
+
+			{URL: "https://app.test/proxy/a", Label: "Vixsrc 1080p", Height: 1080, IsHLS: true},
+
+		},
+
+		mockDeps: mockDeps{
+
+			shareKey: "share123",
+			consoleMovieFID: 99,
+			consoleLinks: map[int][]febbox.Quality{
+
+				99: {{Quality: "1080p", URL: "https://febbox.test/console.mp4"}},
+
+			},
+
+			rootListing: map[any][]febbox.File{
+
+				0: {{FID: 301, FileName: "Movie.1080p.mkv", IsDir: 0}},
+
+			},
+
+			links: map[int][]febbox.Quality{
+
+				301: {{URL: "https://cdn.example/share.mp4", Quality: "1080p", Name: "HD"}},
+
+			},
+
+		},
+
+	}
+
+	movie := NewMovie(deps, 4059)
+
+	qualities, err := movie.Qualities()
+
+	if err != nil {
+
+		t.Fatalf("Qualities: %v", err)
+
+	}
+
+	if len(qualities) != 1 || qualities[0].URL != "https://cdn.example/share.mp4" {
+
+		t.Fatalf("expected share-key qualities, got %+v", qualities)
+
+	}
+
+}
+
+func TestMovieQualitiesPrefersConsole(t *testing.T) {
 
 	deps := &providerMockDeps{
 
@@ -56,9 +110,46 @@ func TestMovieQualitiesPrefersVixsrcProvider(t *testing.T) {
 			consoleMovieFID: 99,
 			consoleLinks: map[int][]febbox.Quality{
 
-				99: {{Quality: "1080p", URL: "https://febbox.test/never"}},
+				99: {{Quality: "1080p", Name: "ORG", URL: "https://febbox.test/console.mp4"}},
 
 			},
+
+		},
+
+	}
+
+	movie := NewMovie(deps, 4059)
+
+	qualities, err := movie.Qualities()
+
+	if err != nil {
+
+		t.Fatalf("Qualities: %v", err)
+
+	}
+
+	if len(qualities) != 1 || qualities[0].URL != "https://febbox.test/console.mp4" {
+
+		t.Fatalf("expected console qualities, got %+v", qualities)
+
+	}
+
+}
+
+func TestMovieQualitiesFallsBackToVixsrc(t *testing.T) {
+
+	deps := &providerMockDeps{
+
+		providerQualities: []quality.Quality{
+
+			{URL: "https://app.test/proxy/a", Label: "Vixsrc 1080p", Height: 1080, IsHLS: true},
+			{URL: "https://app.test/proxy/b", Label: "Vixsrc 720p", Height: 720, IsHLS: true},
+
+		},
+
+		mockDeps: mockDeps{
+
+			consoleMovieFID: 0,
 
 		},
 

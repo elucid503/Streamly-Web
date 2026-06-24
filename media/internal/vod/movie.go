@@ -126,7 +126,7 @@ func (m *Movie) File() (*MediaFile, error) {
 }
 
 // Qualities lists available download renditions for this movie.
-// Vixsrc (TMDB) is tried first, then console IMDb bindings, then share-key folders.
+// Share-key folders are tried first, then console IMDb bindings, then Vixsrc (TMDB).
 func (m *Movie) Qualities() ([]quality.Quality, error) {
 
 	details, err := m.Details()
@@ -141,13 +141,13 @@ func (m *Movie) Qualities() ([]quality.Quality, error) {
 
 	}
 
-	if err == nil && details.TMDBId > 0 {
+	streamDebugf("movie %d trying share-key path", m.id)
 
-		if qualities, ok := providerQualities(m.deps, details.TMDBId, "movie", 0, 0); ok {
+	if qualities, ok := m.tryShareKeyQualities(); ok {
 
-			return qualities, nil
+		streamDebugf("movie %d share-key path ok count=%d", m.id, len(qualities))
 
-		}
+		return qualities, nil
 
 	}
 
@@ -165,9 +165,41 @@ func (m *Movie) Qualities() ([]quality.Quality, error) {
 
 	}
 
-	streamDebugf("movie %d trying share-key fallback", m.id)
+	if err == nil && details.TMDBId > 0 {
 
-	return m.shareKeyQualities()
+		if qualities, ok := providerQualities(m.deps, details.TMDBId, "movie", 0, 0); ok {
+
+			return qualities, nil
+
+		}
+
+	}
+
+	return []quality.Quality{}, nil
+
+}
+
+func (m *Movie) tryShareKeyQualities() ([]quality.Quality, bool) {
+
+	qualities, err := m.shareKeyQualities()
+
+	if err != nil {
+
+		streamDebugf("movie %d share-key path error: %v", m.id, err)
+
+		return nil, false
+
+	}
+
+	if len(qualities) == 0 {
+
+		streamDebugf("movie %d share-key path miss", m.id)
+
+		return nil, false
+
+	}
+
+	return qualities, true
 
 }
 

@@ -353,33 +353,46 @@ func TestEpisodeQualitiesFlatRootListingFallback(t *testing.T) {
 
 }
 
-func TestEpisodeQualitiesPropagatesGetLinksError(t *testing.T) {
+func TestEpisodeQualitiesPrefersShareKeyOverVixsrc(t *testing.T) {
 
 	deps := &mockDeps{
+
+		providerQualities: []quality.Quality{
+
+			{URL: "https://app.test/proxy/a", Label: "Vixsrc 1080p", Height: 1080, IsHLS: true},
+
+		},
 
 		shareKey: "share123",
 
 		rootListing: map[any][]febbox.File{
 
-			0: {
-
-				{FID: 301, FileName: "Show.S01E01.720p.mkv", IsDir: 0},
-			},
+			0: {{FID: 301, FileName: "Show.S01E01.720p.mkv", IsDir: 0}},
 
 		},
 
-		linksErr: febboxQualityErr("auth required"),
+		links: map[int][]febbox.Quality{
+
+			301: {{URL: "https://cdn.example/720.mp4", Quality: "720p", Name: "SD"}},
+
+		},
 
 	}
 
 	show := NewShow(deps, 42)
 	ep := show.Episode(1, 1)
 
-	_, err := ep.Qualities()
+	qualities, err := ep.Qualities()
 
-	if err == nil {
+	if err != nil {
 
-		t.Fatal("expected GetLinks error to propagate")
+		t.Fatalf("unexpected error: %v", err)
+
+	}
+
+	if len(qualities) != 1 || qualities[0].URL != "https://cdn.example/720.mp4" {
+
+		t.Fatalf("expected share-key qualities, got %+v", qualities)
 
 	}
 
@@ -393,7 +406,7 @@ func (e febboxQualityErr) Error() string {
 
 }
 
-func TestEpisodeQualitiesPrefersProviderPath(t *testing.T) {
+func TestEpisodeQualitiesFallsBackToVixsrc(t *testing.T) {
 
 	deps := &mockDeps{
 
@@ -401,14 +414,6 @@ func TestEpisodeQualitiesPrefersProviderPath(t *testing.T) {
 
 			{URL: "https://app.test/proxy/a", Label: "Vixsrc 1080p", Height: 1080, IsHLS: true},
 			{URL: "https://app.test/proxy/b", Label: "Vixsrc 720p", Height: 720, IsHLS: true},
-
-		},
-
-		consoleEpisodeFID: 555,
-
-		consoleLinks: map[int][]febbox.Quality{
-
-			555: {{URL: "https://cdn.example/console.mp4", Quality: "1080p", Name: "HD"}},
 
 		},
 
@@ -428,93 +433,6 @@ func TestEpisodeQualitiesPrefersProviderPath(t *testing.T) {
 	if len(qualities) != 2 || qualities[0].Height != 1080 {
 
 		t.Fatalf("expected provider qualities, got %+v", qualities)
-
-	}
-
-}
-
-func TestEpisodeQualitiesPrefersConsolePath(t *testing.T) {
-
-	deps := &mockDeps{
-
-		consoleEpisodeFID: 555,
-
-		consoleLinks: map[int][]febbox.Quality{
-
-			555: {
-
-				{URL: "https://cdn.example/console.mp4", Quality: "1080p", Name: "HD"},
-			},
-
-		},
-
-	}
-
-	show := NewShow(deps, 42)
-	ep := show.Episode(1, 1)
-
-	qualities, err := ep.Qualities()
-
-	if err != nil {
-
-		t.Fatalf("unexpected error: %v", err)
-
-	}
-
-	if len(qualities) != 1 || qualities[0].URL != "https://cdn.example/console.mp4" {
-
-		t.Fatalf("expected console qualities, got %+v", qualities)
-
-	}
-
-}
-
-func TestEpisodeQualitiesUsesShareKeyFallback(t *testing.T) {
-
-	deps := &mockDeps{
-
-		shareKey: "share123",
-
-		rootListing: map[any][]febbox.File{
-
-			0: {
-
-				{FID: 301, FileName: "Show.S01E01.720p.mkv", IsDir: 0},
-			},
-
-		},
-
-		links: map[int][]febbox.Quality{
-
-			301: {
-
-				{URL: "https://cdn.example/720.mp4", Quality: "720p", Name: "SD"},
-			},
-
-		},
-
-	}
-
-	show := NewShow(deps, 42)
-	ep := show.Episode(1, 1)
-
-	qualities, err := ep.Qualities()
-
-	if err != nil {
-
-		t.Fatalf("unexpected error: %v", err)
-
-	}
-
-	if len(qualities) != 1 {
-
-		t.Fatalf("expected 1 quality, got %d", len(qualities))
-
-	}
-
-	if qualities[0].Height != quality.ToQualities(deps.links[301])[0].Height {
-
-		t.Fatal("expected converted quality metadata")
 
 	}
 

@@ -161,7 +161,7 @@ func (e *Episode) File() (*MediaFile, error) {
 }
 
 // Qualities lists available download renditions for this episode.
-// Vixsrc (TMDB) is tried first, then console IMDb bindings, then share-key folders.
+// Share-key folders are tried first, then Vixsrc (TMDB).
 func (e *Episode) Qualities() ([]quality.Quality, error) {
 
 	details, err := e.show.Details()
@@ -176,6 +176,16 @@ func (e *Episode) Qualities() ([]quality.Quality, error) {
 
 	}
 
+	streamDebugf("show %d S%02dE%02d trying share-key path", e.show.id, e.season, e.episode)
+
+	if qualities, ok := e.tryShareKeyQualities(); ok {
+
+		streamDebugf("show %d S%02dE%02d share-key path ok count=%d", e.show.id, e.season, e.episode, len(qualities))
+
+		return qualities, nil
+
+	}
+
 	if err == nil && details.TMDBId > 0 {
 
 		if qualities, ok := providerQualities(e.show.deps, details.TMDBId, "tv", e.season, e.episode); ok {
@@ -184,25 +194,35 @@ func (e *Episode) Qualities() ([]quality.Quality, error) {
 
 		}
 
-	}
-
-	if err == nil && details.IMDBId != "" {
-
-		if qualities, ok := e.consoleQualities(details.IMDBId); ok {
-
-			streamDebugf("show %d S%02dE%02d console path ok count=%d", e.show.id, e.season, e.episode, len(qualities))
-
-			return qualities, nil
-
-		}
-
-		streamDebugf("show %d S%02dE%02d console path miss imdb=%q", e.show.id, e.season, e.episode, details.IMDBId)
+		streamDebugf("show %d S%02dE%02d vixsrc path miss", e.show.id, e.season, e.episode)
 
 	}
 
-	streamDebugf("show %d S%02dE%02d trying share-key fallback", e.show.id, e.season, e.episode)
+	return []quality.Quality{}, nil
 
-	return e.shareKeyQualities()
+}
+
+func (e *Episode) tryShareKeyQualities() ([]quality.Quality, bool) {
+
+	qualities, err := e.shareKeyQualities()
+
+	if err != nil {
+
+		streamDebugf("show %d S%02dE%02d share-key path error: %v", e.show.id, e.season, e.episode, err)
+
+		return nil, false
+
+	}
+
+	if len(qualities) == 0 {
+
+		streamDebugf("show %d S%02dE%02d share-key path miss", e.show.id, e.season, e.episode)
+
+		return nil, false
+
+	}
+
+	return qualities, true
 
 }
 
