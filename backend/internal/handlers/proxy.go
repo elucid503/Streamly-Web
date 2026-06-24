@@ -3,7 +3,9 @@ package handlers
 import (
 	"bufio"
 	"io"
+	"log"
 	"net/http"
+	"os"
 	"strings"
 
 	"streamly/internal/services"
@@ -54,6 +56,8 @@ func (h *ProxyHandler) Serve(c *gin.Context) {
 
 		}
 
+		proxyDebugf("fetch failed target=%s: %v", entry.TargetURL, err)
+
 		writeError(c, http.StatusBadGateway, "upstream stream unavailable")
 		return
 
@@ -62,6 +66,8 @@ func (h *ProxyHandler) Serve(c *gin.Context) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode >= 400 {
+
+		proxyDebugf("upstream %d target=%s", resp.StatusCode, entry.TargetURL)
 
 		writeError(c, http.StatusBadGateway, "upstream returned error")
 		return
@@ -113,5 +119,17 @@ func isM3U8Peek(reader *bufio.Reader) bool {
 	}
 
 	return strings.HasPrefix(string(peek), "#EXTM3U")
+
+}
+
+func proxyDebugf(format string, args ...any) {
+
+	switch strings.ToLower(strings.TrimSpace(os.Getenv("STREAM_DEBUG"))) {
+
+	case "1", "true", "yes", "on":
+
+		log.Printf("proxy: "+format, args...)
+
+	}
 
 }

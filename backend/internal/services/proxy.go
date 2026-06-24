@@ -51,6 +51,7 @@ type ProxyService struct {
 
 	ttl time.Duration
 	client *http.Client
+	proxiedClient *http.Client
 	vixsrcProxy *url.URL
 
 	tokenMu sync.Mutex
@@ -70,6 +71,18 @@ func NewProxyService(cfg *config.Config) *ProxyService {
 
 	}
 
+	checkRedirect := func(req *http.Request, via []*http.Request) error {
+
+		if len(via) >= 5 {
+
+			return errors.New("too many redirects")
+
+		}
+
+		return nil
+
+	}
+
 	transport := &http.Transport{
 
 		Proxy: http.ProxyFromEnvironment,
@@ -82,7 +95,7 @@ func NewProxyService(cfg *config.Config) *ProxyService {
 
 	}
 
-	return &ProxyService{
+	svc := &ProxyService{
 
 		ttl: cfg.ProxyTokenTTL,
 		vixsrcProxy: vixsrcProxy,
@@ -94,21 +107,37 @@ func NewProxyService(cfg *config.Config) *ProxyService {
 
 			Transport: transport,
 			Timeout: 0,
-			CheckRedirect: func(req *http.Request, via []*http.Request) error {
-
-				if len(via) >= 5 {
-
-					return errors.New("too many redirects")
-
-				}
-
-				return nil
-
-			},
+			CheckRedirect: checkRedirect,
 
 		},
 
 	}
+
+	if vixsrcProxy != nil {
+
+		proxiedTransport := &http.Transport{
+
+			Proxy: http.ProxyURL(vixsrcProxy),
+
+			MaxIdleConns: 64,
+			MaxIdleConnsPerHost: 16,
+
+			IdleConnTimeout: 90 * time.Second,
+			ResponseHeaderTimeout: 30 * time.Second,
+
+		}
+
+		svc.proxiedClient = &http.Client{
+
+			Transport: proxiedTransport,
+			Timeout: 0,
+			CheckRedirect: checkRedirect,
+
+		}
+
+	}
+
+	return svc
 
 }
 
@@ -239,34 +268,15 @@ func (s *ProxyService) Fetch(ctx context.Context, entry *ProxyEntry, incoming ht
 
 func (s *ProxyService) clientForTarget(targetURL string) *http.Client {
 
-	// Video segments are served from vix-content.net and stay on the VPS egress IP.
-	// Only vixsrc.to playlist/key traffic uses the outbound proxy (small metadata).
-	if s.vixsrcProxy == nil || !isVixsrcOriginHost(targetURL) {
+	// Match mediakit resolution: when VIXSRC_PROXY_URL is set, all Vixsrc playback
+	// traffic (playlists, keys, segments on vix-content.net) uses the outbound proxy.
+	if s.proxiedClient != nil {
 
-		return s.client
-
-	}
-
-	transport := &http.Transport{
-
-		Proxy: http.ProxyURL(s.vixsrcProxy),
-
-		MaxIdleConns:        64,
-		MaxIdleConnsPerHost: 16,
-
-		IdleConnTimeout:       90 * time.Second,
-		ResponseHeaderTimeout: 30 * time.Second,
+		return s.proxiedClient
 
 	}
 
-	return &http.Client{
-
-		Transport: transport,
-		Timeout:   0,
-
-		CheckRedirect: s.client.CheckRedirect,
-
-	}
+	return s.client
 
 }
 
@@ -301,22 +311,6 @@ func parseVixsrcProxyURL(raw string) (*url.URL, error) {
 	}
 
 	return parsed, nil
-
-}
-
-func isVixsrcOriginHost(raw string) bool {
-
-	parsed, err := url.Parse(strings.TrimSpace(raw))
-
-	if err != nil {
-
-		return false
-
-	}
-
-	host := strings.ToLower(parsed.Hostname())
-
-	return host == "vixsrc.to" || strings.HasSuffix(host, ".vixsrc.to")
 
 }
 

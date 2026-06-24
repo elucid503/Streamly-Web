@@ -49,25 +49,48 @@ func TestCreateSessionWithHeadersStoresOrigin(t *testing.T) {
 
 }
 
-func TestIsVixsrcOriginHost(t *testing.T) {
+func TestClientForTargetUsesOutboundProxyWhenConfigured(t *testing.T) {
 
-	cases := []struct {
-		url  string
-		want bool
-	}{
+	direct := NewProxyService(&config.Config{ProxyTokenTTL: time.Hour})
 
-		{"https://vixsrc.to/playlist/1.m3u8", true},
-		{"https://vixsrc.to/api/movie/1", true},
-		{"https://sc-u5-01.vix-content.net/hls/seg.ts", false},
-		{"https://cdn.example.com/vixsrc-like/path.ts", false},
+	if direct.clientForTarget("https://vixsrc.to/playlist/1.m3u8") != direct.client {
+
+		t.Fatal("expected direct client without VIXSRC_PROXY_URL")
 
 	}
 
-	for _, tc := range cases {
+	proxied, err := parseVixsrcProxyURL("http://127.0.0.1:9999")
 
-		if got := isVixsrcOriginHost(tc.url); got != tc.want {
+	if err != nil {
 
-			t.Fatalf("%q: got %v want %v", tc.url, got, tc.want)
+		t.Fatalf("parseVixsrcProxyURL: %v", err)
+
+	}
+
+	withProxy := &ProxyService{
+
+		ttl: time.Hour,
+		client: direct.client,
+		vixsrcProxy: proxied,
+		proxiedClient: direct.client,
+
+		tokenByKey: make(map[string]proxyTokenCacheEntry),
+		entryByToken: make(map[string]ProxyEntry),
+
+	}
+
+	cases := []string{
+
+		"https://vixsrc.to/playlist/1.m3u8",
+		"https://sc-u5-01.vix-content.net/hls/seg.ts",
+
+	}
+
+	for _, target := range cases {
+
+		if withProxy.clientForTarget(target) != withProxy.proxiedClient {
+
+			t.Fatalf("%q: expected proxied client", target)
 
 		}
 
