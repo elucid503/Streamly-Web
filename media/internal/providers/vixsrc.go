@@ -66,9 +66,13 @@ func (v *vixsrcProvider) fetchAtBase(base string, tmdbID int, mediaType string, 
 
 	}
 
+	streamDebugf("vixsrc api GET %s", apiURL)
+
 	data, err := getJSON(apiURL, vixHeaders)
 
 	if err != nil {
+
+		streamDebugf("vixsrc api failed: %v", err)
 
 		return nil, fmt.Errorf("vixsrc: api call failed: %w", err)
 
@@ -78,9 +82,13 @@ func (v *vixsrcProvider) fetchAtBase(base string, tmdbID int, mediaType string, 
 
 	if src == "" {
 
+		streamDebugf("vixsrc api missing src field in %+v", data)
+
 		return nil, fmt.Errorf("vixsrc: no src in response")
 
 	}
+
+	streamDebugf("vixsrc embed GET %s%s", base, src)
 
 	html, err := getText(base+src, map[string]string{
 
@@ -91,6 +99,8 @@ func (v *vixsrcProvider) fetchAtBase(base string, tmdbID int, mediaType string, 
 
 	if err != nil {
 
+		streamDebugf("vixsrc embed failed: %v", err)
+
 		return nil, fmt.Errorf("vixsrc: embed page failed: %w", err)
 
 	}
@@ -100,6 +110,8 @@ func (v *vixsrcProvider) fetchAtBase(base string, tmdbID int, mediaType string, 
 	playlist := matchFirst(vixPlaylistRe, html)
 
 	if token == "" || expires == "" || playlist == "" {
+
+		streamDebugf("vixsrc embed parse failed token=%t expires=%t playlist=%t html_bytes=%d", token != "", expires != "", playlist != "", len(html))
 
 		return nil, fmt.Errorf("vixsrc: could not extract token data from embed page")
 
@@ -115,6 +127,8 @@ func (v *vixsrcProvider) fetchAtBase(base string, tmdbID int, mediaType string, 
 
 	masterURL := appendVixsrcToken(playlist, token, expires, true)
 
+	streamDebugf("vixsrc master GET %s", masterURL)
+
 	m3u8, err := getText(masterURL, map[string]string{
 
 		"Referer": apiURL,
@@ -123,6 +137,8 @@ func (v *vixsrcProvider) fetchAtBase(base string, tmdbID int, mediaType string, 
 	})
 
 	if err != nil {
+
+		streamDebugf("vixsrc master failed: %v", err)
 
 		return nil, fmt.Errorf("vixsrc: failed to fetch playlist: %w", err)
 

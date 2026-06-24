@@ -131,6 +131,16 @@ func (m *Movie) Qualities() ([]quality.Quality, error) {
 
 	details, err := m.Details()
 
+	if err != nil {
+
+		streamDebugf("movie %d details error: %v", m.id, err)
+
+	} else {
+
+		streamDebugf("movie %d metadata tmdb=%d imdb=%q", m.id, details.TMDBId, details.IMDBId)
+
+	}
+
 	if err == nil && details.TMDBId > 0 {
 
 		if qualities, ok := providerQualities(m.deps, details.TMDBId, "movie", 0, 0); ok {
@@ -145,11 +155,17 @@ func (m *Movie) Qualities() ([]quality.Quality, error) {
 
 		if qualities, ok := m.consoleQualities(details.IMDBId); ok {
 
+			streamDebugf("movie %d console path ok count=%d", m.id, len(qualities))
+
 			return qualities, nil
 
 		}
 
+		streamDebugf("movie %d console path miss imdb=%q", m.id, details.IMDBId)
+
 	}
+
+	streamDebugf("movie %d trying share-key fallback", m.id)
 
 	return m.shareKeyQualities()
 

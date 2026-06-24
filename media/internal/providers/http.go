@@ -6,11 +6,27 @@ import (
 	"io"
 	"net/http"
 	"regexp"
+	"sync"
 )
 
 const providerUA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36"
 
-var httpClient = providerHTTPClient()
+var (
+	httpClient     *http.Client
+	httpClientOnce sync.Once
+)
+
+func sharedHTTPClient() *http.Client {
+
+	httpClientOnce.Do(func() {
+
+		httpClient = providerHTTPClient()
+
+	})
+
+	return httpClient
+
+}
 
 func getText(url string, extraHeaders map[string]string) (string, error) {
 
@@ -31,7 +47,7 @@ func getText(url string, extraHeaders map[string]string) (string, error) {
 
 	}
 
-	resp, err := httpClient.Do(req)
+	resp, err := sharedHTTPClient().Do(req)
 
 	if err != nil {
 
@@ -72,7 +88,7 @@ func getJSON(url string, extraHeaders map[string]string) (map[string]any, error)
 
 	}
 
-	resp, err := httpClient.Do(req)
+	resp, err := sharedHTTPClient().Do(req)
 
 	if err != nil {
 

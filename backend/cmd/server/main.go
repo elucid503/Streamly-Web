@@ -22,6 +22,36 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+func proxyURLForLog(raw string) string {
+
+	raw = strings.TrimSpace(raw)
+
+	if raw == "" {
+
+		return ""
+
+	}
+
+	if !strings.Contains(raw, "://") {
+
+		raw = "http://" + raw
+
+	}
+
+	if at := strings.LastIndex(raw, "@"); at >= 0 {
+
+		if schemeEnd := strings.Index(raw, "://"); schemeEnd >= 0 {
+
+			return raw[:schemeEnd+3] + "***@" + raw[at+1:]
+
+		}
+
+	}
+
+	return raw
+
+}
+
 func main() {
 
 	cfg, err := config.Load()
@@ -81,13 +111,19 @@ func main() {
 
 	if cfg.VixsrcProxyURL != "" {
 
-		log.Println("vixsrc: proxy configured for vixsrc")
+		log.Printf("vixsrc: HTTP proxy configured for vixsrc.to resolution (%s)", proxyURLForLog(cfg.VixsrcProxyURL))
 
 	}
 
 	if !cfg.VixsrcServerEnabled {
 
 		log.Println("vixsrc: server resolution disabled (VIXSRC_SERVER=0); using Febbox fallback only")
+
+	}
+
+	if strings.EqualFold(strings.TrimSpace(os.Getenv("STREAM_DEBUG")), "1") || strings.EqualFold(strings.TrimSpace(os.Getenv("STREAM_DEBUG")), "true") {
+
+		log.Println("stream: debug logging enabled (STREAM_DEBUG=1)")
 
 	}
 

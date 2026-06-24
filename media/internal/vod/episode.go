@@ -166,6 +166,16 @@ func (e *Episode) Qualities() ([]quality.Quality, error) {
 
 	details, err := e.show.Details()
 
+	if err != nil {
+
+		streamDebugf("show %d S%02dE%02d details error: %v", e.show.id, e.season, e.episode, err)
+
+	} else {
+
+		streamDebugf("show %d S%02dE%02d metadata tmdb=%d imdb=%q", e.show.id, e.season, e.episode, details.TMDBId, details.IMDBId)
+
+	}
+
 	if err == nil && details.TMDBId > 0 {
 
 		if qualities, ok := providerQualities(e.show.deps, details.TMDBId, "tv", e.season, e.episode); ok {
@@ -180,11 +190,17 @@ func (e *Episode) Qualities() ([]quality.Quality, error) {
 
 		if qualities, ok := e.consoleQualities(details.IMDBId); ok {
 
+			streamDebugf("show %d S%02dE%02d console path ok count=%d", e.show.id, e.season, e.episode, len(qualities))
+
 			return qualities, nil
 
 		}
 
+		streamDebugf("show %d S%02dE%02d console path miss imdb=%q", e.show.id, e.season, e.episode, details.IMDBId)
+
 	}
+
+	streamDebugf("show %d S%02dE%02d trying share-key fallback", e.show.id, e.season, e.episode)
 
 	return e.shareKeyQualities()
 

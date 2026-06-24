@@ -13,6 +13,7 @@ import (
 const (
 
 	qualitiesTTL = 30 * time.Minute
+	emptyQualitiesTTL = 2 * time.Minute
 	maxEntries = 512
 
 )
@@ -21,6 +22,7 @@ type cacheEntry struct {
 
 	qualities []mediakit.Quality
 	fetchedAt time.Time
+	ttl time.Duration
 
 }
 
@@ -60,7 +62,7 @@ func (c *Cache) MovieQualities(id int) ([]mediakit.Quality, error) {
 
 	c.mu.RUnlock()
 
-	if ok && time.Since(entry.fetchedAt) < qualitiesTTL {
+	if ok && time.Since(entry.fetchedAt) < entry.ttl {
 
 		return cloneQualities(entry.qualities), nil
 
@@ -90,12 +92,7 @@ func (c *Cache) MovieQualities(id int) ([]mediakit.Quality, error) {
 
 	c.pruneLocked()
 
-	c.movies[id] = cacheEntry{
-
-		qualities: cloneQualities(qualities),
-		fetchedAt: time.Now(),
-
-	}
+	c.setMovieEntry(id, qualities)
 
 	c.mu.Unlock()
 
@@ -114,7 +111,7 @@ func (c *Cache) EpisodeQualities(showID, season, episode int) ([]mediakit.Qualit
 
 	c.mu.RUnlock()
 
-	if ok && time.Since(entry.fetchedAt) < qualitiesTTL {
+	if ok && time.Since(entry.fetchedAt) < entry.ttl {
 
 		return cloneQualities(entry.qualities), nil
 
@@ -144,16 +141,47 @@ func (c *Cache) EpisodeQualities(showID, season, episode int) ([]mediakit.Qualit
 
 	c.pruneLocked()
 
-	c.episodes[key] = cacheEntry{
-
-		qualities: cloneQualities(qualities),
-		fetchedAt: time.Now(),
-
-	}
+	c.setEpisodeEntry(key, qualities)
 
 	c.mu.Unlock()
 
 	return qualities, nil
+
+}
+
+func (c *Cache) setMovieEntry(id int, qualities []mediakit.Quality) {
+
+	c.movies[id] = cacheEntry{
+
+		qualities: cloneQualities(qualities),
+		fetchedAt: time.Now(),
+		ttl: entryTTL(len(qualities)),
+
+	}
+
+}
+
+func (c *Cache) setEpisodeEntry(key string, qualities []mediakit.Quality) {
+
+	c.episodes[key] = cacheEntry{
+
+		qualities: cloneQualities(qualities),
+		fetchedAt: time.Now(),
+		ttl: entryTTL(len(qualities)),
+
+	}
+
+}
+
+func entryTTL(count int) time.Duration {
+
+	if count == 0 {
+
+		return emptyQualitiesTTL
+
+	}
+
+	return qualitiesTTL
 
 }
 
@@ -163,7 +191,7 @@ func (c *Cache) pruneLocked() {
 
 	for id, entry := range c.movies {
 
-		if now.Sub(entry.fetchedAt) >= qualitiesTTL || len(c.movies) > maxEntries {
+		if now.Sub(entry.fetchedAt) >= entry.ttl || len(c.movies) > maxEntries {
 
 			delete(c.movies, id)
 
@@ -173,7 +201,7 @@ func (c *Cache) pruneLocked() {
 
 	for key, entry := range c.episodes {
 
-		if now.Sub(entry.fetchedAt) >= qualitiesTTL || len(c.episodes) > maxEntries {
+		if now.Sub(entry.fetchedAt) >= entry.ttl || len(c.episodes) > maxEntries {
 
 			delete(c.episodes, key)
 

@@ -34,24 +34,28 @@ func providerTransport() *http.Transport {
 }
 
 // VIXSRC_PROXY_URL applies only to server-side Vixsrc resolution (API + embed + master
-// playlist fetch). Playback segment proxying uses a separate host filter in the backend.
+// playlist fetch). Supports http://, https://, and socks5:// proxies.
 func providerProxyFunc() func(*http.Request) (*url.URL, error) {
 
-	proxyURL := strings.TrimSpace(os.Getenv("VIXSRC_PROXY_URL"))
+	raw := strings.TrimSpace(os.Getenv("VIXSRC_PROXY_URL"))
 
-	if proxyURL == "" {
+	if raw == "" {
+
+		return http.ProxyFromEnvironment
+
+	}
+
+	parsed, err := normalizeProxyURL(raw)
+
+	if err != nil || parsed == nil {
+
+		streamDebugf("vixsrc proxy url invalid %q: %v", raw, err)
 
 		return http.ProxyFromEnvironment
 
 	}
 
-	parsed, err := url.Parse(proxyURL)
-
-	if err != nil {
-
-		return http.ProxyFromEnvironment
-
-	}
+	streamDebugf("vixsrc resolution using proxy %s", proxyURLForLog(parsed))
 
 	return http.ProxyURL(parsed)
 

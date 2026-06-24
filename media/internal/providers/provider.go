@@ -37,13 +37,19 @@ func (r *Resolver) Resolve(tmdbID int, mediaType string, season, episode int) ([
 
 	if !vixsrcServerEnabled() {
 
+		streamDebugf("vixsrc disabled for tmdb:%d %s", tmdbID, mediaType)
+
 		return nil, fmt.Errorf("providers: vixsrc server resolution disabled")
 
 	}
 
+	streamDebugf("vixsrc resolve start tmdb:%d %s s%de%d", tmdbID, mediaType, season, episode)
+
 	streams, err := r.provider.Fetch(tmdbID, mediaType, season, episode)
 
 	if err != nil {
+
+		streamDebugf("vixsrc resolve failed tmdb:%d %s: %v", tmdbID, mediaType, err)
 
 		return nil, err
 
@@ -65,9 +71,13 @@ func (r *Resolver) Resolve(tmdbID int, mediaType string, season, episode int) ([
 
 	if len(qualities) == 0 {
 
+		streamDebugf("vixsrc resolve empty streams tmdb:%d %s", tmdbID, mediaType)
+
 		return nil, fmt.Errorf("providers: no streams found for tmdb:%d %s", tmdbID, mediaType)
 
 	}
+
+	streamDebugf("vixsrc resolve ok tmdb:%d %s qualities=%d", tmdbID, mediaType, len(qualities))
 
 	return qualities, nil
 

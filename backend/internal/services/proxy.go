@@ -64,13 +64,9 @@ func NewProxyService(cfg *config.Config) *ProxyService {
 
 	var vixsrcProxy *url.URL
 
-	if proxyURL := strings.TrimSpace(cfg.VixsrcProxyURL); proxyURL != "" {
+	if parsed, err := parseVixsrcProxyURL(cfg.VixsrcProxyURL); err == nil {
 
-		if parsed, err := url.Parse(proxyURL); err == nil {
-
-			vixsrcProxy = parsed
-
-		}
+		vixsrcProxy = parsed
 
 	}
 
@@ -271,6 +267,40 @@ func (s *ProxyService) clientForTarget(targetURL string) *http.Client {
 		CheckRedirect: s.client.CheckRedirect,
 
 	}
+
+}
+
+func parseVixsrcProxyURL(raw string) (*url.URL, error) {
+
+	raw = strings.TrimSpace(raw)
+
+	if raw == "" {
+
+		return nil, nil
+
+	}
+
+	if !strings.Contains(raw, "://") {
+
+		raw = "http://" + raw
+
+	}
+
+	parsed, err := url.Parse(raw)
+
+	if err != nil {
+
+		return nil, err
+
+	}
+
+	if parsed.Scheme == "" {
+
+		parsed.Scheme = "http"
+
+	}
+
+	return parsed, nil
 
 }
 

@@ -1,8 +1,11 @@
 package handlers
 
 import (
+	"log"
 	"net/http"
+	"os"
 	"strconv"
+	"strings"
 
 	"streamly/internal/services"
 
@@ -48,12 +51,21 @@ func (h *StreamHandler) MovieStream(c *gin.Context) {
 
 	if stream == nil {
 
+		streamDebugf("movie %d stream 404: raw_qualities=%d after_dto_filter=0", id, len(qualities))
 		writeError(c, http.StatusNotFound, "no stream available")
 		return
 
 	}
 
 	stream.Qualities = h.proxyHeaderQualities(c, stream.Qualities)
+
+	if len(stream.Qualities) == 0 {
+
+		streamDebugf("movie %d stream 404: proxy step emptied qualities", id)
+		writeError(c, http.StatusNotFound, "no stream available")
+		return
+
+	}
 
 	c.JSON(http.StatusOK, stream)
 
@@ -124,12 +136,21 @@ func (h *StreamHandler) EpisodeStream(c *gin.Context) {
 
 	if stream == nil {
 
+		streamDebugf("show %d S%02dE%02d stream 404: raw_qualities=%d after_dto_filter=0", showID, season, episode, len(qualities))
 		writeError(c, http.StatusNotFound, "no stream available")
 		return
 
 	}
 
 	stream.Qualities = h.proxyHeaderQualities(c, stream.Qualities)
+
+	if len(stream.Qualities) == 0 {
+
+		streamDebugf("show %d S%02dE%02d stream 404: proxy step emptied qualities", showID, season, episode)
+		writeError(c, http.StatusNotFound, "no stream available")
+		return
+
+	}
 
 	c.JSON(http.StatusOK, stream)
 
@@ -355,7 +376,13 @@ func (h *StreamHandler) proxyHeaderQualities(c *gin.Context, qualities []service
 
 		if len(q.Headers) > 0 {
 
-			if session, err := h.proxy.CreateSessionWithHeaders(c.Request.Context(), q.URL, q.Headers, q.IsHLS); err == nil {
+			session, err := h.proxy.CreateSessionWithHeaders(c.Request.Context(), q.URL, q.Headers, q.IsHLS)
+
+			if err != nil {
+
+				streamDebugf("proxy session failed url=%s: %v", q.URL, err)
+
+			} else {
 
 				proxyURL := base + session.ProxyPath
 
@@ -372,5 +399,19 @@ func (h *StreamHandler) proxyHeaderQualities(c *gin.Context, qualities []service
 	}
 
 	return out
+
+}
+
+func streamDebugf(format string, args ...any) {
+
+	switch strings.ToLower(strings.TrimSpace(os.Getenv("STREAM_DEBUG"))) {
+
+	case "1", "true", "yes", "on":
+
+		log.Printf("[stream-debug] "+format, args...)
+
+	default:
+
+	}
 
 }
