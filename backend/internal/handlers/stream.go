@@ -70,7 +70,15 @@ func (h *StreamHandler) MovieSubtitles(c *gin.Context) {
 
 	}
 
-	c.JSON(http.StatusOK, h.subtitles.MovieTracks(c.Request.Context(), id))
+	tracks := h.subtitles.MovieTracks(c.Request.Context(), id)
+
+	if tracks == nil {
+
+		tracks = []services.SubtitleDTO{}
+
+	}
+
+	c.JSON(http.StatusOK, tracks)
 
 }
 
@@ -156,7 +164,15 @@ func (h *StreamHandler) EpisodeSubtitles(c *gin.Context) {
 
 	}
 
-	c.JSON(http.StatusOK, h.subtitles.EpisodeTracks(c.Request.Context(), showID, season, episode))
+	tracks := h.subtitles.EpisodeTracks(c.Request.Context(), showID, season, episode)
+
+	if tracks == nil {
+
+		tracks = []services.SubtitleDTO{}
+
+	}
+
+	c.JSON(http.StatusOK, tracks)
 
 }
 
@@ -327,9 +343,8 @@ func (h *StreamHandler) LiveStream(c *gin.Context) {
 
 }
 
-// proxyHeaderQualities replaces any quality that carries request headers with a
-// proxy URL so the browser never needs to set Referer/Origin directly. Qualities
-// without headers are returned as-is (they are browser-safe already).
+// proxyHeaderQualities replaces gated qualities with same-origin proxy URLs.
+// Direct Febbox progressive URLs without headers are returned unchanged.
 func (h *StreamHandler) proxyHeaderQualities(c *gin.Context, qualities []services.QualityDTO) []services.QualityDTO {
 
 	base := baseURL(c)
@@ -340,11 +355,12 @@ func (h *StreamHandler) proxyHeaderQualities(c *gin.Context, qualities []service
 
 		if len(q.Headers) > 0 {
 
-			referer, _ := q.Headers["Referer"]
+			if session, err := h.proxy.CreateSessionWithHeaders(c.Request.Context(), q.URL, q.Headers, q.IsHLS); err == nil {
 
-			if session, err := h.proxy.CreateSession(c.Request.Context(), q.URL, referer, q.IsHLS); err == nil {
+				proxyURL := base + session.ProxyPath
 
-				q.URL = base + session.ProxyPath
+				q.ProxyURL = proxyURL
+				q.URL = proxyURL
 				q.Headers = nil
 
 			}

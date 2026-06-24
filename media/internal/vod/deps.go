@@ -20,12 +20,17 @@ type Deps interface {
 	GetShowSeasonsByTMDB(tmdbID int) ([]ShowSeasonInfo, error)
 
 	GetFebBoxID(id int, boxType int) (string, error)
+
+	GetConsoleMovieFID(imdbID string) (int, error)
+	GetConsoleEpisodeFID(imdbID string, season, episode int) (int, error)
+	GetConsoleLinks(fid int) ([]febbox.Quality, error)
+
 	ListFiles(shareKey string, parentID any, cookie string) ([]febbox.File, error)
 	GetLinks(shareKey string, fid any, cookie string) ([]febbox.Quality, error)
 	GetDownloadURL(shareKey string, fid any, cookie string) (string, error)
 
-	ResolveProviderStreams(tmdbID int, mediaType string, season, episode int) ([]quality.Quality, error)
-
 	GetIntro(query introdb.MediaQuery) (*introdb.MediaRecord, error)
+
+	ResolveProviderStreams(tmdbID int, mediaType string, season, episode int) ([]quality.Quality, error)
 
 }

@@ -2,6 +2,7 @@ package config
 
 import (
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -25,6 +26,7 @@ type Config struct {
 	FebboxCookie        string
 	IntroDBKey          string
 	TMDBAPIKey          string
+	SubDLAPIKey         string
 	OpenSubtitlesAPIKey string
 	TVBaseURL           string
 
@@ -44,7 +46,7 @@ type Config struct {
 
 func Load() (*Config, error) {
 
-	_ = godotenv.Load()
+	loadDotEnv()
 
 	cfg := &Config{
 
@@ -60,6 +62,7 @@ func Load() (*Config, error) {
 		FebboxCookie:        os.Getenv("FEBBOX_UI_COOKIE"),
 		IntroDBKey:          os.Getenv("INTRODB_API_KEY"),
 		TMDBAPIKey:          os.Getenv("TMDB_API_KEY"),
+		SubDLAPIKey:         os.Getenv("SUBDL_API_KEY"),
 		OpenSubtitlesAPIKey: os.Getenv("OPENSUBTITLES_API_KEY"),
 		TVBaseURL:           os.Getenv("TV_BASE_URL"),
 
@@ -78,6 +81,55 @@ func Load() (*Config, error) {
 	}
 
 	return cfg, nil
+
+}
+
+func loadDotEnv() {
+
+	candidates := []string{
+		".env",
+		"../.env",
+		"../../.env",
+		filepath.Join("backend", ".env"),
+	}
+
+	if exe, err := os.Executable(); err == nil {
+
+		dir := filepath.Dir(exe)
+
+		candidates = append(candidates,
+			filepath.Join(dir, ".env"),
+			filepath.Join(dir, "..", ".env"),
+			filepath.Join(dir, "..", "..", ".env"),
+		)
+
+	}
+
+	seen := make(map[string]struct{})
+
+	for _, path := range candidates {
+
+		path = filepath.Clean(path)
+
+		if _, ok := seen[path]; ok {
+
+			continue
+
+		}
+
+		seen[path] = struct{}{}
+
+		if _, err := os.Stat(path); err != nil {
+
+			continue
+
+		}
+
+		_ = godotenv.Load(path)
+
+		return
+
+	}
 
 }
 

@@ -119,6 +119,10 @@ func applyDefaults(c *config) {
 }
 
 type febboxBrowser interface {
+	GetMoviePlayFID(imdbID string) (int, error)
+	GetEpisodePlayFID(imdbID string, season, episode int) (int, error)
+	GetConsoleLinks(fid int) ([]febbox.Quality, error)
+
 	ListFiles(shareKey string, parentID any, cookie string) ([]febbox.File, error)
 	GetLinks(shareKey string, fid any, cookie string) ([]febbox.Quality, error)
 	GetDownloadURL(shareKey string, fid any, cookie string) (string, error)
@@ -149,10 +153,10 @@ type Client struct {
 	febbox    febboxBrowser
 	tv        *tv.Client
 	imdb      *imdb.Client
-	intro     introFetcher
+	intro introFetcher
 	resolver  *providers.Resolver
 
-	titleMu     sync.Mutex
+	titleMu sync.Mutex
 	titleGroup  singleflight.Group
 	showTitles  map[int]titleCacheEntry
 	movieTitles map[int]titleCacheEntry
@@ -192,11 +196,11 @@ func New(opts ...Option) *Client {
 		showbox:  showbox.New(showbox.Options{ChildMode: cfg.childMode}),
 		febbox:   febbox.NewCached(febboxClient),
 		tv:       tv.New(tv.Options{BaseURL: cfg.tvBaseURL}),
-		imdb:     imdb.New(cfg.tmdbAPIKey),
-		intro:    intro,
+		imdb:  imdb.New(cfg.tmdbAPIKey),
+		intro: intro,
 		resolver: providers.New(cfg.tmdbAPIKey),
 
-		showTitles:  make(map[int]titleCacheEntry),
+		showTitles: make(map[int]titleCacheEntry),
 		movieTitles: make(map[int]titleCacheEntry),
 		shareKeys:   make(map[string]shareKeyCacheEntry),
 	}
@@ -527,9 +531,13 @@ func (c *Client) GetFebBoxID(id, boxType int) (string, error) {
 
 		}
 
-		c.shareKeyMu.Lock()
-		c.shareKeys[key] = shareKeyCacheEntry{key: shareKey, expiry: time.Now().Add(shareKeyTTL)}
-		c.shareKeyMu.Unlock()
+		if shareKey != "" {
+
+			c.shareKeyMu.Lock()
+			c.shareKeys[key] = shareKeyCacheEntry{key: shareKey, expiry: time.Now().Add(shareKeyTTL)}
+			c.shareKeyMu.Unlock()
+
+		}
 
 		return shareKey, nil
 
@@ -542,6 +550,30 @@ func (c *Client) GetFebBoxID(id, boxType int) (string, error) {
 	}
 
 	return result.(string), nil
+
+}
+
+func (c *Client) GetConsoleMovieFID(imdbID string) (int, error) {
+
+	return c.febbox.GetMoviePlayFID(imdbID)
+
+}
+
+func (c *Client) GetConsoleEpisodeFID(imdbID string, season, episode int) (int, error) {
+
+	return c.febbox.GetEpisodePlayFID(imdbID, season, episode)
+
+}
+
+func (c *Client) GetConsoleLinks(fid int) ([]febbox.Quality, error) {
+
+	return c.febbox.GetConsoleLinks(fid)
+
+}
+
+func (c *Client) ResolveProviderStreams(tmdbID int, mediaType string, season, episode int) ([]quality.Quality, error) {
+
+	return c.resolver.Resolve(tmdbID, mediaType, season, episode)
 
 }
 
@@ -594,12 +626,6 @@ func (c *Client) GetShowSeasonsByTMDB(tmdbID int) ([]vod.ShowSeasonInfo, error) 
 	}
 
 	return out, nil
-
-}
-
-func (c *Client) ResolveProviderStreams(tmdbID int, mediaType string, season, episode int) ([]quality.Quality, error) {
-
-	return c.resolver.Resolve(tmdbID, mediaType, season, episode)
 
 }
 

@@ -107,6 +107,27 @@ func NewCached(client *Client) *CachedClient {
 
 }
 
+// GetMoviePlayFID resolves a console-bound movie file id.
+func (c *CachedClient) GetMoviePlayFID(imdbID string) (int, error) {
+
+	return c.inner.GetMoviePlayFID(imdbID)
+
+}
+
+// GetEpisodePlayFID resolves a console-bound episode file id.
+func (c *CachedClient) GetEpisodePlayFID(imdbID string, season, episode int) (int, error) {
+
+	return c.inner.GetEpisodePlayFID(imdbID, season, episode)
+
+}
+
+// GetConsoleLinks resolves stream qualities for a console file id.
+func (c *CachedClient) GetConsoleLinks(fid int) ([]Quality, error) {
+
+	return c.GetLinks("", fid, "")
+
+}
+
 // ListFiles returns cached folder listings when fresh.
 func (c *CachedClient) ListFiles(shareKey string, parentID any, cookie string) ([]File, error) {
 

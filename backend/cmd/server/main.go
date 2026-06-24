@@ -60,8 +60,24 @@ func main() {
 	defer mediaSvc.StopCatalogCache()
 
 	proxySvc := services.NewProxyService(cfg)
+	subdlClient := captions.NewSubDLClient(captions.SubDLOptions{APIKey: cfg.SubDLAPIKey})
 	opensubsClient := captions.NewOpenSubsClient(captions.OpenSubsOptions{APIKey: cfg.OpenSubtitlesAPIKey})
-	subtitleSvc := services.NewSubtitleResolver(mediaSvc, opensubsClient, cfg)
+
+	if !subdlClient.Configured() && !opensubsClient.Configured() {
+
+		log.Println("warning: no subtitle API keys configured (SUBDL_API_KEY / OPENSUBTITLES_API_KEY); subtitles disabled")
+
+	} else if subdlClient.Configured() {
+
+		log.Println("subtitles: SubDL configured")
+
+	} else {
+
+		log.Println("subtitles: OpenSubtitles configured")
+
+	}
+
+	subtitleSvc := services.NewSubtitleResolver(mediaSvc, subdlClient, opensubsClient, cfg)
 
 	authHandler := handlers.NewAuthHandler(authSvc)
 	settingsHandler := handlers.NewSettingsHandler(settingsSvc)

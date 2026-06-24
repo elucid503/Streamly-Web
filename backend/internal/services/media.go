@@ -87,6 +87,7 @@ type QualityDTO struct {
 	IsHLS bool `json:"isHls"`
 
 	URL string `json:"url"`
+	ProxyURL string `json:"proxyUrl,omitempty"`
 
 	Headers map[string]string `json:"headers,omitempty"`
 
@@ -521,7 +522,7 @@ func QualitiesToDTO(items []mediakit.Quality) []QualityDTO {
 			Height:  q.Height,
 			IsHLS:   q.IsHLS,
 			URL:     q.URL,
-			Headers: q.Headers,
+			Headers: cloneQualityHeaders(q.Headers),
 
 		}
 
@@ -643,6 +644,32 @@ func (s *MediaService) pruneTitleDetailsLocked() {
 		}
 
 	}
+
+}
+
+func cloneQualityHeaders(headers map[string]string) map[string]string {
+
+	if len(headers) == 0 {
+
+		return nil
+
+	}
+
+	out := make(map[string]string, len(headers))
+
+	for key, value := range headers {
+
+		if value == "" {
+
+			continue
+
+		}
+
+		out[key] = value
+
+	}
+
+	return out
 
 }
 

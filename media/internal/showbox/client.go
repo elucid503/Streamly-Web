@@ -83,6 +83,7 @@ var baseParams = struct {
 
 const requestTTLSeconds = 60 * 60 * 12
 const searchCacheTTL = 60 * time.Minute
+const browserUA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " + "(KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36"
 
 type searchCacheEntry struct {
 
@@ -393,7 +394,19 @@ func (c *Client) GetFebBoxID(id int, boxType BoxType) (string, error) {
 
 	endpoint := fmt.Sprintf("%s/index/share_link?id=%d&type=%d", strings.TrimRight(showboxWebURL, "/"), id, boxType)
 
-	response, err := c.client.Get(endpoint)
+	request, err := http.NewRequest(http.MethodGet, endpoint, nil)
+
+	if err != nil {
+
+		return "", err
+
+	}
+
+	request.Header.Set("User-Agent", browserUA)
+	request.Header.Set("Accept", "application/json, text/plain, */*")
+	request.Header.Set("Referer", strings.TrimRight(showboxWebURL, "/")+"/")
+
+	response, err := c.client.Do(request)
 
 	if err != nil {
 
@@ -411,37 +424,13 @@ func (c *Client) GetFebBoxID(id int, boxType BoxType) (string, error) {
 
 	}
 
-	var parsed struct {
+	if response.StatusCode >= 400 {
 
-		Data *struct {
-
-			Link string `json:"link"`
-
-		} `json:"data"`
+		return "", fmt.Errorf("showbox share_link HTTP %d", response.StatusCode)
 
 	}
 
-	if len(body) == 0 {
-
-		return "", nil
-
-	}
-
-	if err := json.Unmarshal(body, &parsed); err != nil {
-
-		return "", err
-
-	}
-
-	if parsed.Data == nil || parsed.Data.Link == "" {
-
-		return "", nil
-
-	}
-
-	parts := strings.Split(parsed.Data.Link, "/")
-
-	return parts[len(parts)-1], nil
+	return parseShareKeyFromBody(body)
 
 }
 
@@ -631,6 +620,40 @@ func (c *Client) request(module string, params map[string]any, dest any) error {
 	}
 
 	return nil
+
+}
+
+func parseShareKeyFromBody(body []byte) (string, error) {
+
+	if len(body) == 0 {
+
+		return "", nil
+
+	}
+
+	var parsed struct {
+
+		Data *struct {
+			Link string `json:"link"`
+		} `json:"data"`
+
+	}
+
+	if err := json.Unmarshal(body, &parsed); err != nil {
+
+		return "", err
+
+	}
+
+	if parsed.Data == nil || parsed.Data.Link == "" {
+
+		return "", nil
+
+	}
+
+	parts := strings.Split(parsed.Data.Link, "/")
+
+	return parts[len(parts)-1], nil
 
 }
 

@@ -161,75 +161,58 @@ func (e *Episode) File() (*MediaFile, error) {
 }
 
 // Qualities lists available download renditions for this episode.
-// Showbox/Febbox and the multi-provider resolver run concurrently; the first
-// to return a non-empty result wins.
+// Vixsrc (TMDB) is tried first, then console IMDb bindings, then share-key folders.
 func (e *Episode) Qualities() ([]quality.Quality, error) {
 
-	details, detailsErr := e.show.Details()
+	details, err := e.show.Details()
 
-	type result struct {
-		qs  []quality.Quality
-		err error
-	}
+	if err == nil && details.TMDBId > 0 {
 
-	ch := make(chan result, 2)
+		if qualities, ok := providerQualities(e.show.deps, details.TMDBId, "tv", e.season, e.episode); ok {
 
-	go func() {
-
-		qs, err := e.showboxQualities()
-		ch <- result{qs, err}
-
-	}()
-
-	hasTMDB := detailsErr == nil && details.TMDBId > 0
-
-	if hasTMDB {
-
-		go func() {
-
-			qs, err := e.show.deps.ResolveProviderStreams(details.TMDBId, "tv", e.season, e.episode)
-			ch <- result{qs, err}
-
-		}()
-
-	}
-
-	total := 1
-	if hasTMDB {
-		total = 2
-	}
-
-	var lastErr error
-
-	for i := 0; i < total; i++ {
-
-		r := <-ch
-
-		if len(r.qs) > 0 {
-
-			return r.qs, nil
-
-		}
-
-		if r.err != nil {
-
-			lastErr = r.err
+			return qualities, nil
 
 		}
 
 	}
 
-	if lastErr != nil {
+	if err == nil && details.IMDBId != "" {
 
-		return nil, lastErr
+		if qualities, ok := e.consoleQualities(details.IMDBId); ok {
+
+			return qualities, nil
+
+		}
 
 	}
 
-	return []quality.Quality{}, nil
+	return e.shareKeyQualities()
 
 }
 
-func (e *Episode) showboxQualities() ([]quality.Quality, error) {
+func (e *Episode) consoleQualities(imdbID string) ([]quality.Quality, bool) {
+
+	fid, err := e.show.deps.GetConsoleEpisodeFID(imdbID, e.season, e.episode)
+
+	if err != nil || fid <= 0 {
+
+		return nil, false
+
+	}
+
+	items, err := e.show.deps.GetConsoleLinks(fid)
+
+	if err != nil || len(items) == 0 {
+
+		return nil, false
+
+	}
+
+	return quality.ToQualities(items), true
+
+}
+
+func (e *Episode) shareKeyQualities() ([]quality.Quality, error) {
 
 	shareKey, err := e.show.ShareKey()
 
@@ -295,21 +278,7 @@ func (e *Episode) allEpisodeFiles(shareKey string) ([]febbox.File, error) {
 
 	folder, err := season.resolveFolder(shareKey)
 
-	var allFiles []febbox.File
-
-	if err != nil {
-
-		root, listErr := e.show.listFiles(shareKey, 0)
-
-		if listErr != nil {
-
-			return nil, listErr
-
-		}
-
-		allFiles = fileparser.FilesOnly(root)
-
-	} else {
+	if err == nil {
 
 		children, listErr := e.show.listFiles(shareKey, folder.FID)
 
@@ -319,11 +288,41 @@ func (e *Episode) allEpisodeFiles(shareKey string) ([]febbox.File, error) {
 
 		}
 
-		allFiles = fileparser.FilesOnly(children)
+		return fileparser.AllEpisodeFiles(fileparser.FilesOnly(children), e.season, e.episode), nil
 
 	}
 
-	return fileparser.AllEpisodeFiles(allFiles, e.season, e.episode), nil
+	root, listErr := e.show.listFiles(shareKey, 0)
+
+	if listErr != nil {
+
+		return nil, listErr
+
+	}
+
+	if direct := fileparser.FilesOnly(root); len(direct) > 0 {
+
+		return fileparser.AllEpisodeFiles(direct, e.season, e.episode), nil
+
+	}
+
+	var matches []febbox.File
+
+	for _, item := range fileparser.ParseSeasons(root) {
+
+		children, listErr := e.show.listFiles(shareKey, item.Folder.FID)
+
+		if listErr != nil {
+
+			continue
+
+		}
+
+		matches = append(matches, fileparser.AllEpisodeFiles(fileparser.FilesOnly(children), e.season, e.episode)...)
+
+	}
+
+	return matches, nil
 
 }
 

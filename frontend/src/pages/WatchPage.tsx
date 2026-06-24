@@ -371,11 +371,29 @@ export class WatchPage extends Component<WatchPageProps, WatchPageState> {
 
   switchStream = (height: number, positionMs: number) => {
 
-    const { qualities } = this.state;
+    const { qualities, streamUrl } = this.state;
 
     const quality = pickQualityByHeight(qualities, height);
 
     if (!quality || !qualityPlaybackUrl(quality)) return;
+
+    const nextUrl = qualityPlaybackUrl(quality);
+
+    if (quality.isHls && nextUrl === streamUrl) {
+
+      this.userSelectedQuality = true;
+
+      this.setState({
+
+        selectedHeight: height,
+        startPositionMs: Math.floor(positionMs),
+        error: "",
+
+      });
+
+      return;
+
+    }
 
     this.applyStream(streamFromQuality(qualities, quality, height), height, positionMs);
 

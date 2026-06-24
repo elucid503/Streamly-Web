@@ -1,48 +1,68 @@
 package providers
 
 import (
-
 	"fmt"
 	"regexp"
 	"strconv"
 	"strings"
 	"time"
-
 )
 
 const vixsrcBase = "https://vixsrc.to"
 
 var (
-	vixTokenRE    = regexp.MustCompile(`token["']\s*:\s*["']([^"']+)`)
-	vixExpiresRE  = regexp.MustCompile(`expires["']\s*:\s*["']([^"']+)`)
-	vixPlaylistRE = regexp.MustCompile(`url\s*:\s*["']([^"']+)`)
+	vixTokenRe    = regexp.MustCompile(`token["']\s*:\s*["']([^"']+)`)
+	vixExpiresRe  = regexp.MustCompile(`expires["']\s*:\s*["']([^"']+)`)
+	vixPlaylistRe = regexp.MustCompile(`url\s*:\s*["']([^"']+)`)
 	vixResRE      = regexp.MustCompile(`RESOLUTION=\d+x(\d+)`)
 )
 
-type vixsrcProvider struct{}
+type vixsrcProvider struct {
 
-func newVixsrc() Provider { return &vixsrcProvider{} }
+	baseURL string
+
+}
+
+func newVixsrc() Provider {
+
+	return &vixsrcProvider{baseURL: vixsrcBase}
+
+}
 
 func (v *vixsrcProvider) Name() string { return "Vixsrc" }
 
+func (v *vixsrcProvider) origin() string {
+
+	return v.baseURL
+
+}
+
 func (v *vixsrcProvider) Fetch(tmdbID int, mediaType string, season, episode int) ([]Stream, error) {
 
-	var apiURL string
+	return v.fetchAtBase(v.baseURL, tmdbID, mediaType, season, episode)
 
-	if mediaType == "movie" {
+}
 
-		apiURL = fmt.Sprintf("%s/api/movie/%d", vixsrcBase, tmdbID)
+func (v *vixsrcProvider) fetchAtBase(base string, tmdbID int, mediaType string, season, episode int) ([]Stream, error) {
 
-	} else {
+	if tmdbID <= 0 {
 
-		apiURL = fmt.Sprintf("%s/api/tv/%d/%d/%d", vixsrcBase, tmdbID, season, episode)
+		return nil, fmt.Errorf("vixsrc: invalid tmdb id")
+
+	}
+
+	apiURL, err := vixsrcAPIURL(base, tmdbID, mediaType, season, episode)
+
+	if err != nil {
+
+		return nil, err
 
 	}
 
 	vixHeaders := map[string]string{
 
-		"Referer": vixsrcBase,
-		"Origin":  vixsrcBase,
+		"Referer": base,
+		"Origin":  base,
 
 	}
 
@@ -62,10 +82,10 @@ func (v *vixsrcProvider) Fetch(tmdbID int, mediaType string, season, episode int
 
 	}
 
-	html, err := getText(vixsrcBase+src, map[string]string{
+	html, err := getText(base+src, map[string]string{
 
 		"Referer": apiURL,
-		"Origin":  vixsrcBase,
+		"Origin":  base,
 
 	})
 
@@ -75,9 +95,9 @@ func (v *vixsrcProvider) Fetch(tmdbID int, mediaType string, season, episode int
 
 	}
 
-	token := matchFirst(vixTokenRE, html)
-	expires := matchFirst(vixExpiresRE, html)
-	playlist := matchFirst(vixPlaylistRE, html)
+	token := matchFirst(vixTokenRe, html)
+	expires := matchFirst(vixExpiresRe, html)
+	playlist := matchFirst(vixPlaylistRe, html)
 
 	if token == "" || expires == "" || playlist == "" {
 
@@ -93,6 +113,87 @@ func (v *vixsrcProvider) Fetch(tmdbID int, mediaType string, season, episode int
 
 	}
 
+	masterURL := appendVixsrcToken(playlist, token, expires, true)
+
+	m3u8, err := getText(masterURL, map[string]string{
+
+		"Referer": apiURL,
+		"Origin":  base,
+
+	})
+
+	if err != nil {
+
+		return nil, fmt.Errorf("vixsrc: failed to fetch playlist: %w", err)
+
+	}
+
+	variants, err := parseVixsrcMasterPlaylist(m3u8)
+
+	if err != nil {
+
+		return nil, err
+
+	}
+
+	playbackHeaders := map[string]string{
+
+		"Referer": apiURL,
+		"Origin":  base,
+
+	}
+
+	// Serve the master playlist for every quality entry. Variant URLs are
+	// video-only renditions; the master manifest carries separate audio tracks.
+	streams := make([]Stream, 0, len(variants))
+
+	for _, variant := range variants {
+
+		streams = append(streams, Stream{
+
+			Name:     fmt.Sprintf("Vixsrc %dp", variant.Height),
+			URL:      masterURL,
+			Quality:  fmt.Sprintf("%dp", variant.Height),
+			Provider: "Vixsrc",
+			IsHLS:    true,
+			Headers:  playbackHeaders,
+
+		})
+
+	}
+
+	return streams, nil
+
+}
+
+func vixsrcAPIURL(base string, tmdbID int, mediaType string, season, episode int) (string, error) {
+
+	switch mediaType {
+
+	case "movie":
+
+		return fmt.Sprintf("%s/api/movie/%d", base, tmdbID), nil
+
+	case "tv", "series":
+
+		if season <= 0 || episode <= 0 {
+
+			return "", fmt.Errorf("vixsrc: invalid season/episode")
+
+		}
+
+		return fmt.Sprintf("%s/api/tv/%d/%d/%d", base, tmdbID, season, episode), nil
+
+	default:
+
+		return "", fmt.Errorf("vixsrc: unsupported media type %q", mediaType)
+
+	}
+
+}
+
+func appendVixsrcToken(playlist, token, expires string, includeHeight bool) string {
+
 	sep := "?"
 
 	if strings.Contains(playlist, "?") {
@@ -101,53 +202,14 @@ func (v *vixsrcProvider) Fetch(tmdbID int, mediaType string, season, episode int
 
 	}
 
-	masterURL := fmt.Sprintf("%s%stoken=%s&expires=%s&h=1", playlist, sep, token, expires)
+	url := fmt.Sprintf("%s%stoken=%s&expires=%s", playlist, sep, token, expires)
 
-	m3u8, err := getText(masterURL, map[string]string{"Referer": apiURL})
+	if includeHeight {
 
-	if err != nil {
-
-		return nil, fmt.Errorf("vixsrc: failed to fetch playlist: %w", err)
+		url += "&h=1"
 
 	}
 
-	matches := vixResRE.FindAllStringSubmatch(m3u8, -1)
-	best := 0
-
-	for _, m := range matches {
-
-		if h, _ := strconv.Atoi(m[1]); h > best {
-
-			best = h
-
-		}
-
-	}
-
-	if best == 0 {
-
-		return nil, fmt.Errorf("vixsrc: no valid resolution found in playlist")
-
-	}
-
-	return []Stream{
-
-		{
-
-			Name:     fmt.Sprintf("Vixsrc %dp", best),
-			URL:      masterURL,
-			Quality:  fmt.Sprintf("%dp", best),
-			Provider: "Vixsrc",
-			IsHLS:    true,
-			Headers: map[string]string{
-
-				"Referer":    apiURL,
-				"User-Agent": providerUA,
-
-			},
-
-		},
-
-	}, nil
+	return url
 
 }

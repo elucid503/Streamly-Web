@@ -249,7 +249,10 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
 
   componentDidUpdate(prev: VideoPlayerProps) {
 
-    if (prev.src !== this.props.src || prev.isHls !== this.props.isHls || (this.props.isHls && prev.selectedHeight !== this.props.selectedHeight)) {
+    const srcChanged = prev.src !== this.props.src || prev.isHls !== this.props.isHls;
+    const heightChanged = this.props.isHls && prev.selectedHeight !== this.props.selectedHeight;
+
+    if (srcChanged) {
 
       this.unbindVideoEvents();
 
@@ -258,6 +261,10 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
       this.attachSource();
 
       this.bindVideoEvents();
+
+    } else if (heightChanged && this.hls) {
+
+      this.applyHlsLevel(this.props.selectedHeight ?? 0, true);
 
     }
 
@@ -610,6 +617,39 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
 
   };
 
+  applyHlsLevel = (selectedHeight: number, allowInexact = false) => {
+
+    if (!this.hls || this.hls.levels.length === 0) return;
+
+    const levels = this.hls.levels as HlsLevelLike[];
+    const target = bestSupportedHlsLevel(levels, selectedHeight);
+
+    if (!target) {
+
+      this.onVideoError();
+      return;
+
+    }
+
+    if (!this.props.live && selectedHeight > 0 && !target.isExact && !allowInexact) {
+
+      this.onVideoError();
+      return;
+
+    }
+
+    if (!this.props.live) {
+
+      this.hls.currentLevel = target.index;
+      this.hls.nextLevel = target.index;
+      this.hls.autoLevelCapping = target.index;
+
+    }
+
+    this.ensureHlsAudio();
+
+  };
+
   ensureHlsAudio = () => {
 
     if (!this.hls) return;
@@ -916,36 +956,12 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
         if (hls && hls.levels.length > 0) {
 
           const selectedHeight = this.props.selectedHeight ?? 0;
-          const levels = hls.levels as HlsLevelLike[];
-          const target = bestSupportedHlsLevel(levels, selectedHeight);
 
-          if (!target) {
+          this.applyHlsLevel(selectedHeight);
 
-            this.onVideoError();
-            return;
-
-          }
-
-          if (!this.props.live && selectedHeight > 0 && !target.isExact) {
-
-            this.onVideoError();
-            return;
-
-          }
-
-          // Lock to the highest level this browser says it can decode, so ABR
-          // doesn't downgrade explicit choices unless the codec is unsupported.
-          if (!this.props.live) {
-
-            hls.currentLevel = target.index;
-            hls.nextLevel = target.index;
-            hls.autoLevelCapping = target.index;
-
-          }
-
-          // Detect HDR content from the manifest's codec / video-range attrs.
           if (selectedHeight > 0) {
 
+            const levels = hls.levels as HlsLevelLike[];
             const isHdr = levels.some((level) => isHdrLevel(level));
 
             if (isHdr) {

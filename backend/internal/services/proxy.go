@@ -35,6 +35,7 @@ type ProxyEntry struct {
 	Token string
 	TargetURL string
 	Referer string
+	RequestHeaders map[string]string
 	ExpiresAt time.Time
 
 }
@@ -112,6 +113,20 @@ type ProxySession struct {
 
 func (s *ProxyService) CreateSession(ctx context.Context, targetURL, referer string, isHLS bool) (*ProxySession, error) {
 
+	headers := map[string]string{}
+
+	if referer != "" {
+
+		headers["Referer"] = referer
+
+	}
+
+	return s.CreateSessionWithHeaders(ctx, targetURL, headers, isHLS)
+
+}
+
+func (s *ProxyService) CreateSessionWithHeaders(ctx context.Context, targetURL string, headers map[string]string, isHLS bool) (*ProxySession, error) {
+
 	targetURL = strings.TrimSpace(targetURL)
 
 	if targetURL == "" {
@@ -120,7 +135,9 @@ func (s *ProxyService) CreateSession(ctx context.Context, targetURL, referer str
 
 	}
 
-	token, err := s.getOrCreateToken(targetURL, referer)
+	referer := headers["Referer"]
+
+	token, err := s.getOrCreateTokenWithHeaders(targetURL, referer, headers)
 
 	if err != nil {
 
@@ -182,6 +199,18 @@ func (s *ProxyService) Fetch(ctx context.Context, entry *ProxyEntry, incoming ht
 
 	}
 
+	for key, value := range entry.RequestHeaders {
+
+		if value == "" || strings.EqualFold(key, "Referer") {
+
+			continue
+
+		}
+
+		req.Header.Set(key, value)
+
+	}
+
 	if rangeHeader := incoming.Get("Range"); rangeHeader != "" {
 
 		req.Header.Set("Range", rangeHeader)
@@ -198,7 +227,7 @@ func (s *ProxyService) Fetch(ctx context.Context, entry *ProxyEntry, incoming ht
 
 }
 
-func (s *ProxyService) proxyMediaURL(base *url.URL, referer, baseProxyURL, raw string) (string, error) {
+func (s *ProxyService) proxyMediaURL(base *url.URL, entry *ProxyEntry, baseProxyURL, raw string) (string, error) {
 
 	trimmed := strings.TrimSpace(raw)
 
@@ -210,7 +239,7 @@ func (s *ProxyService) proxyMediaURL(base *url.URL, referer, baseProxyURL, raw s
 
 	resolved := resolveRelativeURL(base, trimmed)
 
-	token, err := s.getOrCreateToken(resolved, referer)
+	token, err := s.getOrCreateTokenWithHeaders(resolved, entry.Referer, entry.RequestHeaders)
 
 	if err != nil {
 
@@ -272,7 +301,7 @@ func (s *ProxyService) RewritePlaylist(body []byte, entry *ProxyEntry, baseProxy
 
 				}
 
-				proxyURL, err := s.proxyMediaURL(base, entry.Referer, baseProxyURL, parts[1])
+				proxyURL, err := s.proxyMediaURL(base, entry, baseProxyURL, parts[1])
 
 				if err != nil {
 
@@ -290,7 +319,7 @@ func (s *ProxyService) RewritePlaylist(body []byte, entry *ProxyEntry, baseProxy
 
 		}
 
-		proxyURL, err := s.proxyMediaURL(base, entry.Referer, baseProxyURL, trimmed)
+		proxyURL, err := s.proxyMediaURL(base, entry, baseProxyURL, trimmed)
 
 		if err != nil {
 
@@ -310,7 +339,13 @@ func (s *ProxyService) RewritePlaylist(body []byte, entry *ProxyEntry, baseProxy
 
 func (s *ProxyService) getOrCreateToken(targetURL, referer string) (string, error) {
 
-	key := proxyTokenKey(targetURL, referer)
+	return s.getOrCreateTokenWithHeaders(targetURL, referer, nil)
+
+}
+
+func (s *ProxyService) getOrCreateTokenWithHeaders(targetURL, referer string, headers map[string]string) (string, error) {
+
+	key := proxyTokenKey(targetURL, referer, headers)
 	now := time.Now()
 
 	s.tokenMu.Lock()
@@ -358,6 +393,7 @@ func (s *ProxyService) getOrCreateToken(targetURL, referer string) (string, erro
 			Token: token,
 			TargetURL: targetURL,
 			Referer: referer,
+			RequestHeaders: cloneProxyHeaders(headers),
 			ExpiresAt: expiresAt,
 
 		}
@@ -421,11 +457,58 @@ func (s *ProxyService) pruneTokenCacheLocked(now time.Time) {
 
 }
 
-func proxyTokenKey(targetURL, referer string) string {
+func proxyTokenKey(targetURL, referer string, headers map[string]string) string {
 
-	sum := sha256.Sum256([]byte(targetURL + "\x00" + referer))
+	var builder strings.Builder
+
+	builder.WriteString(targetURL)
+	builder.WriteString("\x00")
+	builder.WriteString(referer)
+
+	for key, value := range headers {
+
+		if value == "" {
+
+			continue
+
+		}
+
+		builder.WriteString("\x00")
+		builder.WriteString(strings.ToLower(key))
+		builder.WriteString("=")
+		builder.WriteString(value)
+
+	}
+
+	sum := sha256.Sum256([]byte(builder.String()))
 
 	return hex.EncodeToString(sum[:])
+
+}
+
+func cloneProxyHeaders(headers map[string]string) map[string]string {
+
+	if len(headers) == 0 {
+
+		return nil
+
+	}
+
+	out := make(map[string]string, len(headers))
+
+	for key, value := range headers {
+
+		if value == "" {
+
+			continue
+
+		}
+
+		out[key] = value
+
+	}
+
+	return out
 
 }
 

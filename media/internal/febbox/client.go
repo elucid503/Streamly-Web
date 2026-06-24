@@ -182,6 +182,10 @@ func (c *Client) headers(shareKey, cookie string) map[string]string {
 
 		headers["referer"] = baseURL + "/share/" + shareKey
 
+	} else {
+
+		headers["referer"] = baseURL + "/console"
+
 	}
 
 	return headers

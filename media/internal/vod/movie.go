@@ -126,75 +126,58 @@ func (m *Movie) File() (*MediaFile, error) {
 }
 
 // Qualities lists available download renditions for this movie.
-// Showbox/Febbox and the multi-provider resolver run concurrently; the first
-// to return a non-empty result wins.
+// Vixsrc (TMDB) is tried first, then console IMDb bindings, then share-key folders.
 func (m *Movie) Qualities() ([]quality.Quality, error) {
 
-	details, detailsErr := m.Details()
+	details, err := m.Details()
 
-	type result struct {
-		qs  []quality.Quality
-		err error
-	}
+	if err == nil && details.TMDBId > 0 {
 
-	ch := make(chan result, 2)
+		if qualities, ok := providerQualities(m.deps, details.TMDBId, "movie", 0, 0); ok {
 
-	go func() {
-
-		qs, err := m.showboxQualities()
-		ch <- result{qs, err}
-
-	}()
-
-	hasTMDB := detailsErr == nil && details.TMDBId > 0
-
-	if hasTMDB {
-
-		go func() {
-
-			qs, err := m.deps.ResolveProviderStreams(details.TMDBId, "movie", 0, 0)
-			ch <- result{qs, err}
-
-		}()
-
-	}
-
-	total := 1
-	if hasTMDB {
-		total = 2
-	}
-
-	var lastErr error
-
-	for i := 0; i < total; i++ {
-
-		r := <-ch
-
-		if len(r.qs) > 0 {
-
-			return r.qs, nil
-
-		}
-
-		if r.err != nil {
-
-			lastErr = r.err
+			return qualities, nil
 
 		}
 
 	}
 
-	if lastErr != nil {
+	if err == nil && details.IMDBId != "" {
 
-		return nil, lastErr
+		if qualities, ok := m.consoleQualities(details.IMDBId); ok {
+
+			return qualities, nil
+
+		}
 
 	}
 
-	return []quality.Quality{}, nil
+	return m.shareKeyQualities()
 
 }
 
-func (m *Movie) showboxQualities() ([]quality.Quality, error) {
+func (m *Movie) consoleQualities(imdbID string) ([]quality.Quality, bool) {
+
+	fid, err := m.deps.GetConsoleMovieFID(imdbID)
+
+	if err != nil || fid <= 0 {
+
+		return nil, false
+
+	}
+
+	items, err := m.deps.GetConsoleLinks(fid)
+
+	if err != nil || len(items) == 0 {
+
+		return nil, false
+
+	}
+
+	return quality.ToQualities(items), true
+
+}
+
+func (m *Movie) shareKeyQualities() ([]quality.Quality, error) {
 
 	shareKey, err := m.ShareKey()
 

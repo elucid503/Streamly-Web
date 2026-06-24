@@ -1,15 +1,12 @@
 package providers
 
 import (
-
 	"fmt"
-	"sync"
 
 	"mediakit/internal/quality"
-
 )
 
-// Provider is a streaming source that resolves playable URLs for TMDB-identified content.
+// Provider resolves playable URLs for TMDB-identified content.
 type Provider interface {
 
 	Name() string
@@ -17,101 +14,46 @@ type Provider interface {
 
 }
 
-// Resolver runs all registered providers concurrently and aggregates their results.
+// Resolver resolves streams through the configured primary provider (Vixsrc).
 type Resolver struct {
 
-	providers []Provider
+	provider Provider
 
 }
 
-// New builds a Resolver with all available providers.
-// Providers that need a TMDB API key are only registered when one is supplied.
-func New(tmdbKey string) *Resolver {
+// New builds a Vixsrc resolver.
+func New(_ string) *Resolver {
 
-	r := &Resolver{}
+	return &Resolver{
 
-	r.providers = append(r.providers, newVixsrc())
-	r.providers = append(r.providers, newVidsrc())
-
-	if tmdbKey != "" {
-
-		r.providers = append(r.providers, newVideasy(tmdbKey))
-		r.providers = append(r.providers, newRive(tmdbKey))
+		provider: newVixsrc(),
 
 	}
 
-	return r
-
 }
 
-// Resolve queries all providers concurrently and returns aggregated qualities.
-// Returns an error only when no provider returns any stream.
+// Resolve returns playable qualities from Vixsrc for the given TMDB title.
 func (r *Resolver) Resolve(tmdbID int, mediaType string, season, episode int) ([]quality.Quality, error) {
 
-	type result struct {
+	streams, err := r.provider.Fetch(tmdbID, mediaType, season, episode)
 
-		streams []Stream
+	if err != nil {
 
-	}
-
-	ch := make(chan result, len(r.providers))
-
-	var wg sync.WaitGroup
-
-	for _, p := range r.providers {
-
-		wg.Add(1)
-
-		go func(p Provider) {
-
-			defer wg.Done()
-
-			streams, err := p.Fetch(tmdbID, mediaType, season, episode)
-
-			if err == nil {
-
-				ch <- result{streams: streams}
-
-			} else {
-
-				ch <- result{}
-
-			}
-
-		}(p)
+		return nil, err
 
 	}
 
-	go func() {
+	qualities := make([]quality.Quality, 0, len(streams))
 
-		wg.Wait()
-		close(ch)
+	for _, stream := range streams {
 
-	}()
+		if stream.URL == "" {
 
-	seen := make(map[string]struct{})
-	var qualities []quality.Quality
-
-	for res := range ch {
-
-		for _, s := range res.streams {
-
-			if s.URL == "" {
-
-				continue
-
-			}
-
-			if _, dup := seen[s.URL]; dup {
-
-				continue
-
-			}
-
-			seen[s.URL] = struct{}{}
-			qualities = append(qualities, s.ToQuality())
+			continue
 
 		}
+
+		qualities = append(qualities, stream.ToQuality())
 
 	}
 

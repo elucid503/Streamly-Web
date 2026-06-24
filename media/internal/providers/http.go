@@ -1,15 +1,12 @@
 package providers
 
 import (
-
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"regexp"
 	"time"
-
 )
 
 const providerUA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36"
@@ -109,94 +106,6 @@ func getJSON(url string, extraHeaders map[string]string) (map[string]any, error)
 	}
 
 	return out, nil
-
-}
-
-func getJSONRaw(url string, extraHeaders map[string]string) ([]byte, error) {
-
-	req, err := http.NewRequest(http.MethodGet, url, nil)
-
-	if err != nil {
-
-		return nil, err
-
-	}
-
-	req.Header.Set("User-Agent", providerUA)
-	req.Header.Set("Accept", "application/json, text/plain, */*")
-
-	for k, v := range extraHeaders {
-
-		req.Header.Set(k, v)
-
-	}
-
-	resp, err := httpClient.Do(req)
-
-	if err != nil {
-
-		return nil, err
-
-	}
-
-	defer resp.Body.Close()
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-
-		return nil, fmt.Errorf("http %d from %s", resp.StatusCode, url)
-
-	}
-
-	return io.ReadAll(resp.Body)
-
-}
-
-func postJSON(url string, body any, extraHeaders map[string]string) ([]byte, error) {
-
-	payload, err := json.Marshal(body)
-
-	if err != nil {
-
-		return nil, err
-
-	}
-
-	req, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(payload))
-
-	if err != nil {
-
-		return nil, err
-
-	}
-
-	req.Header.Set("User-Agent", providerUA)
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Accept", "application/json, */*")
-
-	for k, v := range extraHeaders {
-
-		req.Header.Set(k, v)
-
-	}
-
-	resp, err := httpClient.Do(req)
-
-	if err != nil {
-
-		return nil, err
-
-	}
-
-	defer resp.Body.Close()
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-
-		b, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("http %d: %s", resp.StatusCode, string(b))
-
-	}
-
-	return io.ReadAll(resp.Body)
 
 }
 

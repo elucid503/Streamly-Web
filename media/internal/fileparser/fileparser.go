@@ -397,11 +397,13 @@ func AllEpisodeFiles(files []febbox.File, seasonNumber, episodeNumber int) []feb
 
 		}
 
-		if number == episodeNumber {
+		if season != seasonNumber || number != episodeNumber {
 
-			out = append(out, file)
+			continue
 
 		}
+
+		out = append(out, file)
 
 	}
 

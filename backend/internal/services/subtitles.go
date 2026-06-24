@@ -30,9 +30,10 @@ type subtitleCacheEntry struct {
 
 type SubtitleResolver struct {
 
-	media   *MediaService
+	media *MediaService
+	subdl *captions.SubDLClient
 	opensubs *captions.OpenSubsClient
-	ttl     time.Duration
+	ttl time.Duration
 
 	cacheMu sync.RWMutex
 
@@ -43,7 +44,7 @@ type SubtitleResolver struct {
 
 }
 
-func NewSubtitleResolver(media *MediaService, opensubs *captions.OpenSubsClient, cfg *config.Config) *SubtitleResolver {
+func NewSubtitleResolver(media *MediaService, subdl *captions.SubDLClient, opensubs *captions.OpenSubsClient, cfg *config.Config) *SubtitleResolver {
 
 	ttl := cfg.SubtitleCacheTTL
 
@@ -55,7 +56,8 @@ func NewSubtitleResolver(media *MediaService, opensubs *captions.OpenSubsClient,
 
 	return &SubtitleResolver{
 
-		media:    media,
+		media: media,
+		subdl: subdl,
 		opensubs: opensubs,
 
 		ttl: ttl,
@@ -117,6 +119,12 @@ func (r *SubtitleResolver) resolveMovieTracks(ctx context.Context, id int) []Sub
 
 	query, err := r.media.MovieCaptionQuery(id)
 
+	if tracks := r.subdlTracks(ctx, query, err); len(tracks) > 0 {
+
+		return tracks
+
+	}
+
 	return r.opensubsTracks(ctx, query, err)
 
 }
@@ -124,6 +132,12 @@ func (r *SubtitleResolver) resolveMovieTracks(ctx context.Context, id int) []Sub
 func (r *SubtitleResolver) resolveEpisodeTracks(ctx context.Context, showID, season, episode int) []SubtitleDTO {
 
 	query, err := r.media.EpisodeCaptionQuery(showID, season, episode)
+
+	if tracks := r.subdlTracks(ctx, query, err); len(tracks) > 0 {
+
+		return tracks
+
+	}
 
 	return r.opensubsTracks(ctx, query, err)
 
@@ -256,6 +270,73 @@ func cloneSubtitleTracks(tracks []SubtitleDTO) []SubtitleDTO {
 	}
 
 	return append([]SubtitleDTO(nil), tracks...)
+
+}
+
+func (r *SubtitleResolver) subdlTracks(ctx context.Context, query captions.Query, err error) []SubtitleDTO {
+
+	if err != nil || r.subdl == nil || !r.subdl.Configured() {
+
+		return nil
+
+	}
+
+	tracks, err := r.subdl.ListTracks(ctx, query)
+
+	if err != nil {
+
+		return nil
+
+	}
+
+	out := make([]SubtitleDTO, 0, min(len(tracks), 3))
+
+	langCount := make(map[string]int)
+
+	for _, track := range tracks {
+
+		if len(out) >= 3 {
+
+			break
+
+		}
+
+		content, format, err := r.subdl.DownloadTrack(ctx, track, query.Season, query.Episode)
+
+		if err != nil {
+
+			continue
+
+		}
+
+		if format == "" {
+
+			format = track.Format
+
+		}
+
+		if format == "zip" {
+
+			continue
+
+		}
+
+		label := friendlySubdlLabel(track, langCount)
+
+		out = append(out, SubtitleDTO{
+
+			ID:       subdlTrackID(track),
+			Label:    label,
+			Language: track.Language,
+			Format:   format,
+			ProxyURL: subtitleDataURI(content, format),
+			Source:   "subdl",
+
+		})
+
+	}
+
+	return out
 
 }
 
@@ -398,6 +479,14 @@ func friendlyLanguageName(code string) string {
 
 }
 
+func friendlySubdlLabel(track captions.Track, langCount map[string]int) string {
+
+	lang := friendlyLanguageName(track.Language)
+
+	return disambiguateLabel(lang, langCount, track.Hi)
+
+}
+
 func friendlyOpenSubsLabel(track captions.Track, langCount map[string]int) string {
 
 	lang := friendlyLanguageName(track.Language)
@@ -438,6 +527,14 @@ func disambiguateLabel(lang string, langCount map[string]int, hearingImpaired bo
 
 }
 
+func subdlTrackID(track captions.Track) string {
+
+	sum := sha256.Sum256([]byte(strings.TrimSpace(track.Path)))
+
+	return "subdl-" + hex.EncodeToString(sum[:8])
+
+}
+
 func opensubsTrackID(track captions.Track) string {
 
 	sum := sha256.Sum256([]byte(strings.TrimSpace(track.Path)))
@@ -448,7 +545,9 @@ func opensubsTrackID(track captions.Track) string {
 
 func (s *MediaService) MovieCaptionQuery(id int) (captions.Query, error) {
 
-	details, err := s.client.Movie(id).Details()
+	movie := s.client.Movie(id)
+
+	details, err := movie.Details()
 
 	if err != nil {
 
@@ -456,24 +555,34 @@ func (s *MediaService) MovieCaptionQuery(id int) (captions.Query, error) {
 
 	}
 
-	if details.IMDBId == "" && details.TMDBId <= 0 {
+	query := captions.Query{
+
+		IMDBId: details.IMDBId,
+		TMDBId: details.TMDBId,
+
+	}
+
+	if file, err := movie.File(); err == nil && file != nil {
+
+		query.VideoName = file.Name
+
+	}
+
+	if query.IMDBId == "" && query.TMDBId <= 0 {
 
 		return captions.Query{}, fmt.Errorf("captions: no metadata ids for movie %d", id)
 
 	}
 
-	return captions.Query{
-
-		IMDBId: details.IMDBId,
-		TMDBId: details.TMDBId,
-
-	}, nil
+	return query, nil
 
 }
 
 func (s *MediaService) EpisodeCaptionQuery(showID, season, episode int) (captions.Query, error) {
 
-	details, err := s.client.Show(showID).Details()
+	show := s.client.Show(showID)
+
+	details, err := show.Details()
 
 	if err != nil {
 
@@ -481,13 +590,7 @@ func (s *MediaService) EpisodeCaptionQuery(showID, season, episode int) (caption
 
 	}
 
-	if details.IMDBId == "" && details.TMDBId <= 0 {
-
-		return captions.Query{}, fmt.Errorf("captions: no metadata ids for show %d", showID)
-
-	}
-
-	return captions.Query{
+	query := captions.Query{
 
 		IMDBId: details.IMDBId,
 		TMDBId: details.TMDBId,
@@ -495,6 +598,20 @@ func (s *MediaService) EpisodeCaptionQuery(showID, season, episode int) (caption
 		Season:  season,
 		Episode: episode,
 
-	}, nil
+	}
+
+	if file, err := show.Episode(season, episode).File(); err == nil && file != nil {
+
+		query.VideoName = file.Name
+
+	}
+
+	if query.IMDBId == "" && query.TMDBId <= 0 {
+
+		return captions.Query{}, fmt.Errorf("captions: no metadata ids for show %d", showID)
+
+	}
+
+	return query, nil
 
 }
