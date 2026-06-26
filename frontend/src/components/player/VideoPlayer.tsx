@@ -1681,9 +1681,11 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
 
           <div className="max-w-[55%] min-w-0 rounded-md border border-border-subtle bg-surface/80 px-3 py-1.5 text-right backdrop-blur-md">
 
+            {/* For tv shows, a bit of a different layout. Not ideally done, but works */}
+
             <p className="truncate text-sm font-medium">
 
-              {title}
+              {title} {episodeTitle ? <span className="text-foreground-muted">{subtitle}</span> : null}
 
             </p>
 
@@ -1691,7 +1693,7 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
 
               <p className="truncate text-xs text-foreground-muted">
 
-                {subtitle}
+                {episodeTitle ? `${episodeTitle}` : subtitle}
 
               </p>
 

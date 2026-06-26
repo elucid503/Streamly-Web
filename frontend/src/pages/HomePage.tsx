@@ -11,6 +11,7 @@ import { HomeBottomBar } from "@/components/layout/HomeBottomBar";
 import { ViewCarousel } from "@/components/layout/ViewCarousel";
 import type { ContextActionId } from "@/components/layout/ViewContextBar";
 import { AdminPanel } from "@/pages/AdminPanel";
+import { FriendsPage } from "@/pages/FriendsPage";
 import { SettingsPanel } from "@/pages/SettingsPanel";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
@@ -59,6 +60,8 @@ interface HomePageState {
 export class HomePage extends Component<HomePageProps, HomePageState> {
 
   private searchDebounce: ReturnType<typeof setTimeout> | null = null;
+  private eventSource: EventSource | null = null;
+  private sseReconnect: ReturnType<typeof setTimeout> | null = null;
 
   private unsubscribe = () => {};
 
@@ -96,6 +99,9 @@ export class HomePage extends Component<HomePageProps, HomePageState> {
     this.loadHomeData();
     this.checkServiceInterruption();
 
+    void this.fetchRequestCount();
+    this.connectSSE();
+
   }
 
   componentWillUnmount() {
@@ -104,7 +110,52 @@ export class HomePage extends Component<HomePageProps, HomePageState> {
 
     if (this.searchDebounce) clearTimeout(this.searchDebounce);
 
+    this.eventSource?.close();
+
+    if (this.sseReconnect) clearTimeout(this.sseReconnect);
+
   }
+
+  connectSSE = () => {
+
+    this.eventSource?.close();
+
+    const es = new EventSource("/api/social/events");
+
+    const refresh = () => void this.fetchRequestCount();
+
+    es.addEventListener("friend_request", refresh);
+    es.addEventListener("request_accepted", refresh);
+    es.addEventListener("request_declined", refresh);
+
+    es.onerror = () => {
+
+      this.eventSource?.close();
+      this.sseReconnect = setTimeout(this.connectSSE, 8000);
+
+    };
+
+    this.eventSource = es;
+
+  };
+
+  fetchRequestCount = async () => {
+
+    try {
+
+      const requests = await api.listFriendRequests();
+
+      const count = (requests ?? []).filter((r) => r.direction === "incoming").length;
+
+      store.setIncomingRequestCount(count);
+
+    } catch {
+
+      /* ignore */
+
+    }
+
+  };
 
   checkServiceInterruption = async () => {
 
@@ -667,7 +718,76 @@ export class HomePage extends Component<HomePageProps, HomePageState> {
 
     const { view, searchQuery, searchKind, searchYear, searchRating, searchProgress, history, favorites, settingsOpen, adminOpen, interruption, interruptionOpen, contextLoading } = this.state;
 
-    const showSearch = searchQuery.trim().length > 0 && view !== "live";
+    const showSearch = searchQuery.trim().length > 0 && view !== "live" && view !== "friends";
+
+    const header = (
+
+      <Header
+
+        view={view}
+        onViewChange={(v) => {
+
+          localStorage.setItem("streamly:lastView", v);
+          this.setState({ view: v, contextLoading: null });
+
+        }}
+        onOpenSettings={() => this.setState({ settingsOpen: true })}
+        onOpenAdmin={() => this.setState({ adminOpen: true })}
+        onLogout={this.handleLogout}
+
+      />
+
+    );
+
+    const modals = (
+
+      <>
+
+        <SettingsPanel open={settingsOpen} onClose={() => this.setState({ settingsOpen: false })} />
+
+        <AdminPanel open={adminOpen} onClose={() => this.setState({ adminOpen: false })} />
+
+        {interruption && (
+
+          <Modal open={interruptionOpen} onClose={this.dismissInterruption} title={interruption.title || "Service Interruption"}>
+
+            <p className="mb-5 text-sm text-foreground-muted">{interruption.message}</p>
+
+            <Button onClick={this.dismissInterruption} className="w-full">
+
+              Dismiss
+
+            </Button>
+
+          </Modal>
+
+        )}
+
+      </>
+
+    );
+
+    if (view === "friends") {
+
+      return (
+
+        <div className="relative min-h-screen">
+
+          {header}
+
+          <div className="relative z-10 pt-[calc(4rem+env(safe-area-inset-top))]">
+
+            <FriendsPage />
+
+          </div>
+
+          {modals}
+
+        </div>
+
+      );
+
+    }
 
     return (
 
@@ -675,20 +795,7 @@ export class HomePage extends Component<HomePageProps, HomePageState> {
 
         <HomeBackdrop view={view} history={history} favorites={favorites} />
 
-        <Header
-
-          view={view}
-          onViewChange={(v) => {
-
-            localStorage.setItem("streamly:lastView", v);
-            this.setState({ view: v, contextLoading: null });
-
-          }}
-          onOpenSettings={() => this.setState({ settingsOpen: true })}
-          onOpenAdmin={() => this.setState({ adminOpen: true })}
-          onLogout={this.handleLogout}
-
-        />
+        {header}
 
         <div className="relative z-10 overflow-x-clip pt-[calc(4rem+env(safe-area-inset-top))] pb-24 lg:pb-32">
 
@@ -750,29 +857,11 @@ export class HomePage extends Component<HomePageProps, HomePageState> {
 
               ),
 
+              friends: null,
+
             }}
 
           />
-
-        )}
-
-        <SettingsPanel open={settingsOpen} onClose={() => this.setState({ settingsOpen: false })} />
-
-        <AdminPanel open={adminOpen} onClose={() => this.setState({ adminOpen: false })} />
-
-        {interruption && (
-
-          <Modal open={interruptionOpen} onClose={this.dismissInterruption} title={interruption.title || "Service Interruption"}>
-
-            <p className="mb-5 text-sm text-foreground-muted">{interruption.message}</p>
-
-            <Button onClick={this.dismissInterruption} className="w-full">
-
-              Dismiss
-
-            </Button>
-
-          </Modal>
 
         )}
 
@@ -803,6 +892,8 @@ export class HomePage extends Component<HomePageProps, HomePageState> {
         />
 
         </div>
+
+        {modals}
 
       </div>
 

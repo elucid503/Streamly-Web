@@ -21,40 +21,56 @@ func handleServiceError(c *gin.Context, err error) {
 
 	switch {
 
-	case errors.Is(err, services.ErrInvalidCredentials):
+		case errors.Is(err, services.ErrInvalidCredentials):
 
-		writeError(c, http.StatusUnauthorized, "invalid email or password")
+			writeError(c, http.StatusUnauthorized, "invalid email or password")
 
-	case errors.Is(err, services.ErrEmailTaken):
+		case errors.Is(err, services.ErrEmailTaken):
 
-		writeError(c, http.StatusConflict, "email already registered")
+			writeError(c, http.StatusConflict, "email already registered")
 
-	case errors.Is(err, services.ErrInvalidAccessCode):
+		case errors.Is(err, services.ErrInvalidAccessCode):
 
-		writeError(c, http.StatusForbidden, "invalid or expired access code")
+			writeError(c, http.StatusForbidden, "invalid or expired access code")
 
-	case errors.Is(err, services.ErrInvalidFavorite):
+		case errors.Is(err, services.ErrInvalidFavorite):
 
-		writeError(c, http.StatusBadRequest, "invalid favorite")
+			writeError(c, http.StatusBadRequest, "invalid favorite")
 
-	case errors.Is(err, services.ErrAccessCodeExhausted):
+		case errors.Is(err, services.ErrSocialSelf):
 
-		writeError(c, http.StatusForbidden, "access code has reached its usage limit")
+			writeError(c, http.StatusBadRequest, "cannot perform this action on yourself")
 
-	case errors.Is(err, mongo.ErrNoDocuments):
+		case errors.Is(err, services.ErrSocialDuplicate):
 
-		writeError(c, http.StatusNotFound, "not found")
+			writeError(c, http.StatusConflict, "request already exists")
 
-	default:
+		case errors.Is(err, services.ErrSocialForbidden):
 
-		if isUpstreamUnavailable(err) {
+			writeError(c, http.StatusForbidden, "forbidden")
 
-			writeError(c, http.StatusServiceUnavailable, "upstream temporarily unavailable")
-			return
+		case errors.Is(err, services.ErrSocialBadInput):
 
-		}
+			writeError(c, http.StatusBadRequest, "invalid input")
 
-		writeError(c, http.StatusInternalServerError, err.Error())
+		case errors.Is(err, services.ErrAccessCodeExhausted):
+
+			writeError(c, http.StatusForbidden, "access code has reached its usage limit")
+
+		case errors.Is(err, mongo.ErrNoDocuments):
+
+			writeError(c, http.StatusNotFound, "not found")
+
+		default:
+
+			if isUpstreamUnavailable(err) {
+
+				writeError(c, http.StatusServiceUnavailable, "upstream temporarily unavailable")
+				return
+
+			}
+
+			writeError(c, http.StatusInternalServerError, err.Error())
 
 	}
 

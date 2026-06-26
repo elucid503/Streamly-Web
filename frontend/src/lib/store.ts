@@ -7,6 +7,9 @@ class AppStore {
   user: User | null = null;
   settings: UserSettings | null = null;
 
+  incomingRequestCount = 0;
+  sseEventVersion = 0;
+
   private listeners = new Set<Listener>();
 
   subscribe(listener: Listener) {
@@ -34,6 +37,15 @@ class AppStore {
   setSettings(settings: UserSettings | null) {
 
     this.settings = settings;
+
+    this.notify();
+
+  }
+
+  setIncomingRequestCount(count: number) {
+
+    this.incomingRequestCount = count;
+    this.sseEventVersion++;
 
     this.notify();
 

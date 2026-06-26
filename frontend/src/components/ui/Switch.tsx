@@ -9,6 +9,7 @@ interface SwitchProps {
 
   onChange: (checked: boolean) => void;
 
+  className?: string;
 
 }
 
@@ -20,7 +21,7 @@ export class Switch extends Component<SwitchProps> {
 
     return (
 
-      <label className="flex cursor-pointer items-center justify-between gap-4 py-2">
+      <label className={`flex cursor-pointer items-center justify-between gap-4 py-2 ${this.props.className || ""}`}>
 
         <span className="text-sm text-foreground-muted">{label}</span>
 

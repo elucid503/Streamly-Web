@@ -128,7 +128,6 @@ function movieProgress(items: WatchHistoryItem[], movieId: number): number {
 export class WatchPage extends Component<WatchPageProps, WatchPageState> {
 
   private progressDebounce: ReturnType<typeof setTimeout> | null = null;
-
   private lastProgressSave = 0;
 
   private pendingProgress: { positionMs: number; durationMs: number } | null = null;
@@ -142,7 +141,6 @@ export class WatchPage extends Component<WatchPageProps, WatchPageState> {
   private userSelectedQuality = false;
 
   private lastPlaybackPositionMs = 0;
-
   private lastPreferredHeight = 1080;
 
   state: WatchPageState = {
@@ -541,7 +539,7 @@ export class WatchPage extends Component<WatchPageProps, WatchPageState> {
         season,
         episode,
 
-        subtitle: `Season ${season}, Episode ${episode}`,
+        subtitle: `S${season} E${episode}`,
         menuSeason: season,
 
       },
@@ -802,7 +800,7 @@ export class WatchPage extends Component<WatchPageProps, WatchPageState> {
 
   writeProgress = async (positionMs: number, durationMs: number) => {
 
-    const { kind, mediaId, title, poster, historyPoster, season, episode, channelId, ready } = this.state;
+    const { kind, mediaId, title, poster, historyPoster, season, episode, episodeTitle, channelId, ready } = this.state;
 
     if (!ready) return;
 
@@ -820,6 +818,7 @@ export class WatchPage extends Component<WatchPageProps, WatchPageState> {
 
         season,
         episode,
+        episodeTitle: kind === "show" ? episodeTitle : undefined,
 
         channelId,
 

@@ -10,14 +10,15 @@ import (
 )
 
 type DB struct {
+
 	client *mongo.Client
-	db     *mongo.Database
+	db *mongo.Database
+
 }
 
 func Connect(uri string) (*DB, error) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-
 	defer cancel()
 
 	client, err := mongo.Connect(ctx, options.Client().ApplyURI(uri))
@@ -90,14 +91,27 @@ func (d *DB) ServiceInterruption() *mongo.Collection {
 
 }
 
+func (d *DB) Profiles() *mongo.Collection {
+
+	return d.db.Collection("profiles")
+
+}
+
+func (d *DB) FriendRequests() *mongo.Collection {
+
+	return d.db.Collection("friend_requests")
+
+}
+
 func (d *DB) ensureIndexes(ctx context.Context) error {
 
 	indexes := []struct {
-		coll *mongo.Collection
 
+		coll *mongo.Collection
 		keys bson.D
 
 		uniq bool
+
 	}{
 
 		{d.Users(), bson.D{{Key: "email", Value: 1}}, true},
@@ -107,12 +121,17 @@ func (d *DB) ensureIndexes(ctx context.Context) error {
 		{d.Settings(), bson.D{{Key: "userId", Value: 1}}, true},
 
 		{d.History(), bson.D{{Key: "userId", Value: 1}, {Key: "kind", Value: 1}, {Key: "mediaId", Value: 1}, {Key: "season", Value: 1}, {Key: "episode", Value: 1}}, false},
-
 		{d.History(), bson.D{{Key: "userId", Value: 1}, {Key: "updatedAt", Value: -1}}, false},
 
 		{d.Favorites(), bson.D{{Key: "userId", Value: 1}, {Key: "kind", Value: 1}, {Key: "mediaId", Value: 1}, {Key: "channelId", Value: 1}}, true},
-
 		{d.Favorites(), bson.D{{Key: "userId", Value: 1}, {Key: "createdAt", Value: -1}}, false},
+
+		{d.Profiles(), bson.D{{Key: "userId", Value: 1}}, true},
+
+		{d.FriendRequests(), bson.D{{Key: "fromId", Value: 1}, {Key: "toId", Value: 1}}, true},
+		{d.FriendRequests(), bson.D{{Key: "toId", Value: 1}, {Key: "status", Value: 1}}, false},
+		{d.FriendRequests(), bson.D{{Key: "fromId", Value: 1}, {Key: "status", Value: 1}}, false},
+
 	}
 
 	for _, idx := range indexes {

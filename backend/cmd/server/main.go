@@ -80,6 +80,8 @@ func main() {
 	settingsSvc := services.NewSettingsService(db)
 	historySvc := services.NewHistoryService(db)
 	favoritesSvc := services.NewFavoritesService(db)
+	socialHub := services.NewSocialHub()
+	socialSvc := services.NewSocialService(db, socialHub)
 	mediaSvc := services.NewMediaService(cfg)
 
 	cacheCtx, cacheCancel := context.WithCancel(context.Background())
@@ -131,6 +133,7 @@ func main() {
 	settingsHandler := handlers.NewSettingsHandler(settingsSvc)
 	historyHandler := handlers.NewHistoryHandler(historySvc)
 	favoritesHandler := handlers.NewFavoritesHandler(favoritesSvc)
+	socialHandler := handlers.NewSocialHandler(socialSvc)
 	catalogHandler := handlers.NewCatalogHandler(mediaSvc)
 	streamHandler := handlers.NewStreamHandler(mediaSvc, proxySvc, subtitleSvc)
 	proxyHandler := handlers.NewProxyHandler(proxySvc)
@@ -145,12 +148,13 @@ func main() {
 
 		AllowOrigins: []string{cfg.FrontendOrigin},
 
-		AllowMethods:  []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-		AllowHeaders:  []string{"Origin", "Content-Type", "Accept", "Authorization", "Range", "If-Range"},
+		AllowMethods: []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowHeaders: []string{"Origin", "Content-Type", "Accept", "Authorization", "Range", "If-Range"},
 		ExposeHeaders: []string{"Content-Length", "Content-Range", "Accept-Ranges"},
 
 		AllowCredentials: true,
-		MaxAge:           12 * time.Hour,
+		MaxAge: 12 * time.Hour,
+
 	}))
 
 	versionBytes, _ := os.ReadFile("version.txt")
@@ -203,6 +207,22 @@ func main() {
 	protected.GET("/favorites", favoritesHandler.List)
 	protected.POST("/favorites", favoritesHandler.Upsert)
 	protected.DELETE("/favorites/:kind/:key", favoritesHandler.Delete)
+
+	// Social
+
+	social := protected.Group("/social")
+
+	social.GET("/profile", socialHandler.GetMyProfile)
+	social.PUT("/profile", socialHandler.UpdateProfile)
+	social.GET("/profile/:id", socialHandler.GetPublicProfile)
+	social.GET("/users", middleware.SearchRateLimit, socialHandler.SearchUsers)
+	social.GET("/friends", socialHandler.ListFriends)
+	social.POST("/friends/requests", socialHandler.SendRequest)
+	social.GET("/friends/requests", socialHandler.ListRequests)
+	social.PUT("/friends/requests/:id/accept", socialHandler.AcceptRequest)
+	social.DELETE("/friends/requests/:id", socialHandler.DeleteRequest)
+	social.DELETE("/friends/:id", socialHandler.RemoveFriend)
+	social.GET("/events", socialHandler.SSEEvents)
 
 	// Catalog
 
@@ -290,8 +310,9 @@ func main() {
 
 	server := &http.Server{
 
-		Addr:    ":" + cfg.Port,
+		Addr: ":" + cfg.Port,
 		Handler: r,
+
 	}
 
 	go func() {

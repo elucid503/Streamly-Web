@@ -21,7 +21,7 @@ interface HomeBackdropState {
 
 }
 
-const VIEW_ORDER: MainView[] = ["shows", "movies", "live"];
+const VIEW_ORDER: MainView[] = ["shows", "movies", "live", "friends"];
 
 const GRID_TILE_COUNT = 48;
 const CATEGORY_SAMPLE = 6;
@@ -60,6 +60,7 @@ export class HomeBackdrop extends Component<HomeBackdropProps, HomeBackdropState
       shows: [],
       movies: [],
       live: [],
+      friends: [],
 
     },
 
@@ -155,7 +156,7 @@ export class HomeBackdrop extends Component<HomeBackdropProps, HomeBackdropState
 
     if (gen !== this.loadGen) return;
 
-    this.setState({ panels: { shows, movies, live: [] } });
+    this.setState({ panels: { shows, movies, live: [], friends: [] } });
 
   };
 
@@ -188,7 +189,7 @@ export class HomeBackdrop extends Component<HomeBackdropProps, HomeBackdropState
     const { view } = this.props;
     const { panels } = this.state;
 
-    if (view === "live") return null;
+    if (view === "live" || view === "friends") return null;
 
     const hasPanels = VIEW_ORDER.some((panel) => panels[panel].length > 0);
 

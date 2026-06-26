@@ -4,7 +4,7 @@ import { isIOS } from "@/lib/platform";
 import { Component, type ReactNode } from "react";
 import { motion } from "framer-motion";
 
-const VIEW_ORDER: MainView[] = ["shows", "movies", "live"];
+const VIEW_ORDER: MainView[] = ["shows", "movies", "live", "friends"];
 
 interface ViewCarouselProps {
 

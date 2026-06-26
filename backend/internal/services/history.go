@@ -32,6 +32,7 @@ type HistoryUpsert struct {
 	Poster string `json:"poster"`
 	Season int `json:"season"`
 	Episode int `json:"episode"`
+	EpisodeTitle string `json:"episodeTitle"`
 	ChannelID string `json:"channelId"`
 	PositionMs int64 `json:"positionMs"`
 	DurationMs int64 `json:"durationMs"`
@@ -135,6 +136,7 @@ func (s *HistoryService) Upsert(ctx context.Context, userID string, input Histor
 			"poster": input.Poster,
 			"season": input.Season,
 			"episode": input.Episode,
+			"episodeTitle": input.EpisodeTitle,
 			"channelId": input.ChannelID,
 			"positionMs": input.PositionMs,
 			"durationMs": input.DurationMs,

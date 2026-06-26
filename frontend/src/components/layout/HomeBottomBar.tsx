@@ -233,6 +233,7 @@ export class HomeBottomBar extends Component<HomeBottomBarProps, HomeBottomBarSt
         {hasQuery && (
 
           <button type="button"
+
             onClick={() => onSearch("")}
             aria-label="Clear search"
 
@@ -294,6 +295,7 @@ export class HomeBottomBar extends Component<HomeBottomBarProps, HomeBottomBarSt
     const { faqOpen, version } = this.state;
 
     const faqModal = (
+
       <Modal open={faqOpen} onClose={() => this.setState({ faqOpen: false })} title="Help & Legal">
 
         <div className="space-y-4 text-sm">
@@ -379,7 +381,7 @@ export class HomeBottomBar extends Component<HomeBottomBarProps, HomeBottomBarSt
 
           </div>
 
-          {/* Absolute-positioned corner elements - desktop only */}
+          {/* Absolute-positioned corner elements for desktop only */}
 
           <button
 
