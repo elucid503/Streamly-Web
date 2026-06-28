@@ -272,6 +272,9 @@ class HistoryGroup extends Component<HistoryGroupProps, HistoryGroupState> {
 
     const { group, accentColor } = this.props;
     const { expanded } = this.state;
+
+    if (!group?.length) return null;
+
     const [main, ...extras] = group;
 
     return (
@@ -696,7 +699,7 @@ class ExpandableFriendCard extends Component<ExpandableFriendCardProps, Expandab
     const { summary, onRemove, removeLoading } = this.props;
     const { expanded, profileOpen, profile, profileLoading, menuPos } = this.state;
 
-    const firstItem = profile?.recentHistory[0] ?? null;
+    const firstItem = profile?.recentHistory?.[0] ?? null;
 
     return (
 
@@ -780,11 +783,11 @@ class ExpandableFriendCard extends Component<ExpandableFriendCardProps, Expandab
 
               )}
 
-              {!profileLoading && profile && profile.recentHistory.length > 1 && (() => {
+              {!profileLoading && profile && (profile.recentHistory?.length ?? 0) > 1 && (() => {
 
                 const groups = new Map<number, PublicProfile["recentHistory"]>();
 
-                for (const item of profile.recentHistory.slice(1)) {
+                for (const item of (profile.recentHistory ?? []).slice(1)) {
 
                   const g = groups.get(item.mediaId);
                   if (g) { g.push(item); } else { groups.set(item.mediaId, [item]); }

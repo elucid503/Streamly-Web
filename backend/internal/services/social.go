@@ -583,6 +583,12 @@ func (s *SocialService) GetPublicProfile(ctx context.Context, viewerID, targetID
 
 			if err := cur.All(ctx, &items); err == nil {
 
+				if items == nil {
+
+					items = []models.WatchHistoryItem{}
+
+				}
+
 				resp.RecentHistory = items
 
 			}
