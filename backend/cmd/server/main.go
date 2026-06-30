@@ -148,13 +148,12 @@ func main() {
 
 		AllowOrigins: []string{cfg.FrontendOrigin},
 
-		AllowMethods: []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-		AllowHeaders: []string{"Origin", "Content-Type", "Accept", "Authorization", "Range", "If-Range"},
+		AllowMethods:  []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowHeaders:  []string{"Origin", "Content-Type", "Accept", "Authorization", "Range", "If-Range"},
 		ExposeHeaders: []string{"Content-Length", "Content-Range", "Accept-Ranges"},
 
 		AllowCredentials: true,
-		MaxAge: 12 * time.Hour,
-
+		MaxAge:           12 * time.Hour,
 	}))
 
 	versionBytes, _ := os.ReadFile("version.txt")
@@ -261,6 +260,7 @@ func main() {
 	live.GET("/channels/search", middleware.SearchRateLimit, catalogHandler.LiveSearch)
 	live.GET("/channels/:id/stream", middleware.StreamRateLimit, streamHandler.LiveStream)
 	live.GET("/schedule", catalogHandler.LiveSchedule)
+	live.GET("/sports", catalogHandler.LiveSports)
 
 	// Admin
 
@@ -310,9 +310,8 @@ func main() {
 
 	server := &http.Server{
 
-		Addr: ":" + cfg.Port,
+		Addr:    ":" + cfg.Port,
 		Handler: r,
-
 	}
 
 	go func() {

@@ -3,26 +3,23 @@ package tv
 import (
 	"encoding/json"
 	"strings"
+	"time"
 )
 
 // Country holds channel country metadata from tv-channels.json.
 type Country struct {
-
 	Code string `json:"code"`
 	Name string `json:"name"`
 	Flag string `json:"flag"`
-
 }
 
 // UnmarshalJSON accepts both the current object shape and the older/string shape returned by some catalog providers.
 func (c *Country) UnmarshalJSON(data []byte) error {
 
 	var country struct {
-
 		Code string `json:"code"`
 		Name string `json:"name"`
 		Flag string `json:"flag"`
-
 	}
 
 	if err := json.Unmarshal(data, &country); err == nil {
@@ -66,13 +63,13 @@ func countryCode(value string) string {
 
 	switch normalized {
 
-		case "united states", "usa", "u.s.", "u.s.a.":
+	case "united states", "usa", "u.s.", "u.s.a.":
 
-			return "us"
+		return "us"
 
-		case "united kingdom", "uk", "great britain":
+	case "united kingdom", "uk", "great britain":
 
-			return "gb"
+		return "gb"
 
 	}
 
@@ -86,10 +83,30 @@ func countryCode(value string) string {
 
 }
 
+// SportsChannel is a TV channel broadcasting a sports event.
+type SportsChannel struct {
+
+	DaddyID string
+	Name string
+
+}
+
+// SportsEvent is a live sports fixture from the DLHD schedule.
+type SportsEvent struct {
+
+	Title string
+	League string
+
+	Time string
+	Start time.Time
+
+	Channels []SportsChannel
+
+}
+
 // Channel is a single Live TV entry from the catalog.
 type Channel struct {
-
-	ID string `json:"id"`
+	ID      string `json:"id"`
 	DaddyID string `json:"daddyId"`
 
 	Name string `json:"name"`
@@ -97,12 +114,12 @@ type Channel struct {
 
 	Logo string `json:"logo"`
 
-	Country Country `json:"country"`
-	Category string `json:"category"`
+	Country  Country `json:"country"`
+	Category string  `json:"category"`
 
-	Status string `json:"status"`
-	Source string `json:"source"`
-
+	Status   string `json:"status"`
+	Source   string `json:"source"`
+	Enriched bool   `json:"enriched"`
 }
 
 // UnmarshalJSON tolerates provider schema drift: newer catalogs name the logo field "image", omit "id", or send "id" as a number, so we accept both logo keys, coerce numeric ids to strings, and synthesize an id from daddyId when absent.
@@ -111,14 +128,12 @@ func (c *Channel) UnmarshalJSON(data []byte) error {
 	type channelAlias Channel
 
 	var raw struct {
-
 		channelAlias
 
 		// RawID shadows channelAlias.ID so we can accept string or number.
 		RawID json.RawMessage `json:"id"`
 
 		Image string `json:"image"`
-
 	}
 
 	if err := json.Unmarshal(data, &raw); err != nil {
@@ -164,52 +179,42 @@ func (c *Channel) UnmarshalJSON(data []byte) error {
 
 // ChannelCatalog is the top-level response from tv-channels.json.
 type ChannelCatalog struct {
-
 	Generated string `json:"generated"`
 
-	Total int `json:"total"`
+	Total  int    `json:"total"`
 	Source string `json:"source"`
 
 	StreamAPI string `json:"streamApi"`
 
 	Channels []Channel `json:"channels"`
-
 }
 
 // ResolveResult is the legacy dami-tv.pro resolve payload.
 type ResolveResult struct {
-
 	Success bool   `json:"success"`
 	Stream  string `json:"stream"`
 
 	Error string `json:"error"`
-
 }
 
 // TV247ResolveResult is returned by the tv247 resolve-dlstream API.
 type TV247ResolveResult struct {
-
 	ChannelID string `json:"channelId"`
 
 	ProxyPlaylistURL string `json:"proxyPlaylistUrl"`
-	ProxyPlayerURL string `json:"proxyPlayerUrl"`
+	ProxyPlayerURL   string `json:"proxyPlayerUrl"`
 
 	Error string `json:"error"`
-
 }
 
 // ResolvedStream is a live TV playlist URL and the Referer it expects.
 type ResolvedStream struct {
-
-	URL string
+	URL     string
 	Referer string
-
 }
 
 // StreamInfo pairs a channel with its resolved HLS playlist URL.
 type StreamInfo struct {
-
 	Channel Channel
-	HLSURL string
-
+	HLSURL  string
 }

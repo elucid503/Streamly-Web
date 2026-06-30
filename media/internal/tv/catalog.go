@@ -5,7 +5,29 @@ import (
 	"strings"
 )
 
-var popularUSSlugs = []string{ "espn-usa", "cnn-usa", "abc-usa", "cbs-usa", "nbc-usa", "fox-usa", "fox-sports-1-usa", "discovery-channel", "comedy-central", "hbo-usa", "espn2-usa", "tnt-usa", "usa-network", "fx-usa", "mtv-usa", "disney-channel", "cartoon-network", "national-geographic", "cnbc-usa", "bravo-usa" }
+var popularUSSlugs = []string{
+
+	"espn", "espn-usa",
+	"cnn", "cnn-usa",
+	"abc", "abc-usa",
+	"cbs", "cbs-usa",
+	"nbc", "nbc-usa",
+	"fox", "fox-usa",
+	"fox-sports-1", "fox-sports-1-usa",
+	"discovery-channel",
+	"comedy-central",
+	"hbo", "hbo-usa",
+	"espn2", "espn2-usa",
+	"tnt", "tnt-usa",
+	"usa-network",
+	"fx", "fx-usa",
+	"mtv", "mtv-usa",
+	"disney-channel",
+	"cartoon-network",
+	"national-geographic",
+	"cnbc", "cnbc-usa",
+	"bravo", "bravo-usa",
+}
 
 // FindByID returns the channel with the given daddyId, if present.
 func (catalog *ChannelCatalog) FindByID(id string) (Channel, bool) {
@@ -120,6 +142,12 @@ func (catalog *ChannelCatalog) Search(query string, limit int) []Channel {
 
 	sort.Slice(matches, func(i, j int) bool {
 
+		if matches[i].Enriched != matches[j].Enriched {
+
+			return matches[i].Enriched
+
+		}
+
 		return strings.Compare(matches[i].Name, matches[j].Name) < 0
 
 	})
@@ -146,6 +174,12 @@ func (catalog *ChannelCatalog) PopularUS(limit int) []Channel {
 	us := catalog.Filter("us", "")
 
 	sort.Slice(us, func(i, j int) bool {
+
+		if us[i].Enriched != us[j].Enriched {
+
+			return us[i].Enriched
+
+		}
 
 		left := popularityRank(us[i].Slug)
 		right := popularityRank(us[j].Slug)
@@ -176,6 +210,12 @@ func (catalog *ChannelCatalog) Sorted() []Channel {
 	channels := append([]Channel(nil), catalog.Channels...)
 
 	sort.Slice(channels, func(i, j int) bool {
+
+		if channels[i].Enriched != channels[j].Enriched {
+
+			return channels[i].Enriched
+
+		}
 
 		left := popularityRank(channels[i].Slug)
 		right := popularityRank(channels[j].Slug)

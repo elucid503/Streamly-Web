@@ -130,6 +130,27 @@ export interface LiveChannel {
   logo: string;
   country: string;
   category: string;
+  enriched?: boolean;
+
+}
+
+export interface SportsChannel {
+
+  daddyId: string;
+  name: string;
+  logo: string;
+  enriched: boolean;
+
+}
+
+export interface SportsEvent {
+
+  title: string;
+  league: string;
+  time: string;
+  startsAt: number;
+  live: boolean;
+  channels: SportsChannel[];
 
 }
 

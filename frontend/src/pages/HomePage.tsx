@@ -55,6 +55,8 @@ interface HomePageState {
 
   contextLoading: ContextActionId | null;
 
+  sportsLeague: string;
+
 }
 
 export class HomePage extends Component<HomePageProps, HomePageState> {
@@ -89,6 +91,8 @@ export class HomePage extends Component<HomePageProps, HomePageState> {
     interruptionOpen: false,
 
     contextLoading: null,
+
+    sportsLeague: "all",
 
   };
 
@@ -716,7 +720,7 @@ export class HomePage extends Component<HomePageProps, HomePageState> {
 
   render() {
 
-    const { view, searchQuery, searchKind, searchYear, searchRating, searchProgress, history, favorites, settingsOpen, adminOpen, interruption, interruptionOpen, contextLoading } = this.state;
+    const { view, searchQuery, searchKind, searchYear, searchRating, searchProgress, history, favorites, settingsOpen, adminOpen, interruption, interruptionOpen, contextLoading, sportsLeague } = this.state;
 
     const showSearch = searchQuery.trim().length > 0 && view !== "live" && view !== "friends";
 
@@ -853,6 +857,8 @@ export class HomePage extends Component<HomePageProps, HomePageState> {
                   searchQuery={searchQuery}
                   favorites={favorites}
 
+                  sportsLeague={sportsLeague}
+
                 />
 
               ),
@@ -888,6 +894,9 @@ export class HomePage extends Component<HomePageProps, HomePageState> {
 
           contextLoading={contextLoading}
           onContextAction={this.handleContextAction}
+
+          sportsLeague={sportsLeague}
+          onSportsLeagueChange={(v) => this.setState({ sportsLeague: v })}
 
         />
 

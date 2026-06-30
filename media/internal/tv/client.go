@@ -14,7 +14,6 @@ import (
 )
 
 const (
-
 	defaultBaseURL = "https://dami-tv.pro"
 
 	legacyResolvePath = "/papi/tv/resolve/"
@@ -25,23 +24,29 @@ const (
 
 // Options tunes a Client instance.
 type Options struct {
-
 	BaseURL string
-
 }
 
 // Client fetches channel listings and resolves HLS streams.
 type Client struct {
-
 	baseURL string
-	client *http.Client
+	client  *http.Client
 
 	catalogMu sync.RWMutex
-	catalog *ChannelCatalog
+	catalog   *ChannelCatalog
 	catalogAt time.Time
 
-	refreshOnce sync.Once
+	refreshOnce    sync.Once
+	enrichmentOnce sync.Once
 
+	metadataMu sync.RWMutex
+	metadata   *channelMetadataIndex
+	metadataAt time.Time
+
+	sportsMu sync.RWMutex
+	sports []SportsEvent
+	sportsAt time.Time
+	sportsRefreshing bool
 }
 
 // New builds a Client with optional overrides.
@@ -67,9 +72,7 @@ func New(options Options) *Client {
 		client: &http.Client{
 
 			Timeout: 30 * time.Second,
-
 		},
-
 	}
 
 	seedEmbeddedCatalog(client)
@@ -131,7 +134,6 @@ func (c *Client) streamResolvers() []streamResolver {
 
 		c.resolveLegacy,
 		c.resolveDLHD,
-
 	}
 
 	if api := strings.TrimSpace(os.Getenv("TV_STREAM_API")); api != "" {
@@ -249,7 +251,6 @@ func (c *Client) fetchResolvedStream(resolveURL, referer, origin string) (Resolv
 
 		URL:     streamURL,
 		Referer: referer,
-
 	}, nil
 
 }

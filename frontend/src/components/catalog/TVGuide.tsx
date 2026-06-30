@@ -1,7 +1,7 @@
 import { api } from "@/api/client";
 
 import { ContentRow } from "@/components/catalog/ContentRow";
-import { CachedImage } from "@/components/ui/CachedImage";
+import { LiveLogo } from "@/components/catalog/LiveLogo";
 
 import type { ChannelGuideEntry, LiveChannel, ProgramEntry } from "@/lib/types";
 
@@ -130,11 +130,10 @@ function GuideCard({ entry, onSelect }: GuideCardProps) {
 
       <div className="flex items-center gap-2.5 border-b border-border-subtle px-3 py-2.5">
 
-        <CachedImage
+        <LiveLogo
 
           className="h-7 w-7 flex-shrink-0 bg-surface-overlay"
-          src={channel.logo}
-          alt={channel.name}
+          channel={channel}
           imgClassName="object-contain p-1"
           rounded="rounded-full"
           fallback={<Radio size={12} className="text-foreground-faint" />}

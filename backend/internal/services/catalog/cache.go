@@ -13,26 +13,23 @@ import (
 )
 
 const (
-
 	titlesPerCategory = 24
 
-	trendingLimit = 10
-	livePopularLimit  = 24
-
+	trendingLimit       = 10
+	livePopularLimit    = 24
+	liveRefreshInterval = 5 * time.Minute
 )
 
 // Cache maintains a periodically refreshed in-memory catalog snapshot.
 type Cache struct {
-
 	client *mediakit.Client
 
 	cacheTTL  time.Duration
 	cacheFile string
 
-	mu sync.RWMutex
-	snap Snapshot
+	mu     sync.RWMutex
+	snap   Snapshot
 	cancel context.CancelFunc
-
 }
 
 // New builds a Cache. cacheTTL controls the refresh interval; cacheFile is the optional path for disk persistence (empty disables disk caching).
@@ -40,7 +37,7 @@ func New(client *mediakit.Client, cacheTTL time.Duration, cacheFile string) *Cac
 
 	return &Cache{
 
-		client:   client,
+		client: client,
 
 		cacheTTL:  cacheTTL,
 		cacheFile: cacheFile,
@@ -93,6 +90,8 @@ func (c *Cache) Start(ctx context.Context) {
 		}
 
 	}()
+
+	go c.runLiveRefreshLoop(child)
 
 }
 
@@ -168,7 +167,6 @@ func (c *Cache) CategoryTitles(kind mediakit.MediaKind, categoryID string, page,
 	return slicePage(titles, page, limit)
 
 }
-
 
 // LiveChannels returns all cached live TV channels.
 func (c *Cache) LiveChannels() []LiveChannelDTO {
@@ -414,6 +412,56 @@ func (c *Cache) refresh() {
 			time.Since(start).Round(time.Millisecond), len(next.searchIndex))
 
 	}
+
+}
+
+func (c *Cache) runLiveRefreshLoop(ctx context.Context) {
+
+	ticker := time.NewTicker(liveRefreshInterval)
+	defer ticker.Stop()
+
+	for {
+
+		select {
+
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			c.refreshLiveChannels()
+
+		}
+
+	}
+
+}
+
+func (c *Cache) refreshLiveChannels() {
+
+	start := time.Now()
+
+	channels, err := c.loadLiveChannels()
+
+	if err != nil {
+
+		log.Printf("[catalog-cache] live channels refresh failed: %v", err)
+		return
+
+	}
+
+	c.mu.Lock()
+
+	c.snap.liveChannels = channels
+	c.snap.livePopular = sliceLimit(channels, livePopularLimit)
+	c.snap.refreshedAt = time.Now()
+
+	snap := c.snap
+
+	c.mu.Unlock()
+
+	c.saveToDisk(snap)
+
+	log.Printf("[catalog-cache] live channels refreshed in %s (%d channels)",
+		time.Since(start).Round(time.Millisecond), len(channels))
 
 }
 

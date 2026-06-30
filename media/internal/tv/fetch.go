@@ -57,6 +57,12 @@ func (c *Client) Warmup() {
 
 	})
 
+	c.enrichmentOnce.Do(func() {
+
+		go c.runCatalogEnrichmentLoop()
+
+	})
+
 }
 
 func (c *Client) runCatalogRefreshLoop() {
@@ -96,8 +102,19 @@ func (c *Client) fetchCatalog(timeout time.Duration) (*ChannelCatalog, error) {
 
 	}
 
+	catalog, enriched := c.enrichCatalogWithCachedMetadata(catalog)
+
 	c.storeCatalog(catalog)
-	log.Printf("[tv] catalog refreshed from dlhd.pk (%d channels)", len(catalog.Channels))
+
+	if enriched > 0 {
+
+		log.Printf("[tv] catalog refreshed from dlhd.pk (%d channels, %d enriched)", len(catalog.Channels), enriched)
+
+	} else {
+
+		log.Printf("[tv] catalog refreshed from dlhd.pk (%d channels)", len(catalog.Channels))
+
+	}
 
 	return catalog, nil
 
@@ -134,8 +151,8 @@ func (c *Client) anyCatalog() *ChannelCatalog {
 
 	}
 
-	copy := *c.catalog
+	copy := cloneChannelCatalog(c.catalog)
 
-	return &copy
+	return copy
 
 }

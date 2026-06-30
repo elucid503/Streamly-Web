@@ -36,6 +36,9 @@ interface HomeBottomBarProps {
   contextLoading: ContextActionId | null;
   onContextAction: (actionId: ContextActionId) => void;
 
+  sportsLeague?: string;
+  onSportsLeagueChange?: (league: string) => void;
+
 }
 
 interface HomeBottomBarState {
@@ -81,6 +84,8 @@ const searchProgressOptions = [
 ];
 
 const mobileSelectClass = "min-w-0 flex-1 [&_button]:h-8 [&_button]:w-full [&_button]:min-w-0 [&_button]:px-2 [&_button]:text-[11px]";
+
+const SPORTS_CHIPS = ["NFL", "NBA", "MLB", "NHL", "Soccer", "UFC", "Cricket", "F1"] as const;
 
 const faqItems = [
 
@@ -207,12 +212,18 @@ export class HomeBottomBar extends Component<HomeBottomBarProps, HomeBottomBarSt
 
   renderSearchField = (compact = false) => {
 
-    const { searchQuery, onSearch } = this.props;
+    const { searchQuery, onSearch, view, sportsLeague, onSportsLeagueChange } = this.props;
     const hasQuery = searchQuery.length > 0;
+    const showSports = view === "live";
 
-    return (
+    const sportsOptions = [
+      { value: "all", label: "All Sports" },
+      ...SPORTS_CHIPS.map((s) => ({ value: s, label: s })),
+    ];
 
-      <div className={cn("relative w-full", compact ? "mx-auto max-w-none" : "mx-auto max-w-md")}>
+    const inputEl = (
+
+      <div className={cn("relative", compact || showSports ? "flex-1" : "mx-auto w-full max-w-md")}>
 
         <Search size={compact ? 14 : 16} className="absolute top-1/2 left-3 -translate-y-1/2 text-foreground-faint lg:left-4" />
 
@@ -226,7 +237,7 @@ export class HomeBottomBar extends Component<HomeBottomBarProps, HomeBottomBarSt
 
           value={searchQuery}
           onChange={(e) => onSearch(e.target.value)}
-          placeholder="Search titles..."
+          placeholder={view === "live" ? "Search live TV..." : "Search titles..."}
 
         />
 
@@ -246,6 +257,28 @@ export class HomeBottomBar extends Component<HomeBottomBarProps, HomeBottomBarSt
           </button>
 
         )}
+
+      </div>
+
+    );
+
+    if (!showSports) return inputEl;
+
+    return (
+
+      <div className={cn("flex items-center gap-2", compact ? "w-full" : "mx-auto w-full max-w-[42rem]")}>
+
+        {inputEl}
+
+        <SelectMenu
+          value={sportsLeague ?? "all"}
+          options={sportsOptions}
+          onChange={(v) => onSportsLeagueChange?.(v)}
+          placement="top"
+          text="faint"
+          label="League"
+          className={compact ? "shrink-0 [&_button]:h-9 [&_button]:min-w-[110px] [&_button]:text-[11px]" : "shrink-0"}
+        />
 
       </div>
 

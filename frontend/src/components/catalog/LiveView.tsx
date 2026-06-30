@@ -1,11 +1,12 @@
 import { api } from "@/api/client";
 
 import { ContentRow } from "@/components/catalog/ContentRow";
-import { CachedImage } from "@/components/ui/CachedImage";
+import { LiveLogo } from "@/components/catalog/LiveLogo";
+import { SportsSection } from "@/components/catalog/SportsSection";
 import { TVGuide } from "@/components/catalog/TVGuide";
 
 import { cn } from "@/lib/utils";
-import type { FavoriteItem, LiveChannel } from "@/lib/types";
+import type { FavoriteItem, LiveChannel, SportsEvent } from "@/lib/types";
 
 import { Component } from "react";
 import { motion } from "framer-motion";
@@ -19,6 +20,8 @@ interface LiveViewProps {
   searchQuery: string;
   favorites: FavoriteItem[];
 
+  sportsLeague?: string;
+
 }
 
 interface LiveViewState {
@@ -26,6 +29,7 @@ interface LiveViewState {
   popular: LiveChannel[];
   all: LiveChannel[];
   searchResults: LiveChannel[];
+  sports: SportsEvent[];
 
   loading: boolean;
 
@@ -38,6 +42,7 @@ export class LiveView extends Component<LiveViewProps, LiveViewState> {
     popular: [],
     all: [],
     searchResults: [],
+    sports: [],
 
     loading: true,
 
@@ -63,9 +68,13 @@ export class LiveView extends Component<LiveViewProps, LiveViewState> {
 
     try {
 
-      const [popular, all] = await Promise.all([api.livePopular(16), api.liveChannels()]);
+      const [popular, all, sports] = await Promise.all([
+        api.livePopular(16),
+        api.liveChannels(),
+        api.liveSports(),
+      ]);
 
-      this.setState({ popular, all, loading: false });
+      this.setState({ popular, all, sports: sports ?? [], loading: false });
 
     } catch {
 
@@ -114,6 +123,7 @@ export class LiveView extends Component<LiveViewProps, LiveViewState> {
     logo: item.poster,
     country: "",
     category: item.category ?? "",
+    enriched: Boolean(item.poster),
 
   });
 
@@ -134,10 +144,9 @@ export class LiveView extends Component<LiveViewProps, LiveViewState> {
 
         <button className="flex w-full flex-col items-center gap-2" type="button" onClick={() => onSelect(channel)}>
 
-          <CachedImage className="h-20 w-20 border border-border-subtle bg-surface-raised transition-colors group-hover:border-border sm:h-24 sm:w-24"
+          <LiveLogo className="h-20 w-20 border border-border-subtle bg-surface-raised transition-colors group-hover:border-border sm:h-24 sm:w-24"
 
-            src={channel.logo}
-            alt={channel.name}
+            channel={channel}
 
             imgClassName="object-contain p-3"
 
@@ -196,10 +205,9 @@ export class LiveView extends Component<LiveViewProps, LiveViewState> {
             "flex h-full w-full items-center gap-3 rounded-md border border-border-subtle bg-surface-raised p-3 pr-10 text-left transition-colors hover:border-border hover:bg-surface-overlay"
           )}
         >
-          <CachedImage className="h-10 w-10 flex-shrink-0 bg-surface-overlay"
+          <LiveLogo className="h-10 w-10 flex-shrink-0 bg-surface-overlay"
 
-            src={channel.logo}
-            alt={channel.name}
+            channel={channel}
 
             imgClassName="object-contain p-1.5"
             rounded="rounded-full"
@@ -245,12 +253,22 @@ export class LiveView extends Component<LiveViewProps, LiveViewState> {
 
   render() {
 
-    const { searchQuery, favorites } = this.props;
+    const { searchQuery, favorites, sportsLeague } = this.props;
 
-    const { popular, all, searchResults, loading } = this.state;
+    const { popular, all, searchResults, sports, loading } = this.state;
 
     const favoriteChannels = favorites.filter((item) => item.kind === "live");
     const showing = searchQuery.trim() ? searchResults : null;
+
+    const sportsMatches = showing
+      ? sports.filter((e) => {
+
+          const q = searchQuery.toLowerCase();
+
+          return e.title.toLowerCase().includes(q) || e.league.toLowerCase().includes(q);
+
+        })
+      : [];
 
     return (
 
@@ -258,11 +276,35 @@ export class LiveView extends Component<LiveViewProps, LiveViewState> {
 
         {showing ? (
 
-          <ContentRow title={`Results for "${searchQuery}"`} loading={loading}>
+          <>
 
-            {showing.map((ch) => this.renderChannel(ch))}
+            {(showing.length > 0 || loading) && (
 
-          </ContentRow>
+              <ContentRow title="Channels" loading={loading}>
+
+                {showing.map((ch) => this.renderChannel(ch))}
+
+              </ContentRow>
+
+            )}
+
+            {sportsMatches.length > 0 && (
+
+              <SportsSection events={sportsMatches} onSelect={this.props.onSelect} title="Sports" />
+
+            )}
+
+            {!loading && showing.length === 0 && sportsMatches.length === 0 && (
+
+              <div className="px-4 py-16 text-center text-sm text-foreground-muted sm:px-8">
+
+                No results found
+
+              </div>
+
+            )}
+
+          </>
 
         ) : (
 
@@ -279,6 +321,13 @@ export class LiveView extends Component<LiveViewProps, LiveViewState> {
             )}
 
             <TVGuide onSelect={this.props.onSelect} />
+
+            <SportsSection
+              events={sports}
+              onSelect={this.props.onSelect}
+              loading={loading}
+              leagueFilter={sportsLeague}
+            />
 
             <ContentRow title="Popular Channels" sectionId="live-popular" loading={loading}>
 

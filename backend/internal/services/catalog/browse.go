@@ -19,39 +19,35 @@ var showTrendingFallback = []string{
 	"the bear",
 	"house of the dragon",
 	"yellowstone",
-
 }
 
 var movieBrowseQueries = []string{
 
 	"2025", "action", "horror", "comedy", "drama", "thriller",
 	"adventure", "sci-fi", "romance", "animation", "fantasy", "crime",
-
 }
 
 var showBrowseQueries = []string{
 
 	"2024", "netflix", "drama", "hbo", "marvel", "comedy",
 	"crime", "fantasy", "documentary", "reality", "anime", "british",
-
 }
 
 var categoryQueryOverrides = map[string]string{
 
-	"top_dvd_streaming":                    "popular movies",
-	"certified_fresh_movies":               "award winning",
-	"certified_fresh_movies_on_theaters":   "theater",
-	"opening_this_week":                    "new release",
-	"coming_soon_in_theaters":              "coming soon",
-	"coming_soon":                          "upcoming",
-	"new_tv_tonight":                       "new series",
-	"most_popular_tv_on_rt":                "popular series",
-	"certified_fresh_tv":                   "best series",
-	"reelgood_treading_tv_netflix":         "netflix",
-	"reelgood_treading_tv_hulu_plus":       "hulu",
-	"reelgood_treading_tv_amazon":          "amazon prime",
-	"reelgood_treading_tv_disney":          "disney",
-
+	"top_dvd_streaming":                  "popular movies",
+	"certified_fresh_movies":             "award winning",
+	"certified_fresh_movies_on_theaters": "theater",
+	"opening_this_week":                  "new release",
+	"coming_soon_in_theaters":            "coming soon",
+	"coming_soon":                        "upcoming",
+	"new_tv_tonight":                     "new series",
+	"most_popular_tv_on_rt":              "popular series",
+	"certified_fresh_tv":                 "best series",
+	"reelgood_treading_tv_netflix":       "netflix",
+	"reelgood_treading_tv_hulu_plus":     "hulu",
+	"reelgood_treading_tv_amazon":        "amazon prime",
+	"reelgood_treading_tv_disney":        "disney",
 }
 
 // HitToDTO converts a raw search hit into a SearchResultDTO.
@@ -59,16 +55,15 @@ func HitToDTO(hit mediakit.SearchHit) SearchResultDTO {
 
 	return SearchResultDTO{
 
-		ID: hit.ID,
+		ID:   hit.ID,
 		Kind: kindName(hit.Kind),
 
 		Title: hit.Title,
-		Year: hit.Year,
+		Year:  hit.Year,
 
-		Poster: hit.Poster,
+		Poster:      hit.Poster,
 		Description: hit.Description,
-		Rating: hit.IMDBRating,
-
+		Rating:      hit.IMDBRating,
 	}
 
 }
@@ -253,10 +248,9 @@ func (c *Cache) loadCategories(kind mediakit.MediaKind) ([]CategoryDTO, error) {
 
 		out[i] = CategoryDTO{
 
-			ID: cat.ID(),
+			ID:   cat.ID(),
 			Name: cat.Name(),
 			Kind: kindName(kind),
-
 		}
 
 	}
@@ -295,16 +289,16 @@ func liveChannelFromInfo(info mediakit.LiveChannelInfo) LiveChannelDTO {
 
 	return LiveChannelDTO{
 
-		ID: info.ID,
+		ID:      info.ID,
 		DaddyID: info.DaddyID,
 
 		Name: info.Name,
 		Slug: info.Slug,
 		Logo: info.Logo,
 
-		Country: info.Country,
+		Country:  info.Country,
 		Category: info.Category,
-
+		Enriched: info.Enriched,
 	}
 
 }

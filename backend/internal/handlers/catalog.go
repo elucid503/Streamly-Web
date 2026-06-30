@@ -11,9 +11,7 @@ import (
 )
 
 type CatalogHandler struct {
-
 	media *services.MediaService
-
 }
 
 func NewCatalogHandler(media *services.MediaService) *CatalogHandler {
@@ -341,6 +339,21 @@ func (h *CatalogHandler) LiveSearch(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, jsonSlice(channels))
+
+}
+
+func (h *CatalogHandler) LiveSports(c *gin.Context) {
+
+	events, err := h.media.LiveSports()
+
+	if err != nil {
+
+		handleServiceError(c, err)
+		return
+
+	}
+
+	c.JSON(http.StatusOK, jsonSlice(events))
 
 }
 

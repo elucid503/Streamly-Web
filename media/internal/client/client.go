@@ -629,6 +629,13 @@ func (c *Client) GetShowSeasonsByTMDB(tmdbID int) ([]vod.ShowSeasonInfo, error) 
 
 }
 
+// Sports returns current and upcoming sports events from the DLHD schedule.
+func (c *Client) Sports() ([]tv.SportsEvent, error) {
+
+	return c.tv.Sports()
+
+}
+
 // --- live.Deps implementation ---
 
 func (c *Client) ListChannels() (*tv.ChannelCatalog, error) {

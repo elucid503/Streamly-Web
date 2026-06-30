@@ -10,6 +10,7 @@ import (
 	"mediakit/internal/live"
 	"mediakit/internal/meta"
 	"mediakit/internal/quality"
+	"mediakit/internal/tv"
 	"mediakit/internal/vod"
 )
 
@@ -77,6 +78,12 @@ type LiveChannelInfo = live.ChannelInfo
 
 // LiveStream is a resolved live TV HLS playlist.
 type LiveStream = live.Stream
+
+// SportsChannel is a TV channel broadcasting a sports event.
+type SportsChannel = tv.SportsChannel
+
+// SportsEvent is a live sports fixture from the DLHD schedule.
+type SportsEvent = tv.SportsEvent
 
 // TopCategory is a curated Showbox ranking list.
 type TopCategory = discover.TopCategory

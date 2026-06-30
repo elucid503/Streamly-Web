@@ -18,6 +18,8 @@ interface SelectMenuProps {
   onChange: (value: string) => void;
 
   label?: string;
+  text?: "normal" | "faint";
+
   className?: string;
   placement?: "top" | "bottom" | "auto";
 
@@ -121,7 +123,7 @@ export class SelectMenu extends Component<SelectMenuProps, SelectMenuState> {
           onClick={this.toggleOpen}
         >
 
-          <span className="truncate">{selected?.label}</span>
+          <span className={`truncate ${this.props.text === "faint" ? "text-foreground-muted" : "text-foreground"}`}>{selected?.label}</span>
           <ChevronDown size={14} className={cn("shrink-0 text-foreground-muted transition-transform", open && "rotate-180")} />
 
         </button>

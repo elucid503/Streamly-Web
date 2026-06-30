@@ -4,17 +4,14 @@ import "mediakit/internal/tv"
 
 // Deps is the interface that Client provides to Channel and Catalog handles.
 type Deps interface {
-
 	ListChannels() (*tv.ChannelCatalog, error)
 	ResolveStream(daddyID string) (tv.ResolvedStream, error)
 	ResolveHLS(daddyID string) (string, error)
-
 }
 
 // ChannelInfo describes a live TV channel from the catalog.
 type ChannelInfo struct {
-
-	ID string
+	ID      string
 	DaddyID string
 
 	Name string
@@ -25,26 +22,22 @@ type ChannelInfo struct {
 
 	Category string
 
-	Status string
-
+	Status   string
+	Enriched bool
 }
 
 // Stream is a resolved live TV HLS playlist.
 type Stream struct {
-
-	URL string
+	URL     string
 	Referer string
 
 	Channel ChannelInfo
-
 }
 
 // Catalog wraps the live TV channel listing with search helpers.
 type Catalog struct {
-
 	deps Deps
-	raw *tv.ChannelCatalog
-
+	raw  *tv.ChannelCatalog
 }
 
 // NewCatalog wraps a ChannelCatalog with search helpers.
@@ -172,11 +165,9 @@ func (c *Catalog) PopularUS(limit int) []*Channel {
 
 // Channel is a chainable handle for a live TV channel.
 type Channel struct {
-
-	deps Deps
+	deps    Deps
 	daddyID string
-	info *tv.Channel
-
+	info    *tv.Channel
 }
 
 // NewChannel creates a Channel handle for the given daddyId.
@@ -217,8 +208,7 @@ func (c *Channel) Info() (ChannelInfo, error) {
 		return ChannelInfo{
 
 			DaddyID: c.daddyID,
-			Name: c.daddyID,
-
+			Name:    c.daddyID,
 		}, nil
 
 	}
@@ -248,7 +238,6 @@ func (c *Channel) Resolve() (*Stream, error) {
 
 		Referer: stream.Referer,
 		Channel: info,
-
 	}, nil
 
 }
@@ -264,18 +253,18 @@ func channelInfo(channel tv.Channel) ChannelInfo {
 
 	return ChannelInfo{
 
-		ID: channel.ID,
+		ID:      channel.ID,
 		DaddyID: channel.DaddyID,
 
 		Name: channel.Name,
 		Slug: channel.Slug,
 		Logo: channel.Logo,
 
-		Country: channel.Country.Code,
+		Country:  channel.Country.Code,
 		Category: channel.Category,
 
-		Status: channel.Status,
-
+		Status:   channel.Status,
+		Enriched: channel.Enriched,
 	}
 
 }
@@ -289,8 +278,7 @@ func wrapChannel(deps Deps, channel tv.Channel) *Channel {
 		deps: deps,
 
 		daddyID: channel.DaddyID,
-		info: &ch,
-
+		info:    &ch,
 	}
 
 }
