@@ -223,6 +223,7 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
   private hlsRecoveryAttempts = 0;
 
   private static readonly MAX_HLS_RECOVERIES = 1;
+  private static readonly MAX_LIVE_HLS_RECOVERIES = 8;
   private static readonly SOURCE_READY_TIMEOUT_MS = 8_000;
   private static readonly HOLD_PAUSE_DELAY_MS = 220;
   private static readonly UP_NEXT_VISIBLE_LEAD_MS = 150_000;
@@ -972,17 +973,21 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
       }
 
       const proxied = isProxiedStream(src);
+      const live = !!this.props.live;
+      const maxRecoveries = live ? VideoPlayer.MAX_LIVE_HLS_RECOVERIES : VideoPlayer.MAX_HLS_RECOVERIES;
 
+      // Live TV here is regular ~10s HLS (not LL-HLS); match ntv's buffer profile.
       this.hls = new HlsConstructor({
 
         enableWorker: true,
 
-        lowLatencyMode: !!lowLatency,
+        lowLatencyMode: !!lowLatency && !live,
 
-        maxBufferLength: lowLatency ? 12 : 45,
-        maxMaxBufferLength: lowLatency ? 24 : 90,
+        maxBufferLength: live ? 30 : lowLatency ? 12 : 45,
+        maxMaxBufferLength: live ? 60 : lowLatency ? 24 : 90,
 
-        backBufferLength: 30,
+        backBufferLength: live ? 0 : 30,
+        liveSyncDurationCount: live ? 3 : undefined,
 
         xhrSetup: proxied ? (xhr) => { xhr.withCredentials = true; } : undefined,
 
@@ -1039,7 +1044,7 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
 
         if (data.type === HlsConstructor.ErrorTypes.NETWORK_ERROR) {
 
-          if (++this.hlsRecoveryAttempts > VideoPlayer.MAX_HLS_RECOVERIES) {
+          if (++this.hlsRecoveryAttempts > maxRecoveries) {
 
             this.onVideoError();
             return;
@@ -1053,10 +1058,10 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
 
         if (data.type === HlsConstructor.ErrorTypes.MEDIA_ERROR) {
 
-          if (++this.hlsRecoveryAttempts > VideoPlayer.MAX_HLS_RECOVERIES) {
+          if (++this.hlsRecoveryAttempts > maxRecoveries) {
 
             this.onVideoError();
-            return
+            return;
 
           }
 

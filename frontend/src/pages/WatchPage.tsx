@@ -1035,7 +1035,7 @@ export class WatchPage extends Component<WatchPageProps, WatchPageState> {
           isHls={isHls}
 
           live={this.state.kind === "live"}
-          lowLatency={this.state.kind === "live"}
+          lowLatency={false}
 
           title={title || subtitle}
           subtitle={title ? subtitle : undefined}
