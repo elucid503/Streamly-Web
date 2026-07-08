@@ -520,6 +520,7 @@ interface ExpandableFriendCardProps {
   summary: FriendSummary;
   onRemove: (userId: string) => void;
   removeLoading: boolean;
+  initialProfile?: PublicProfile | null;
 
 }
 
@@ -628,8 +629,8 @@ class ExpandableFriendCard extends Component<ExpandableFriendCardProps, Expandab
 
     profileOpen: false,
 
-    profile: null,
-    profileLoading: false,
+    profile: this.props.initialProfile ?? null,
+    profileLoading: this.props.initialProfile == null,
 
     menuPos: null,
 
@@ -637,7 +638,21 @@ class ExpandableFriendCard extends Component<ExpandableFriendCardProps, Expandab
 
   componentDidMount() {
 
-    void this.loadProfile();
+    if (this.props.initialProfile == null) {
+
+      void this.loadProfile();
+
+    }
+
+  }
+
+  componentDidUpdate(prevProps: ExpandableFriendCardProps) {
+
+    if (prevProps.initialProfile !== this.props.initialProfile && this.props.initialProfile) {
+
+      this.setState({ profile: this.props.initialProfile, profileLoading: false });
+
+    }
 
   }
 
@@ -1884,6 +1899,7 @@ interface FriendsPageState {
 
   friends: FriendSummary[];
   friendsLoading: boolean;
+  friendProfiles: Record<string, PublicProfile>;
 
   requests: FriendRequestItem[];
   requestsLoading: boolean;
@@ -1918,6 +1934,7 @@ export class FriendsPage extends Component<FriendsPageProps, FriendsPageState> {
 
     friends: [],
     friendsLoading: true,
+    friendProfiles: {},
 
     requests: [],
     requestsLoading: true,
@@ -2050,9 +2067,44 @@ export class FriendsPage extends Component<FriendsPageProps, FriendsPageState> {
 
     try {
 
-      const friends = await api.listFriends();
+      const friends = await api.listFriends() ?? [];
 
-      this.setState({ friends: friends ?? [] });
+      const profiles = await Promise.all(
+
+        friends.map((f) => api.getPublicProfile(f.userId).catch(() => null))
+
+      );
+
+      const friendProfiles: Record<string, PublicProfile> = {};
+      const ranked = friends.map((friend, i) => {
+
+        const profile = profiles[i];
+
+        if (profile) friendProfiles[friend.userId] = profile;
+
+        const recent = profile?.recentHistory?.[0]?.updatedAt ?? "";
+        const hasHistory = (profile?.recentHistory?.length ?? 0) > 0;
+
+        return { friend, hasHistory, recent };
+
+      });
+
+      ranked.sort((a, b) => {
+
+        if (a.hasHistory !== b.hasHistory) return a.hasHistory ? -1 : 1;
+
+        if (a.hasHistory && b.hasHistory) return b.recent.localeCompare(a.recent);
+
+        return 0;
+
+      });
+
+      this.setState({
+
+        friends: ranked.map((r) => r.friend),
+        friendProfiles,
+
+      });
 
     } catch {
 
@@ -2316,7 +2368,7 @@ export class FriendsPage extends Component<FriendsPageProps, FriendsPageState> {
 
   renderFriendsTab() {
 
-    const { friends, friendsLoading } = this.state;
+    const { friends, friendsLoading, friendProfiles } = this.state;
 
     if (friendsLoading) {
 
@@ -2353,6 +2405,7 @@ export class FriendsPage extends Component<FriendsPageProps, FriendsPageState> {
 
             key={f.userId}
             summary={f}
+            initialProfile={friendProfiles[f.userId] ?? null}
 
             onRemove={this.handleRemoveFriend}
             removeLoading={this.state.actionLoadingId === f.userId}

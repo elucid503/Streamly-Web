@@ -103,7 +103,7 @@ export class Header extends Component<HeaderProps, HeaderState> {
 
           </div>
 
-          <div className="pointer-events-none absolute inset-x-0 flex justify-start pl-4 pr-12 sm:justify-center sm:px-20 lg:px-32">
+          <div className="pointer-events-none absolute inset-x-0 flex justify-center sm:px-20 lg:px-32">
 
             <div className="pointer-events-auto flex items-center gap-2">
 
@@ -143,41 +143,37 @@ export class Header extends Component<HeaderProps, HeaderState> {
 
           </div>
 
-          <div className="flex shrink-0 items-center justify-end gap-1">
+          <div className="hidden shrink-0 items-center justify-end gap-1 sm:flex">
 
-            <Button variant="ghost" size="sm" onClick={this.openMenu} title="Menu" className="sm:hidden hover:bg-transparent">
+            {user?.isAdmin && (
 
-              <Menu size={15} />
+              <Button variant="ghost" size="sm" onClick={onOpenAdmin} title="Admin">
+
+                <Shield size={15} />
+
+              </Button>
+
+            )}
+
+            <Button variant="ghost" size="sm" onClick={onOpenSettings} title="Settings">
+
+              <Settings size={15} />
 
             </Button>
 
-            <div className="hidden sm:flex sm:items-center sm:gap-1">
+            <Button variant="ghost" size="sm" onClick={onLogout} title="Sign out">
 
-              {user?.isAdmin && (
+              <LogOut size={15} />
 
-                <Button variant="ghost" size="sm" onClick={onOpenAdmin} title="Admin">
-
-                  <Shield size={15} />
-
-                </Button>
-
-              )}
-
-              <Button variant="ghost" size="sm" onClick={onOpenSettings} title="Settings">
-
-                <Settings size={15} />
-
-              </Button>
-
-              <Button variant="ghost" size="sm" onClick={onLogout} title="Sign out">
-
-                <LogOut size={15} />
-
-              </Button>
-
-            </div>
+            </Button>
 
           </div>
+
+          <Button variant="ghost" size="sm" onClick={this.openMenu} title="Menu" className="absolute aspect-square p-2 right-3 z-10 translate-y-16 sm:hidden bg-surface-raised border border-border-subtle rounded-md">
+
+            <Menu size={16} />
+
+          </Button>
 
         </div>
 
