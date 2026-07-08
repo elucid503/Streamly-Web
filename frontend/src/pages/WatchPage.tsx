@@ -727,30 +727,28 @@ export class WatchPage extends Component<WatchPageProps, WatchPageState> {
 
   };
 
-  loadLive = async (daddyId: string, gen: number) => {
+  loadLive = async (channelId: string, gen: number) => {
 
-    const stream = await api.liveStream(daddyId);
+    const stream = await api.liveStream(channelId);
 
     if (gen !== this.loadGen) return;
 
-    const playbackUrl = streamPlaybackUrl(stream);
-
-    if (!playbackUrl) {
+    if (!stream.streamUrl?.trim()) {
 
       throw new Error("no stream available for this channel");
 
     }
 
-    const channelTitle = stream.channel.name?.trim() || stream.channel.slug?.trim() || `Channel ${daddyId}`;
+    const channelTitle = stream.channel?.name?.trim() || `Channel ${channelId}`;
 
     this.setState({
 
-      streamUrl: playbackUrl,
+      streamUrl: stream.streamUrl,
 
       isHls: true,
 
       title: channelTitle,
-      subtitle: stream.channel.category,
+      subtitle: stream.channel?.category ?? "",
 
       intro: null,
       nextEpisode: null,
@@ -763,9 +761,9 @@ export class WatchPage extends Component<WatchPageProps, WatchPageState> {
       kind: "live",
 
       mediaId: 0,
-      channelId: daddyId,
+      channelId: channelId,
 
-      poster: stream.channel.logo,
+      poster: stream.channel?.logo,
 
     });
 
@@ -942,14 +940,6 @@ export class WatchPage extends Component<WatchPageProps, WatchPageState> {
   };
 
   handleBack = () => {
-
-    if (window.history.length > 1) {
-
-      history.back();
-
-      return;
-
-    }
 
     const { kind, mediaId } = this.state;
 

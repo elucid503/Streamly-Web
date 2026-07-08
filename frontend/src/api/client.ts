@@ -1,4 +1,4 @@
-import type { AccessCode, Category, ChannelGuideEntry, Episode, FavoriteItem, FriendRequestItem, FriendSummary, IntroInfo, LiveChannel, NextEpisode, ProfileMedia, PublicProfile, SearchHit, Season, ServiceInterruption, SportsEvent, StreamQuality, SubtitleTrack, TitleDetails, User, UserProfile, UserSettings, WatchHistoryItem, } from "@/lib/types";
+import type { AccessCode, Category, ChannelGuideEntry, Episode, FavoriteItem, FriendRequestItem, FriendSummary, IntroInfo, LiveChannel, NextEpisode, ProfileMedia, PublicProfile, SearchHit, Season, ServiceInterruption, SportsMatch, StreamQuality, SubtitleTrack, TitleDetails, User, UserProfile, UserSettings, WatchHistoryItem, } from "@/lib/types";
 
 export class ApiError extends Error {
 
@@ -378,13 +378,13 @@ export const api = {
 
   liveSports() {
 
-    return request<SportsEvent[]>("/api/live/sports");
+    return request<SportsMatch[]>("/api/live/sports");
 
   },
 
-  liveStream(daddyId: string) {
+  liveStream(channelId: string) {
 
-    return request<{ url?: string; proxyUrl: string; isHls: boolean; channel: LiveChannel }>(`/api/live/channels/${daddyId}/stream`);
+    return request<{ streamUrl: string; isHls: boolean; channel: LiveChannel }>(`/api/live/channels/${channelId}/stream`);
 
   },
 

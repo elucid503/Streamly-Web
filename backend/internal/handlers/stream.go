@@ -316,20 +316,15 @@ func (h *StreamHandler) NextEpisode(c *gin.Context) {
 
 }
 
+// LiveStream resolves a channel to its direct HLS playlist URL. ntv.cx's
+// cdnlivetv.tv playlists send Access-Control-Allow-Origin: * and don't
+// enforce a Referer check, so the frontend plays them directly with hls.js —
+// no proxy session needed here.
 func (h *StreamHandler) LiveStream(c *gin.Context) {
 
-	daddyID := c.Param("id")
+	id := c.Param("id")
 
-	stream, err := h.media.ResolveLiveStream(daddyID)
-
-	if err != nil {
-
-		handleServiceError(c, err)
-		return
-
-	}
-
-	session, err := h.proxy.CreateSession(c.Request.Context(), stream.URL, stream.Referer, true)
+	streamURL, err := h.media.ResolveLiveStream(id)
 
 	if err != nil {
 
@@ -338,25 +333,11 @@ func (h *StreamHandler) LiveStream(c *gin.Context) {
 
 	}
 
-	channel := stream.Channel
-
-	if cached, ok := h.media.LiveChannel(daddyID); ok {
-
-		c.JSON(http.StatusOK, gin.H{
-
-			"proxyUrl": baseURL(c) + session.ProxyPath,
-			"isHls": true,
-			"channel": cached,
-
-		})
-
-		return
-
-	}
+	channel, _ := h.media.LiveChannel(id)
 
 	c.JSON(http.StatusOK, gin.H{
 
-		"proxyUrl": baseURL(c) + session.ProxyPath,
+		"streamUrl": streamURL,
 		"isHls": true,
 		"channel": channel,
 

@@ -2,6 +2,7 @@ package catalog
 
 import (
 	"hash/fnv"
+	"sort"
 	"strings"
 
 	mediakit "mediakit"
@@ -261,7 +262,7 @@ func (c *Cache) loadCategories(kind mediakit.MediaKind) ([]CategoryDTO, error) {
 
 func (c *Cache) loadLiveChannels() ([]LiveChannelDTO, error) {
 
-	catalog, err := c.client.LiveTV()
+	catalog, err := c.client.Channels()
 
 	if err != nil {
 
@@ -269,15 +270,13 @@ func (c *Cache) loadLiveChannels() ([]LiveChannelDTO, error) {
 
 	}
 
-	channels := catalog.Channels()
+	sorted := catalog.Sorted()
 
-	out := make([]LiveChannelDTO, len(channels))
+	out := make([]LiveChannelDTO, len(sorted))
 
-	for i, ch := range channels {
+	for i, ch := range sorted {
 
-		info, _ := ch.Info()
-
-		out[i] = liveChannelFromInfo(info)
+		out[i] = liveChannelFromChannel(ch)
 
 	}
 
@@ -285,21 +284,211 @@ func (c *Cache) loadLiveChannels() ([]LiveChannelDTO, error) {
 
 }
 
-func liveChannelFromInfo(info mediakit.LiveChannelInfo) LiveChannelDTO {
+func liveChannelFromChannel(ch mediakit.Channel) LiveChannelDTO {
 
 	return LiveChannelDTO{
 
-		ID:      info.ID,
-		DaddyID: info.DaddyID,
+		ID:   ch.ID,
+		Name: ch.Name,
+		Slug: ch.Slug,
+		Code: ch.Code,
+		Logo: ch.Logo,
 
-		Name: info.Name,
-		Slug: info.Slug,
-		Logo: info.Logo,
-
-		Country:  info.Country,
-		Category: info.Category,
-		Enriched: info.Enriched,
+		Country:  ch.Country.Code,
+		Category: ch.Category,
+		Enriched: ch.Enriched,
 	}
+
+}
+
+func (c *Cache) loadSportsMatches() ([]SportsMatchDTO, error) {
+
+	matches, err := c.client.Matches()
+
+	if err != nil {
+
+		return nil, err
+
+	}
+
+	out := make([]SportsMatchDTO, 0, len(matches))
+
+	for _, m := range matches {
+
+		out = append(out, sportsMatchFromMatch(m))
+
+	}
+
+	return out, nil
+
+}
+
+func sportsMatchFromMatch(m mediakit.Match) SportsMatchDTO {
+
+	dto := SportsMatchDTO{
+
+		ID:       m.ID,
+		Title:    m.Title,
+		Category: m.Category,
+
+		StartsAt: m.StartTime.Unix(),
+		Live:     m.Live,
+	}
+
+	if m.HomeTeam != nil {
+
+		dto.HomeTeam = m.HomeTeam.Name
+
+	}
+
+	if m.AwayTeam != nil {
+
+		dto.AwayTeam = m.AwayTeam.Name
+
+	}
+
+	if m.Channel != nil {
+
+		dto.Channel = &MatchedChannelDTO{
+
+			ID:   m.Channel.ChannelID,
+			Name: m.Channel.Name,
+			Logo: m.Channel.Logo,
+		}
+
+	}
+
+	return dto
+
+}
+
+// popularChannelNames is a curated ranking of well-known channels, checked
+// case-insensitively against the (possibly enrichment-renamed) channel name.
+// Channels not in this list keep their existing relative order after it.
+var popularChannelNames = []string{
+
+	"ESPN", "ESPN2", "ESPNU", "ESPN News",
+	"ABC", "CBS", "NBC", "FOX", "The CW",
+	"CNN", "Fox News", "MSNBC", "CNBC",
+	"HBO", "Showtime", "Starz",
+	"TNT", "TBS", "USA Network", "FX", "FXX", "AMC", "Syfy",
+	"Discovery Channel", "History", "National Geographic", "TLC", "A&E", "Lifetime",
+	"Comedy Central", "MTV", "VH1", "BET",
+	"Disney Channel", "Nickelodeon", "Cartoon Network",
+	"Fox Sports 1", "Fox Sports 2", "NBA TV", "NFL Network", "MLB Network", "NHL Network", "Golf Channel",
+	"Bravo", "E!", "Food Network", "HGTV", "Travel Channel", "Weather Channel",
+}
+
+func rankPopularChannels(channels []LiveChannelDTO) []LiveChannelDTO {
+
+	rank := make(map[string]int, len(popularChannelNames))
+
+	for i, name := range popularChannelNames {
+
+		rank[strings.ToLower(name)] = i
+
+	}
+
+	ranked := dedupeChannelsByName(channels)
+
+	sort.SliceStable(ranked, func(i, j int) bool {
+
+		// Channels without a real icon never outrank ones that have one,
+		// regardless of name. Enriched (not just Logo != "") is the signal
+		// that matters here — unenriched channels still carry ntv.cx's own
+		// raw channel_image URL, which is consistently unauthorized/broken,
+		// so Logo alone can't tell a working icon from a dead one.
+		hi, hj := ranked[i].Enriched, ranked[j].Enriched
+
+		if hi != hj {
+
+			return hi
+
+		}
+
+		ri, oki := rank[strings.ToLower(ranked[i].Name)]
+		rj, okj := rank[strings.ToLower(ranked[j].Name)]
+
+		if oki && okj {
+
+			return ri < rj
+
+		}
+
+		return oki && !okj
+
+	})
+
+	return ranked
+
+}
+
+// dedupeChannelsByName collapses channels that share a name (e.g. multiple
+// regional "ESPN" entries) down to one, preferring the enriched/logo-bearing
+// variant, and keeps the first-seen position for ordering.
+func dedupeChannelsByName(channels []LiveChannelDTO) []LiveChannelDTO {
+
+	bestByName := make(map[string]LiveChannelDTO, len(channels))
+	order := make([]string, 0, len(channels))
+
+	for _, ch := range channels {
+
+		key := strings.ToLower(strings.TrimSpace(ch.Name))
+
+		if key == "" {
+
+			continue
+
+		}
+
+		existing, ok := bestByName[key]
+
+		if !ok {
+
+			bestByName[key] = ch
+			order = append(order, key)
+
+			continue
+
+		}
+
+		if channelIconPriority(ch) > channelIconPriority(existing) {
+
+			bestByName[key] = ch
+
+		}
+
+	}
+
+	out := make([]LiveChannelDTO, 0, len(order))
+
+	for _, key := range order {
+
+		out = append(out, bestByName[key])
+
+	}
+
+	return out
+
+}
+
+func channelIconPriority(ch LiveChannelDTO) int {
+
+	score := 0
+
+	if ch.Enriched {
+
+		score += 2
+
+	}
+
+	if ch.Logo != "" {
+
+		score++
+
+	}
+
+	return score
 
 }
 

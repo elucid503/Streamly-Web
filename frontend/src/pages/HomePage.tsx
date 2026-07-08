@@ -3,6 +3,7 @@ import { api } from "@/api/client";
 import { LiveView } from "@/components/catalog/LiveView";
 import { MoviesView } from "@/components/catalog/MoviesView";
 import { ShowsView } from "@/components/catalog/ShowsView";
+import { SportsPage } from "@/components/catalog/SportsPage";
 import { ContentRow } from "@/components/catalog/ContentRow";
 import { TitleCard } from "@/components/catalog/TitleCard";
 import { Header } from "@/components/layout/Header";
@@ -55,7 +56,11 @@ interface HomePageState {
 
   contextLoading: ContextActionId | null;
 
-  sportsLeague: string;
+  liveCategory: string;
+  liveCategoryOptions: { value: string; label: string }[];
+
+  sportsCategory: string;
+  sportsCategoryOptions: { value: string; label: string }[];
 
 }
 
@@ -92,7 +97,11 @@ export class HomePage extends Component<HomePageProps, HomePageState> {
 
     contextLoading: null,
 
-    sportsLeague: "all",
+    liveCategory: "all",
+    liveCategoryOptions: [],
+
+    sportsCategory: "all",
+    sportsCategoryOptions: [],
 
   };
 
@@ -220,7 +229,7 @@ export class HomePage extends Component<HomePageProps, HomePageState> {
 
   favoriteKey = (item: FavoriteItem | SearchHit | LiveChannel) => {
 
-    if ("daddyId" in item) return `live:${item.daddyId}`;
+    if ("code" in item) return `live:${item.id}`;
 
     if (item.kind === "live") return `live:${item.channelId ?? item.id}`;
 
@@ -255,17 +264,16 @@ export class HomePage extends Component<HomePageProps, HomePageState> {
 
     }
 
-    if ("daddyId" in item) {
+    if ("code" in item) {
 
       const optimistic: FavoriteItem = {
 
-        id: `pending-live-${item.daddyId}`,
+        id: `pending-live-${item.id}`,
         kind: "live",
         mediaId: 0,
-        channelId: item.daddyId,
+        channelId: item.id,
         title: item.name,
         poster: item.logo,
-        category: item.category,
         createdAt: new Date().toISOString(),
 
       };
@@ -410,7 +418,7 @@ export class HomePage extends Component<HomePageProps, HomePageState> {
 
   handleLiveSelect = (channel: LiveChannel) => {
 
-    this.props.navigate(`/live/${channel.daddyId}`);
+    this.props.navigate(`/live/${channel.id}`);
 
   };
 
@@ -489,7 +497,7 @@ export class HomePage extends Component<HomePageProps, HomePageState> {
       const channels = await api.livePopular(24);
       const pick = this.pickRandom(channels ?? []);
 
-      if (pick) this.props.navigate(`/live/${pick.daddyId}`);
+      if (pick) this.props.navigate(`/live/${pick.id}`);
 
     } catch {
 
@@ -720,9 +728,9 @@ export class HomePage extends Component<HomePageProps, HomePageState> {
 
   render() {
 
-    const { view, searchQuery, searchKind, searchYear, searchRating, searchProgress, history, favorites, settingsOpen, adminOpen, interruption, interruptionOpen, contextLoading, sportsLeague } = this.state;
+    const { view, searchQuery, searchKind, searchYear, searchRating, searchProgress, history, favorites, settingsOpen, adminOpen, interruption, interruptionOpen, contextLoading, liveCategory, liveCategoryOptions, sportsCategory, sportsCategoryOptions } = this.state;
 
-    const showSearch = searchQuery.trim().length > 0 && view !== "live" && view !== "friends";
+    const showSearch = searchQuery.trim().length > 0 && view !== "live" && view !== "sports" && view !== "friends";
 
     const header = (
 
@@ -857,7 +865,22 @@ export class HomePage extends Component<HomePageProps, HomePageState> {
                   searchQuery={searchQuery}
                   favorites={favorites}
 
-                  sportsLeague={sportsLeague}
+                  category={liveCategory}
+                  onCategoriesChange={(opts) => this.setState({ liveCategoryOptions: opts })}
+
+                />
+
+              ),
+
+              sports: (
+
+                <SportsPage
+
+                  onSelectChannel={this.handleLiveSelect}
+
+                  searchQuery={searchQuery}
+                  category={sportsCategory}
+                  onCategoriesChange={(opts) => this.setState({ sportsCategoryOptions: opts })}
 
                 />
 
@@ -895,8 +918,14 @@ export class HomePage extends Component<HomePageProps, HomePageState> {
           contextLoading={contextLoading}
           onContextAction={this.handleContextAction}
 
-          sportsLeague={sportsLeague}
-          onSportsLeagueChange={(v) => this.setState({ sportsLeague: v })}
+          category={view === "live" ? liveCategory : view === "sports" ? sportsCategory : undefined}
+          categoryOptions={view === "live" ? liveCategoryOptions : view === "sports" ? sportsCategoryOptions : undefined}
+          onCategoryChange={(v) => {
+
+            if (view === "live") this.setState({ liveCategory: v });
+            if (view === "sports") this.setState({ sportsCategory: v });
+
+          }}
 
         />
 

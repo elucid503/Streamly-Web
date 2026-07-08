@@ -52,6 +52,9 @@ type channelMetadata struct {
 	Logo       string
 }
 
+// runCatalogEnrichmentLoop periodically cross-references the channel catalog
+// against the public iptv-org dataset to backfill logos, country, and
+// category — ntv.cx's own channel data doesn't reliably provide these.
 func (c *Client) runCatalogEnrichmentLoop() {
 
 	c.refreshCatalogEnrichment()
@@ -134,8 +137,8 @@ func (c *Client) enrichCurrentCatalog() int {
 
 	}
 
-	c.catalogMu.Lock()
-	defer c.catalogMu.Unlock()
+	c.mu.Lock()
+	defer c.mu.Unlock()
 
 	if c.catalog == nil {
 
@@ -147,7 +150,6 @@ func (c *Client) enrichCurrentCatalog() int {
 	count := enrichChannelCatalog(next, index)
 
 	c.catalog = next
-	c.catalogAt = time.Now()
 
 	return count
 

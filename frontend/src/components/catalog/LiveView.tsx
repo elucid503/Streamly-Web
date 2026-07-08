@@ -2,15 +2,14 @@ import { api } from "@/api/client";
 
 import { ContentRow } from "@/components/catalog/ContentRow";
 import { LiveLogo } from "@/components/catalog/LiveLogo";
-import { SportsSection } from "@/components/catalog/SportsSection";
 import { TVGuide } from "@/components/catalog/TVGuide";
 
 import { cn } from "@/lib/utils";
-import type { FavoriteItem, LiveChannel, SportsEvent } from "@/lib/types";
+import type { FavoriteItem, LiveChannel } from "@/lib/types";
 
 import { Component } from "react";
 import { motion } from "framer-motion";
-import { Radio, Star } from "lucide-react";
+import { Star } from "lucide-react";
 
 interface LiveViewProps {
 
@@ -20,7 +19,8 @@ interface LiveViewProps {
   searchQuery: string;
   favorites: FavoriteItem[];
 
-  sportsLeague?: string;
+  category?: string;
+  onCategoriesChange?: (options: { value: string; label: string }[]) => void;
 
 }
 
@@ -29,7 +29,6 @@ interface LiveViewState {
   popular: LiveChannel[];
   all: LiveChannel[];
   searchResults: LiveChannel[];
-  sports: SportsEvent[];
 
   loading: boolean;
 
@@ -42,7 +41,6 @@ export class LiveView extends Component<LiveViewProps, LiveViewState> {
     popular: [],
     all: [],
     searchResults: [],
-    sports: [],
 
     loading: true,
 
@@ -68,13 +66,37 @@ export class LiveView extends Component<LiveViewProps, LiveViewState> {
 
     try {
 
-      const [popular, all, sports] = await Promise.all([
+      const [popular, all] = await Promise.all([
         api.livePopular(16),
         api.liveChannels(),
-        api.liveSports(),
       ]);
 
-      this.setState({ popular, all, sports: sports ?? [], loading: false });
+      this.setState({ popular, all, loading: false });
+
+      const counts = new Map<string, number>();
+
+      for (const ch of all) {
+
+        if (!ch.category) continue;
+
+        counts.set(ch.category, (counts.get(ch.category) ?? 0) + 1);
+
+      }
+
+      const categories = Array.from(counts.entries())
+
+        .filter(([, count]) => count >= 4)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 10)
+        .map(([name]) => name)
+        .sort();
+
+      this.props.onCategoriesChange?.([
+
+        { value: "all", label: "All" },
+        ...categories.map((c) => ({ value: c, label: c })),
+
+      ]);
 
     } catch {
 
@@ -108,22 +130,21 @@ export class LiveView extends Component<LiveViewProps, LiveViewState> {
 
   };
 
-  isFavorite = (daddyId: string) => {
+  isFavorite = (id: string) => {
 
-    return this.props.favorites.some((item) => item.kind === "live" && item.channelId === daddyId);
+    return this.props.favorites.some((item) => item.kind === "live" && item.channelId === id);
 
   };
 
   favoriteAsChannel = (item: FavoriteItem): LiveChannel => ({
 
     id: item.channelId ?? item.id,
-    daddyId: item.channelId ?? item.id,
     name: item.title,
     slug: "",
+    code: "",
     logo: item.poster,
     country: "",
     category: item.category ?? "",
-    enriched: Boolean(item.poster),
 
   });
 
@@ -131,13 +152,13 @@ export class LiveView extends Component<LiveViewProps, LiveViewState> {
 
     const { onSelect, onFavoriteToggle } = this.props;
 
-    const favorite = this.isFavorite(channel.daddyId);
+    const favorite = this.isFavorite(channel.id);
 
     return (
 
       <motion.div className="group relative flex w-[140px] flex-shrink-0 flex-col items-center gap-2 sm:w-[160px]"
 
-        key={channel.daddyId}
+        key={channel.id}
         whileHover={{ y: -2 }}
 
       >
@@ -151,7 +172,6 @@ export class LiveView extends Component<LiveViewProps, LiveViewState> {
             imgClassName="object-contain p-3"
 
             rounded="rounded-full"
-            fallback={<Radio size={24} className="text-foreground-faint" />}
 
           />
 
@@ -194,11 +214,11 @@ export class LiveView extends Component<LiveViewProps, LiveViewState> {
 
   renderGridChannel = (channel: LiveChannel) => {
 
-    const favorite = this.isFavorite(channel.daddyId);
+    const favorite = this.isFavorite(channel.id);
 
     return (
 
-      <div key={channel.daddyId} className="relative">
+      <div key={channel.id} className="relative">
 
         <button onClick={() => this.props.onSelect(channel)}
           className={cn(
@@ -212,8 +232,6 @@ export class LiveView extends Component<LiveViewProps, LiveViewState> {
             imgClassName="object-contain p-1.5"
             rounded="rounded-full"
 
-            fallback={<Radio size={14} className="text-foreground-faint" />}
-
           />
 
           <div className="min-w-0">
@@ -221,7 +239,7 @@ export class LiveView extends Component<LiveViewProps, LiveViewState> {
             <p className="truncate text-xs font-medium">{channel.name}</p>
 
             <p className="truncate text-[10px] text-foreground-faint">
-              {channel.country}
+              {channel.country || channel.code.toUpperCase()}
             </p>
 
           </div>
@@ -253,22 +271,16 @@ export class LiveView extends Component<LiveViewProps, LiveViewState> {
 
   render() {
 
-    const { searchQuery, favorites, sportsLeague } = this.props;
+    const { searchQuery, favorites, category } = this.props;
 
-    const { popular, all, searchResults, sports, loading } = this.state;
+    const { popular, all, searchResults, loading } = this.state;
+
+    const byCategory = (channel: LiveChannel) => !category || category === "all" || channel.category === category;
 
     const favoriteChannels = favorites.filter((item) => item.kind === "live");
-    const showing = searchQuery.trim() ? searchResults : null;
-
-    const sportsMatches = showing
-      ? sports.filter((e) => {
-
-          const q = searchQuery.toLowerCase();
-
-          return e.title.toLowerCase().includes(q) || e.league.toLowerCase().includes(q);
-
-        })
-      : [];
+    const showing = searchQuery.trim() ? searchResults.filter(byCategory) : null;
+    const filteredPopular = popular.filter(byCategory);
+    const filteredAll = all.filter(byCategory);
 
     return (
 
@@ -288,13 +300,7 @@ export class LiveView extends Component<LiveViewProps, LiveViewState> {
 
             )}
 
-            {sportsMatches.length > 0 && (
-
-              <SportsSection events={sportsMatches} onSelect={this.props.onSelect} title="Sports" />
-
-            )}
-
-            {!loading && showing.length === 0 && sportsMatches.length === 0 && (
+            {!loading && showing.length === 0 && (
 
               <div className="px-4 py-16 text-center text-sm text-foreground-muted sm:px-8">
 
@@ -322,16 +328,9 @@ export class LiveView extends Component<LiveViewProps, LiveViewState> {
 
             <TVGuide onSelect={this.props.onSelect} />
 
-            <SportsSection
-              events={sports}
-              onSelect={this.props.onSelect}
-              loading={loading}
-              leagueFilter={sportsLeague}
-            />
-
             <ContentRow title="Popular Channels" sectionId="live-popular" loading={loading}>
 
-              {popular.map((ch) => this.renderChannel(ch))}
+              {filteredPopular.map((ch) => this.renderChannel(ch))}
 
             </ContentRow>
 
@@ -345,7 +344,7 @@ export class LiveView extends Component<LiveViewProps, LiveViewState> {
 
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
 
-                {all.map((channel) => this.renderGridChannel(channel))}
+                {filteredAll.map((channel) => this.renderGridChannel(channel))}
 
               </div>
 

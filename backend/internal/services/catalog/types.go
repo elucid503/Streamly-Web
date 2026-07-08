@@ -24,11 +24,10 @@ type CategoryDTO struct {
 
 // LiveChannelDTO is a live TV channel entry.
 type LiveChannelDTO struct {
-	ID      string `json:"id"`
-	DaddyID string `json:"daddyId"`
-
+	ID   string `json:"id"`
 	Name string `json:"name"`
 	Slug string `json:"slug"`
+	Code string `json:"code"`
 	Logo string `json:"logo"`
 
 	Country  string `json:"country"`
@@ -36,22 +35,26 @@ type LiveChannelDTO struct {
 	Enriched bool   `json:"enriched"`
 }
 
-// SportsChannelDTO is a broadcast channel for a sports event.
-type SportsChannelDTO struct {
-	DaddyID string `json:"daddyId"`
+// MatchedChannelDTO is the 24/7 channel a sports match's broadcast was matched to.
+type MatchedChannelDTO struct {
+	ID   string `json:"id"`
 	Name string `json:"name"`
 	Logo string `json:"logo"`
-	Enriched bool `json:"enriched"`
 }
 
-// SportsEventDTO is a live or upcoming sports fixture.
-type SportsEventDTO struct {
-	Title string `json:"title"`
-	League string `json:"league"`
-	Time string `json:"time"`
+// SportsMatchDTO is a live or upcoming sports fixture.
+type SportsMatchDTO struct {
+	ID       string `json:"id"`
+	Title    string `json:"title"`
+	Category string `json:"category"`
+
+	HomeTeam string `json:"homeTeam,omitempty"`
+	AwayTeam string `json:"awayTeam,omitempty"`
+
 	StartsAt int64 `json:"startsAt"`
-	Live bool `json:"live"`
-	Channels []SportsChannelDTO `json:"channels"`
+	Live     bool  `json:"live"`
+
+	Channel *MatchedChannelDTO `json:"channel,omitempty"`
 }
 
 // Snapshot is an immutable point-in-time view of the catalog cache.
@@ -67,6 +70,8 @@ type Snapshot struct {
 
 	liveChannels []LiveChannelDTO
 	livePopular  []LiveChannelDTO
+
+	sportsMatches []SportsMatchDTO
 
 	searchIndex []SearchResultDTO
 	refreshedAt time.Time

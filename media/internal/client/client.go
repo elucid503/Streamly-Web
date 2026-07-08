@@ -10,11 +10,11 @@ import (
 	"mediakit/internal/febbox"
 	"mediakit/internal/imdb"
 	"mediakit/internal/introdb"
-	"mediakit/internal/live"
 	"mediakit/internal/meta"
 	"mediakit/internal/providers"
 	"mediakit/internal/quality"
 	"mediakit/internal/showbox"
+	"mediakit/internal/sports"
 	"mediakit/internal/tv"
 	"mediakit/internal/vod"
 
@@ -152,6 +152,7 @@ type Client struct {
 	showbox   *showbox.Client
 	febbox    febboxBrowser
 	tv        *tv.Client
+	sports    *sports.Client
 	imdb      *imdb.Client
 	intro introFetcher
 	resolver  *providers.Resolver
@@ -190,12 +191,14 @@ func New(opts ...Option) *Client {
 	}
 
 	febboxClient := febbox.New(febbox.Options{Cookie: cfg.febboxCookie})
+	tvClient := tv.New(tv.Options{BaseURL: cfg.tvBaseURL})
 
 	return &Client{
 
 		showbox:  showbox.New(showbox.Options{ChildMode: cfg.childMode}),
 		febbox:   febbox.NewCached(febboxClient),
-		tv:       tv.New(tv.Options{BaseURL: cfg.tvBaseURL}),
+		tv:       tvClient,
+		sports:   sports.New(cfg.tvBaseURL, tvClient),
 		imdb:  imdb.New(cfg.tmdbAPIKey),
 		intro: intro,
 		resolver: providers.New(cfg.tmdbAPIKey),
@@ -277,8 +280,15 @@ func (c *Client) ShowFromHit(hit meta.SearchHit) (*vod.Show, error) {
 
 }
 
-// LiveTV returns the live channel catalog for browsing and search.
-func (c *Client) LiveTV() (*live.Catalog, error) {
+// Channels returns the current 24/7 live TV channel catalog.
+func (c *Client) Channels() (*tv.ChannelCatalog, error) {
+
+	return c.tv.ListChannels()
+
+}
+
+// SearchChannels finds channels whose name contains query.
+func (c *Client) SearchChannels(query string, limit int) ([]tv.Channel, error) {
 
 	catalog, err := c.tv.ListChannels()
 
@@ -288,14 +298,38 @@ func (c *Client) LiveTV() (*live.Catalog, error) {
 
 	}
 
-	return live.NewCatalog(c, catalog), nil
+	return catalog.Search(query, limit), nil
 
 }
 
-// Channel returns a chainable handle for a live TV channel by daddyId.
-func (c *Client) Channel(daddyID string) *live.Channel {
+// ResolveChannel returns the direct HLS playlist URL for a channel id.
+func (c *Client) ResolveChannel(channelID string) (string, error) {
 
-	return live.NewChannel(c, daddyID)
+	catalog, err := c.tv.ListChannels()
+
+	if err != nil {
+
+		return "", err
+
+	}
+
+	channel, ok := catalog.FindByID(channelID)
+
+	if !ok {
+
+		return "", fmt.Errorf("tv: channel %q not found", channelID)
+
+	}
+
+	return c.tv.ResolveStream(channel.PlayerURL)
+
+}
+
+// Matches returns current and upcoming sports matches, matched to channels
+// where a broadcaster could be identified.
+func (c *Client) Matches() ([]sports.Match, error) {
+
+	return c.sports.Matches()
 
 }
 
@@ -626,33 +660,6 @@ func (c *Client) GetShowSeasonsByTMDB(tmdbID int) ([]vod.ShowSeasonInfo, error) 
 	}
 
 	return out, nil
-
-}
-
-// Sports returns current and upcoming sports events from the DLHD schedule.
-func (c *Client) Sports() ([]tv.SportsEvent, error) {
-
-	return c.tv.Sports()
-
-}
-
-// --- live.Deps implementation ---
-
-func (c *Client) ListChannels() (*tv.ChannelCatalog, error) {
-
-	return c.tv.ListChannels()
-
-}
-
-func (c *Client) ResolveStream(daddyID string) (tv.ResolvedStream, error) {
-
-	return c.tv.ResolveStream(daddyID)
-
-}
-
-func (c *Client) ResolveHLS(daddyID string) (string, error) {
-
-	return c.tv.ResolveHLS(daddyID)
 
 }
 

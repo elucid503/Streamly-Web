@@ -162,7 +162,7 @@ export class CachedImage extends Component<CachedImageProps, CachedImageState> {
 
       return (
 
-        <div className={cn("flex items-center justify-center bg-surface-overlay", rounded, className)} style={style} ref={(node) => { this.root = node; }}>
+        <div className={cn("flex items-center justify-center overflow-hidden bg-surface-overlay", rounded, className)} style={style} ref={(node) => { this.root = node; }}>
 
           {fallback}
 

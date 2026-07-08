@@ -7,9 +7,9 @@ import (
 	"mediakit/internal/client"
 	"mediakit/internal/discover"
 	"mediakit/internal/intro"
-	"mediakit/internal/live"
 	"mediakit/internal/meta"
 	"mediakit/internal/quality"
+	"mediakit/internal/sports"
 	"mediakit/internal/tv"
 	"mediakit/internal/vod"
 )
@@ -67,23 +67,20 @@ type IntroSegment = intro.Segment
 // IntroOption configures TheIntroDB lookups.
 type IntroOption = intro.Option
 
-// LiveCatalog wraps the live TV channel listing with search helpers.
-type LiveCatalog = live.Catalog
+// Channel is a single 24/7 live TV channel.
+type Channel = tv.Channel
 
-// LiveChannel is a chainable handle for a live TV channel.
-type LiveChannel = live.Channel
+// ChannelCatalog is the full set of 24/7 live TV channels.
+type ChannelCatalog = tv.ChannelCatalog
 
-// LiveChannelInfo describes a live TV channel from the catalog.
-type LiveChannelInfo = live.ChannelInfo
+// Match is a single sports fixture.
+type Match = sports.Match
 
-// LiveStream is a resolved live TV HLS playlist.
-type LiveStream = live.Stream
+// MatchTeam is one side of a sports match.
+type MatchTeam = sports.Team
 
-// SportsChannel is a TV channel broadcasting a sports event.
-type SportsChannel = tv.SportsChannel
-
-// SportsEvent is a live sports fixture from the DLHD schedule.
-type SportsEvent = tv.SportsEvent
+// MatchedChannel is the 24/7 channel a match's broadcast was matched to.
+type MatchedChannel = sports.MatchedChannel
 
 // TopCategory is a curated Showbox ranking list.
 type TopCategory = discover.TopCategory

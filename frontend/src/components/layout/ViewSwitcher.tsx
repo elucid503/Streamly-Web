@@ -1,5 +1,4 @@
 import { cn } from "@/lib/utils";
-import { store } from "@/lib/store";
 import type { MainView } from "@/lib/types";
 
 import { Component } from "react";
@@ -13,43 +12,20 @@ interface ViewSwitcherProps {
 
 }
 
-interface ViewSwitcherState {
-
-  count: number;
-
-}
-
 const views: { id: MainView; label: string }[] = [
 
   { id: "shows", label: "TV Shows" },
   { id: "movies", label: "Movies" },
   { id: "live", label: "Live TV" },
-  { id: "friends", label: "Friends" },
+  { id: "sports", label: "Sports" },
 
 ];
 
-export class ViewSwitcher extends Component<ViewSwitcherProps, ViewSwitcherState> {
-
-  private unsub = () => {};
-
-  state: ViewSwitcherState = { count: store.incomingRequestCount };
-
-  componentDidMount() {
-
-    this.unsub = store.subscribe(() => this.setState({ count: store.incomingRequestCount }));
-
-  }
-
-  componentWillUnmount() {
-
-    this.unsub();
-
-  }
+export class ViewSwitcher extends Component<ViewSwitcherProps> {
 
   render() {
 
     const { active, onChange } = this.props;
-    const { count } = this.state;
 
     return (
 
@@ -58,7 +34,6 @@ export class ViewSwitcher extends Component<ViewSwitcherProps, ViewSwitcherState
         {views.map((view) => {
 
           const isActive = active === view.id;
-          const badge = view.id === "friends" && count > 0 ? count : null;
 
           return (
 
@@ -86,21 +61,6 @@ export class ViewSwitcher extends Component<ViewSwitcherProps, ViewSwitcherState
               <span className="relative z-10 inline-flex items-center gap-1.5 whitespace-nowrap">
 
                 {view.label}
-
-                {badge !== null && (
-
-                  <span className={cn(
-
-                    "flex h-4 min-w-[1rem] items-center justify-center rounded-full px-1 text-[10px] font-semibold",
-                    isActive ? "bg-surface text-foreground" : "bg-foreground text-surface"
-
-                  )}>
-
-                    {badge}
-
-                  </span>
-
-                )}
 
               </span>
 

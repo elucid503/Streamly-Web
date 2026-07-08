@@ -116,6 +116,8 @@ export class ViewContextBar extends Component<ViewContextBarProps> {
 
     }
 
+    if (view === "sports") return [];
+
     const actions: ContextAction[] = [];
 
     if (lastWatched(history, "live")) {

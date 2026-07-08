@@ -1,9 +1,10 @@
 import { CachedImage } from "@/components/ui/CachedImage";
 
 import { getLogoBackdrop, type LogoBackdrop } from "@/lib/logoBackdrop";
+import { channelColor, channelInitial } from "@/lib/channelColor";
 import type { LiveChannel } from "@/lib/types";
 
-import { Component, type ReactNode } from "react";
+import { Component } from "react";
 
 interface LiveLogoProps {
 
@@ -12,7 +13,6 @@ interface LiveLogoProps {
   className?: string;
   imgClassName?: string;
   rounded?: string;
-  fallback?: ReactNode;
   lazy?: boolean;
 
 }
@@ -84,7 +84,7 @@ export class LiveLogo extends Component<LiveLogoProps, LiveLogoState> {
 
   render() {
 
-    const { channel, className, imgClassName, rounded, fallback, lazy = true } = this.props;
+    const { channel, className, imgClassName, rounded, lazy = true } = this.props;
 
     const useBackdrop = this.shouldUseBackdrop();
     const backgroundColor = useBackdrop ? this.state.backdrop?.backgroundColor ?? "#ffffff" : undefined;
@@ -98,7 +98,7 @@ export class LiveLogo extends Component<LiveLogoProps, LiveLogoState> {
         alt={channel.name}
         imgClassName={imgClassName}
         rounded={rounded}
-        fallback={fallback}
+        fallback={<ChannelInitialFallback name={channel.name} />}
         lazy={lazy}
         onVisible={this.handleVisible}
         style={backgroundColor ? { backgroundColor } : undefined}
@@ -123,5 +123,23 @@ export class LiveLogo extends Component<LiveLogoProps, LiveLogoState> {
     return Boolean(channel.enriched && channel.logo);
 
   };
+
+}
+
+function ChannelInitialFallback({ name }: { name: string }) {
+
+  return (
+
+    <span className="flex h-full w-full items-center justify-center text-sm font-semibold text-white"
+
+      style={{ backgroundColor: channelColor(name) }}
+
+    >
+
+      {channelInitial(name)}
+
+    </span>
+
+  );
 
 }

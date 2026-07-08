@@ -124,33 +124,38 @@ export interface NextEpisode {
 export interface LiveChannel {
 
   id: string;
-  daddyId: string;
   name: string;
   slug: string;
+  code: string;
   logo: string;
+
   country: string;
   category: string;
   enriched?: boolean;
 
 }
 
-export interface SportsChannel {
+export interface MatchedChannel {
 
-  daddyId: string;
+  id: string;
   name: string;
   logo: string;
-  enriched: boolean;
 
 }
 
-export interface SportsEvent {
+export interface SportsMatch {
 
+  id: string;
   title: string;
-  league: string;
-  time: string;
+  category: string;
+
+  homeTeam?: string;
+  awayTeam?: string;
+
   startsAt: number;
   live: boolean;
-  channels: SportsChannel[];
+
+  channel?: MatchedChannel;
 
 }
 
@@ -230,7 +235,7 @@ export interface ServiceInterruption {
 
 }
 
-export type MainView = "shows" | "movies" | "live" | "friends";
+export type MainView = "shows" | "movies" | "live" | "sports" | "friends";
 
 export interface ProfileMedia {
 

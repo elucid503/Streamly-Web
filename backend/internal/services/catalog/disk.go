@@ -22,6 +22,8 @@ type snapshotFile struct {
 	LiveChannels []LiveChannelDTO `json:"liveChannels"`
 	LivePopular []LiveChannelDTO `json:"livePopular"`
 
+	SportsMatches []SportsMatchDTO `json:"sportsMatches"`
+
 	SearchIndex []SearchResultDTO `json:"searchIndex"`
 	RefreshedAt time.Time `json:"refreshedAt"`
 
@@ -42,6 +44,8 @@ func snapshotToFile(snap Snapshot) snapshotFile {
 
 		LiveChannels: snap.liveChannels,
 		LivePopular: snap.livePopular,
+
+		SportsMatches: snap.sportsMatches,
 
 		SearchIndex: snap.searchIndex,
 		RefreshedAt: snap.refreshedAt,
@@ -81,6 +85,8 @@ func snapshotFromFile(file snapshotFile) Snapshot {
 
 		liveChannels: file.LiveChannels,
 		livePopular: file.LivePopular,
+
+		sportsMatches: file.SportsMatches,
 
 		searchIndex: file.SearchIndex,
 		refreshedAt: file.RefreshedAt,

@@ -60,6 +60,7 @@ export class HomeBackdrop extends Component<HomeBackdropProps, HomeBackdropState
       shows: [],
       movies: [],
       live: [],
+      sports: [],
       friends: [],
 
     },
@@ -156,7 +157,7 @@ export class HomeBackdrop extends Component<HomeBackdropProps, HomeBackdropState
 
     if (gen !== this.loadGen) return;
 
-    this.setState({ panels: { shows, movies, live: [], friends: [] } });
+    this.setState({ panels: { shows, movies, live: [], sports: [], friends: [] } });
 
   };
 
@@ -189,7 +190,7 @@ export class HomeBackdrop extends Component<HomeBackdropProps, HomeBackdropState
     const { view } = this.props;
     const { panels } = this.state;
 
-    if (view === "live" || view === "friends") return null;
+    if (view === "live" || view === "friends" || view === "sports") return null;
 
     const hasPanels = VIEW_ORDER.some((panel) => panels[panel].length > 0);
 

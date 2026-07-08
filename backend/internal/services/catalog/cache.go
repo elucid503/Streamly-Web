@@ -15,9 +15,13 @@ import (
 const (
 	titlesPerCategory = 24
 
-	trendingLimit       = 10
-	livePopularLimit    = 24
-	liveRefreshInterval = 5 * time.Minute
+	trendingLimit    = 10
+	livePopularLimit = 24
+
+	// Sports match data (live status, upcoming-vs-started) goes stale much
+	// faster than the movie/show catalog, so it gets its own short-cadence
+	// refresh loop rather than waiting on cacheTTL.
+	sportsRefreshInterval = 2 * time.Minute
 )
 
 // Cache maintains a periodically refreshed in-memory catalog snapshot.
@@ -91,7 +95,64 @@ func (c *Cache) Start(ctx context.Context) {
 
 	}()
 
-	go c.runLiveRefreshLoop(child)
+	go c.runSportsRefreshLoop(child)
+
+}
+
+func (c *Cache) runSportsRefreshLoop(ctx context.Context) {
+
+	c.refreshSports()
+
+	ticker := time.NewTicker(sportsRefreshInterval)
+	defer ticker.Stop()
+
+	for {
+
+		select {
+
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			c.refreshSports()
+
+		}
+
+	}
+
+}
+
+func (c *Cache) refreshSports() {
+
+	matches, err := c.loadSportsMatches()
+
+	if err != nil {
+
+		log.Printf("[catalog-cache] sports refresh failed: %v", err)
+		return
+
+	}
+
+	c.mu.Lock()
+
+	c.snap.sportsMatches = matches
+	c.snap.refreshedAt = time.Now()
+
+	snap := c.snap
+
+	c.mu.Unlock()
+
+	c.saveToDisk(snap)
+
+	log.Printf("[catalog-cache] sports refreshed (%d matches)", len(matches))
+
+}
+
+// SportsMatches returns the cached sports matches.
+func (c *Cache) SportsMatches() []SportsMatchDTO {
+
+	snap := c.Snapshot()
+
+	return append([]SportsMatchDTO(nil), snap.sportsMatches...)
 
 }
 
@@ -195,13 +256,13 @@ func (c *Cache) LiveSearch(query string, limit int) []LiveChannelDTO {
 
 }
 
-func (c *Cache) LiveChannel(daddyID string) (LiveChannelDTO, bool) {
+func (c *Cache) LiveChannel(id string) (LiveChannelDTO, bool) {
 
 	snap := c.Snapshot()
 
 	for _, channel := range snap.liveChannels {
 
-		if channel.DaddyID == daddyID || channel.ID == daddyID {
+		if channel.ID == id {
 
 			return channel, true
 
@@ -385,7 +446,7 @@ func (c *Cache) refresh() {
 
 		next.liveChannels = channels
 
-		next.livePopular = sliceLimit(channels, livePopularLimit)
+		next.livePopular = sliceLimit(rankPopularChannels(channels), livePopularLimit)
 
 	}
 
@@ -394,6 +455,11 @@ func (c *Cache) refresh() {
 	next.refreshedAt = time.Now()
 
 	c.mu.Lock()
+
+	// sportsMatches is refreshed on its own faster-cadence loop (see
+	// runSportsRefreshLoop) — carry it over so this refresh cycle doesn't
+	// wipe it out.
+	next.sportsMatches = c.snap.sportsMatches
 
 	c.snap = next
 
@@ -412,56 +478,6 @@ func (c *Cache) refresh() {
 			time.Since(start).Round(time.Millisecond), len(next.searchIndex))
 
 	}
-
-}
-
-func (c *Cache) runLiveRefreshLoop(ctx context.Context) {
-
-	ticker := time.NewTicker(liveRefreshInterval)
-	defer ticker.Stop()
-
-	for {
-
-		select {
-
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-			c.refreshLiveChannels()
-
-		}
-
-	}
-
-}
-
-func (c *Cache) refreshLiveChannels() {
-
-	start := time.Now()
-
-	channels, err := c.loadLiveChannels()
-
-	if err != nil {
-
-		log.Printf("[catalog-cache] live channels refresh failed: %v", err)
-		return
-
-	}
-
-	c.mu.Lock()
-
-	c.snap.liveChannels = channels
-	c.snap.livePopular = sliceLimit(channels, livePopularLimit)
-	c.snap.refreshedAt = time.Now()
-
-	snap := c.snap
-
-	c.mu.Unlock()
-
-	c.saveToDisk(snap)
-
-	log.Printf("[catalog-cache] live channels refreshed in %s (%d channels)",
-		time.Since(start).Round(time.Millisecond), len(channels))
 
 }
 
@@ -603,11 +619,7 @@ func filterLiveChannels(channels []LiveChannelDTO, query string, limit int) []Li
 
 	for _, ch := range channels {
 
-		name := strings.ToLower(ch.Name)
-
-		slug := strings.ToLower(ch.Slug)
-
-		if !strings.Contains(name, query) && !strings.Contains(slug, query) {
+		if !strings.Contains(strings.ToLower(ch.Name), query) {
 
 			continue
 

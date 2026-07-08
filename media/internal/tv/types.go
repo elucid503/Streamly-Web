@@ -1,220 +1,54 @@
 package tv
 
-import (
-	"encoding/json"
-	"strings"
-	"time"
-)
+import "time"
 
-// Country holds channel country metadata from tv-channels.json.
+// Country is the enriched country metadata for a channel, backfilled from iptv-org.
 type Country struct {
-	Code string `json:"code"`
-	Name string `json:"name"`
-	Flag string `json:"flag"`
-}
 
-// UnmarshalJSON accepts both the current object shape and the older/string shape returned by some catalog providers.
-func (c *Country) UnmarshalJSON(data []byte) error {
-
-	var country struct {
-		Code string `json:"code"`
-		Name string `json:"name"`
-		Flag string `json:"flag"`
-	}
-
-	if err := json.Unmarshal(data, &country); err == nil {
-
-		c.Code = strings.ToLower(strings.TrimSpace(country.Code))
-		c.Name = strings.TrimSpace(country.Name)
-		c.Flag = strings.TrimSpace(country.Flag)
-
-		if c.Name == "" {
-
-			c.Name = strings.ToUpper(c.Code)
-
-		}
-
-		return nil
-
-	}
-
-	var name string
-
-	if err := json.Unmarshal(data, &name); err != nil {
-
-		return err
-
-	}
-
-	name = strings.TrimSpace(name)
-	code := countryCode(name)
-
-	c.Code = code
-	c.Name = name
-	c.Flag = ""
-
-	return nil
-
-}
-
-func countryCode(value string) string {
-
-	normalized := strings.ToLower(strings.TrimSpace(value))
-
-	switch normalized {
-
-	case "united states", "usa", "u.s.", "u.s.a.":
-
-		return "us"
-
-	case "united kingdom", "uk", "great britain":
-
-		return "gb"
-
-	}
-
-	if len(normalized) == 2 {
-
-		return normalized
-
-	}
-
-	return ""
-
-}
-
-// SportsChannel is a TV channel broadcasting a sports event.
-type SportsChannel struct {
-
-	DaddyID string
+	Code string
 	Name string
 
 }
 
-// SportsEvent is a live sports fixture from the DLHD schedule.
-type SportsEvent struct {
-
-	Title string
-	League string
-
-	Time string
-	Start time.Time
-
-	Channels []SportsChannel
-
-}
-
-// Channel is a single Live TV entry from the catalog.
+// Channel is a single 24/7 live TV channel from the ntv.cx catalog.
 type Channel struct {
-	ID      string `json:"id"`
-	DaddyID string `json:"daddyId"`
 
-	Name string `json:"name"`
-	Slug string `json:"slug"`
+	ID   string `json:"channel_id"`
+	Name string `json:"channel_name"`
+	Code string `json:"channel_code"`
+	Slug string
 
-	Logo string `json:"logo"`
+	Logo      string `json:"channel_image"`
+	PlayerURL string `json:"channel_url"`
 
-	Country  Country `json:"country"`
-	Category string  `json:"category"`
+	Server string `json:"server"`
 
-	Status   string `json:"status"`
-	Source   string `json:"source"`
-	Enriched bool   `json:"enriched"`
-}
-
-// UnmarshalJSON tolerates provider schema drift: newer catalogs name the logo field "image", omit "id", or send "id" as a number, so we accept both logo keys, coerce numeric ids to strings, and synthesize an id from daddyId when absent.
-func (c *Channel) UnmarshalJSON(data []byte) error {
-
-	type channelAlias Channel
-
-	var raw struct {
-		channelAlias
-
-		// RawID shadows channelAlias.ID so we can accept string or number.
-		RawID json.RawMessage `json:"id"`
-
-		Image string `json:"image"`
-	}
-
-	if err := json.Unmarshal(data, &raw); err != nil {
-
-		return err
-
-	}
-
-	*c = Channel(raw.channelAlias)
-
-	if len(raw.RawID) > 0 {
-
-		var s string
-
-		if err := json.Unmarshal(raw.RawID, &s); err == nil {
-
-			c.ID = s
-
-		} else {
-
-			// numeric id — use the raw digits as the string value
-			c.ID = strings.TrimSpace(string(raw.RawID))
-
-		}
-
-	}
-
-	if c.Logo == "" {
-
-		c.Logo = strings.TrimSpace(raw.Image)
-
-	}
-
-	if c.ID == "" {
-
-		c.ID = c.DaddyID
-
-	}
-
-	return nil
+	Country  Country
+	Category string
+	Enriched bool
 
 }
 
-// ChannelCatalog is the top-level response from tv-channels.json.
+// reliableServer is the only ntv.cx backend whose channel_url reliably
+// resolves to a playable stream (verified directly): "dlhd"-backed channels
+// route through dlhd.st, whose CDN is currently returning 503s, and
+// "hesgoales"-backed channels have no logos and an inconsistent stream CDN.
+// Channels from other backends are dropped at fetch time rather than shown
+// as entries that fail when a user tries to actually play them.
+const reliableServer = "cdnlive"
+
+// ChannelCatalog is the full set of channels fetched from ntv.cx.
 type ChannelCatalog struct {
-	Generated string `json:"generated"`
 
-	Total  int    `json:"total"`
-	Source string `json:"source"`
+	Channels  []Channel
+	FetchedAt time.Time
 
-	StreamAPI string `json:"streamApi"`
+}
 
+// getChannelsResponse mirrors the raw ntv.cx /api/get-channels payload.
+type getChannelsResponse struct {
+
+	Success  bool      `json:"success"`
 	Channels []Channel `json:"channels"`
-}
 
-// ResolveResult is the legacy dami-tv.pro resolve payload.
-type ResolveResult struct {
-	Success bool   `json:"success"`
-	Stream  string `json:"stream"`
-
-	Error string `json:"error"`
-}
-
-// TV247ResolveResult is returned by the tv247 resolve-dlstream API.
-type TV247ResolveResult struct {
-	ChannelID string `json:"channelId"`
-
-	ProxyPlaylistURL string `json:"proxyPlaylistUrl"`
-	ProxyPlayerURL   string `json:"proxyPlayerUrl"`
-
-	Error string `json:"error"`
-}
-
-// ResolvedStream is a live TV playlist URL and the Referer it expects.
-type ResolvedStream struct {
-	URL     string
-	Referer string
-}
-
-// StreamInfo pairs a channel with its resolved HLS playlist URL.
-type StreamInfo struct {
-	Channel Channel
-	HLSURL  string
 }

@@ -29,8 +29,8 @@ const (
 type SearchResultDTO = catalog.SearchResultDTO
 type CategoryDTO = catalog.CategoryDTO
 type LiveChannelDTO = catalog.LiveChannelDTO
-type SportsEventDTO = catalog.SportsEventDTO
-type SportsChannelDTO = catalog.SportsChannelDTO
+type SportsMatchDTO = catalog.SportsMatchDTO
+type MatchedChannelDTO = catalog.MatchedChannelDTO
 
 type SeasonDTO = vod.SeasonDTO
 type EpisodeDTO = vod.EpisodeDTO
@@ -493,102 +493,25 @@ func (s *MediaService) LiveSearch(query string, limit int) ([]LiveChannelDTO, er
 
 }
 
-func (s *MediaService) LiveChannel(daddyID string) (LiveChannelDTO, bool) {
+func (s *MediaService) LiveChannel(id string) (LiveChannelDTO, bool) {
 
-	return s.catalog.LiveChannel(daddyID)
-
-}
-
-func (s *MediaService) LiveSports() ([]SportsEventDTO, error) {
-
-	events, err := s.client.Sports()
-
-	if err != nil {
-
-		return nil, err
-
-	}
-
-	enriched := s.catalog.LiveChannels()
-
-	byDaddyID := make(map[string]LiveChannelDTO, len(enriched))
-
-	for _, ch := range enriched {
-
-		if ch.DaddyID != "" {
-
-			byDaddyID[ch.DaddyID] = ch
-
-		}
-
-	}
-
-	now := time.Now()
-
-	out := make([]SportsEventDTO, 0, len(events))
-
-	for _, e := range events {
-
-		if !e.Start.IsZero() && now.Sub(e.Start) > 3*time.Hour {
-
-			continue
-
-		}
-
-		isLive := !e.Start.IsZero() && now.Sub(e.Start) >= 0
-
-		dtos := make([]SportsChannelDTO, 0, len(e.Channels))
-
-		for _, ch := range e.Channels {
-
-			dto := SportsChannelDTO{
-
-				DaddyID: ch.DaddyID,
-				Name: ch.Name,
-
-			}
-
-			if catalogCh, ok := byDaddyID[ch.DaddyID]; ok {
-
-				dto.Logo = catalogCh.Logo
-				dto.Enriched = catalogCh.Enriched
-
-			}
-
-			dtos = append(dtos, dto)
-
-		}
-
-		var startsAt int64
-
-		if !e.Start.IsZero() {
-
-			startsAt = e.Start.Unix()
-
-		}
-
-		out = append(out, SportsEventDTO{
-
-			Title: e.Title,
-			League: e.League,
-
-			Time: e.Time,
-			StartsAt: startsAt,
-
-			Live: isLive,
-			Channels: dtos,
-
-		})
-
-	}
-
-	return out, nil
+	return s.catalog.LiveChannel(id)
 
 }
 
-func (s *MediaService) ResolveLiveStream(daddyID string) (*mediakit.LiveStream, error) {
+// LiveSports returns the cached sports matches — refreshed on its own
+// background loop in catalog.Cache, same pattern as the live channel
+// catalog, so this never blocks on a live upstream lookup.
+func (s *MediaService) LiveSports() ([]SportsMatchDTO, error) {
 
-	return s.client.Channel(daddyID).Resolve()
+	return s.catalog.SportsMatches(), nil
+
+}
+
+// ResolveLiveStream returns the direct HLS playlist URL for a channel id.
+func (s *MediaService) ResolveLiveStream(id string) (string, error) {
+
+	return s.client.ResolveChannel(id)
 
 }
 

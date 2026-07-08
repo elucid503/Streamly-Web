@@ -6,7 +6,6 @@ import { LiveLogo } from "@/components/catalog/LiveLogo";
 import type { ChannelGuideEntry, LiveChannel, ProgramEntry } from "@/lib/types";
 
 import { Component } from "react";
-import { Radio } from "lucide-react";
 
 interface TVGuideProps {
 
@@ -76,7 +75,7 @@ export class TVGuide extends Component<TVGuideProps, TVGuideState> {
 
         {entries.map((entry) => (
 
-          <GuideCard key={entry.channel.daddyId} entry={entry} onSelect={onSelect} />
+          <GuideCard key={entry.channel.id} entry={entry} onSelect={onSelect} />
 
         ))}
 
@@ -136,7 +135,6 @@ function GuideCard({ entry, onSelect }: GuideCardProps) {
           channel={channel}
           imgClassName="object-contain p-1"
           rounded="rounded-full"
-          fallback={<Radio size={12} className="text-foreground-faint" />}
 
         />
 
@@ -144,7 +142,7 @@ function GuideCard({ entry, onSelect }: GuideCardProps) {
 
       </div>
 
-      <div className="flex flex-1 flex-col gap-1.5 px-3 py-2.5">
+      <div className="flex flex-1 flex-col justify-center gap-1.5 px-3 py-2.5">
 
         {current ? (
 

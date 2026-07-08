@@ -5,36 +5,12 @@ import (
 	"strings"
 )
 
-var popularUSSlugs = []string{
-
-	"espn", "espn-usa",
-	"cnn", "cnn-usa",
-	"abc", "abc-usa",
-	"cbs", "cbs-usa",
-	"nbc", "nbc-usa",
-	"fox", "fox-usa",
-	"fox-sports-1", "fox-sports-1-usa",
-	"discovery-channel",
-	"comedy-central",
-	"hbo", "hbo-usa",
-	"espn2", "espn2-usa",
-	"tnt", "tnt-usa",
-	"usa-network",
-	"fx", "fx-usa",
-	"mtv", "mtv-usa",
-	"disney-channel",
-	"cartoon-network",
-	"national-geographic",
-	"cnbc", "cnbc-usa",
-	"bravo", "bravo-usa",
-}
-
-// FindByID returns the channel with the given daddyId, if present.
+// FindByID returns the channel with the given id, if present.
 func (catalog *ChannelCatalog) FindByID(id string) (Channel, bool) {
 
 	for _, channel := range catalog.Channels {
 
-		if channel.DaddyID == id {
+		if channel.ID == id {
 
 			return channel, true
 
@@ -46,29 +22,16 @@ func (catalog *ChannelCatalog) FindByID(id string) (Channel, bool) {
 
 }
 
-// FindBySlug returns the channel with the given slug, if present.
-func (catalog *ChannelCatalog) FindBySlug(slug string) (Channel, bool) {
-
-	slug = strings.ToLower(strings.TrimSpace(slug))
-
-	for _, channel := range catalog.Channels {
-
-		if strings.ToLower(channel.Slug) == slug {
-
-			return channel, true
-
-		}
-
-	}
-
-	return Channel{}, false
-
-}
-
-// FindByName returns the first channel whose name matches case-insensitively.
-func (catalog *ChannelCatalog) FindByName(name string) (Channel, bool) {
+// FindByExactName returns the channel whose name matches query exactly, case-insensitively.
+func (catalog *ChannelCatalog) FindByExactName(name string) (Channel, bool) {
 
 	name = strings.ToLower(strings.TrimSpace(name))
+
+	if name == "" {
+
+		return Channel{}, false
+
+	}
 
 	for _, channel := range catalog.Channels {
 
@@ -84,37 +47,7 @@ func (catalog *ChannelCatalog) FindByName(name string) (Channel, bool) {
 
 }
 
-// Filter returns channels matching optional country code and/or category.
-func (catalog *ChannelCatalog) Filter(countryCode, category string) []Channel {
-
-	countryCode = strings.ToLower(strings.TrimSpace(countryCode))
-	category = strings.ToLower(strings.TrimSpace(category))
-
-	var matches []Channel
-
-	for _, channel := range catalog.Channels {
-
-		if countryCode != "" && strings.ToLower(channel.Country.Code) != countryCode {
-
-			continue
-
-		}
-
-		if category != "" && strings.ToLower(channel.Category) != category {
-
-			continue
-
-		}
-
-		matches = append(matches, channel)
-
-	}
-
-	return matches
-
-}
-
-// Search returns channels whose name or slug contains query.
+// Search returns channels whose name contains query, case-insensitively.
 func (catalog *ChannelCatalog) Search(query string, limit int) []Channel {
 
 	query = strings.ToLower(strings.TrimSpace(query))
@@ -129,10 +62,7 @@ func (catalog *ChannelCatalog) Search(query string, limit int) []Channel {
 
 	for _, channel := range catalog.Channels {
 
-		name := strings.ToLower(channel.Name)
-		slug := strings.ToLower(channel.Slug)
-
-		if strings.Contains(name, query) || strings.Contains(slug, query) {
+		if strings.Contains(strings.ToLower(channel.Name), query) {
 
 			matches = append(matches, channel)
 
@@ -162,49 +92,7 @@ func (catalog *ChannelCatalog) Search(query string, limit int) []Channel {
 
 }
 
-// PopularUS returns up to limit United States channels ranked by curated popularity.
-func (catalog *ChannelCatalog) PopularUS(limit int) []Channel {
-
-	if limit <= 0 {
-
-		limit = 5
-
-	}
-
-	us := catalog.Filter("us", "")
-
-	sort.Slice(us, func(i, j int) bool {
-
-		if us[i].Enriched != us[j].Enriched {
-
-			return us[i].Enriched
-
-		}
-
-		left := popularityRank(us[i].Slug)
-		right := popularityRank(us[j].Slug)
-
-		if left != right {
-
-			return left < right
-
-		}
-
-		return strings.Compare(us[i].Name, us[j].Name) < 0
-
-	})
-
-	if len(us) > limit {
-
-		us = us[:limit]
-
-	}
-
-	return us
-
-}
-
-// Sorted returns channels ranked by US popularity, then alphabetically.
+// Sorted returns channels ranked alphabetically, channels with a known icon first.
 func (catalog *ChannelCatalog) Sorted() []Channel {
 
 	channels := append([]Channel(nil), catalog.Channels...)
@@ -217,15 +105,6 @@ func (catalog *ChannelCatalog) Sorted() []Channel {
 
 		}
 
-		left := popularityRank(channels[i].Slug)
-		right := popularityRank(channels[j].Slug)
-
-		if left != right {
-
-			return left < right
-
-		}
-
 		return strings.Compare(channels[i].Name, channels[j].Name) < 0
 
 	})
@@ -234,20 +113,29 @@ func (catalog *ChannelCatalog) Sorted() []Channel {
 
 }
 
-func popularityRank(slug string) int {
+func slugify(name string) string {
 
-	slug = strings.ToLower(slug)
+	name = strings.ToLower(name)
 
-	for index, popular := range popularUSSlugs {
+	var b strings.Builder
+	lastWasSep := false
 
-		if popular == slug {
+	for _, r := range name {
 
-			return index
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') {
+
+			b.WriteRune(r)
+			lastWasSep = false
+
+		} else if !lastWasSep && b.Len() > 0 {
+
+			b.WriteByte('-')
+			lastWasSep = true
 
 		}
 
 	}
 
-	return len(popularUSSlugs)
+	return strings.TrimRight(b.String(), "-")
 
 }
