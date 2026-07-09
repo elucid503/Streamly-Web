@@ -9,7 +9,7 @@ import { Component } from "react";
 
 const STARTING_SOON_WINDOW_SECS = 3 * 60 * 60;
 const ROW_PREVIEW_COUNT = 5;
-const PAST_PREVIEW_COUNT = 3;
+const UPCOMING_CAP = 5;
 
 interface SportsPageProps {
 
@@ -28,11 +28,12 @@ interface SportsPageState {
 
   showAllLive: boolean;
   showAllSoon: boolean;
-  showAllPast: boolean;
 
 }
 
 export class SportsPage extends Component<SportsPageProps, SportsPageState> {
+
+  private refreshTimer: ReturnType<typeof setInterval> | null = null;
 
   state: SportsPageState = {
 
@@ -41,11 +42,29 @@ export class SportsPage extends Component<SportsPageProps, SportsPageState> {
 
     showAllLive: false,
     showAllSoon: false,
-    showAllPast: false,
 
   };
 
   async componentDidMount() {
+
+    await this.loadMatches(true);
+
+    // Scores and live flags move quickly; poll while the page is mounted.
+    this.refreshTimer = setInterval(() => {
+
+      void this.loadMatches(false);
+
+    }, 60_000);
+
+  }
+
+  componentWillUnmount() {
+
+    if (this.refreshTimer) clearInterval(this.refreshTimer);
+
+  }
+
+  loadMatches = async (initial: boolean) => {
 
     try {
 
@@ -56,29 +75,33 @@ export class SportsPage extends Component<SportsPageProps, SportsPageState> {
 
       this.setState({ matches: watchable, loading: false });
 
-      // Always offer Formula 1 as a filter option, even if no motor-sports
-      // match happens to be in the current lookup window.
-      const categories = Array.from(new Set([
+      if (initial) {
 
-        "motor-sports",
-        ...watchable.map((m) => m.category).filter(Boolean),
+        // Always offer Formula 1 as a filter option, even if no motor-sports
+        // match happens to be in the current lookup window.
+        const categories = Array.from(new Set([
 
-      ])).sort();
+          "motor-sports",
+          ...watchable.map((m) => m.category).filter(Boolean),
 
-      this.props.onCategoriesChange?.([
+        ])).sort();
 
-        { value: "all", label: "All" },
-        ...categories.map((c) => ({ value: c, label: prettyCategory(c) })),
+        this.props.onCategoriesChange?.([
 
-      ]);
+          { value: "all", label: "All" },
+          ...categories.map((c) => ({ value: c, label: prettyCategory(c) })),
+
+        ]);
+
+      }
 
     } catch {
 
-      this.setState({ loading: false });
+      if (initial) this.setState({ loading: false });
 
     }
 
-  }
+  };
 
   filtered = () => {
 
@@ -104,6 +127,7 @@ export class SportsPage extends Component<SportsPageProps, SportsPageState> {
     if (matches.length === 0) return null;
 
     const visible = expanded ? matches : matches.slice(0, previewCount);
+    const canToggle = matches.length > previewCount || (previewCount === 0 && matches.length > 0);
 
     return (
 
@@ -113,11 +137,11 @@ export class SportsPage extends Component<SportsPageProps, SportsPageState> {
 
           <h2 className="text-sm font-medium tracking-wide text-foreground-muted uppercase">{title}</h2>
 
-          {matches.length > previewCount && (
+          {canToggle && (
 
             <button type="button" onClick={onToggle} className="text-xs font-medium text-foreground-muted hover:text-foreground">
 
-              {expanded ? "Show less" : "View More"}
+              {expanded ? "Show less" : previewCount === 0 ? `View ${matches.length}` : "View More"}
 
             </button>
 
@@ -125,15 +149,19 @@ export class SportsPage extends Component<SportsPageProps, SportsPageState> {
 
         </div>
 
-        <div className="flex flex-col gap-2.5">
+        {visible.length > 0 && (
 
-          {visible.map((match) => (
+          <div className="flex flex-col gap-2.5">
 
-            <SportsRow key={match.id} match={match} onSelect={this.props.onSelectChannel} />
+            {visible.map((match) => (
 
-          ))}
+              <SportsRow key={match.id} match={match} onSelect={this.props.onSelectChannel} />
 
-        </div>
+            ))}
+
+          </div>
+
+        )}
 
       </section>
 
@@ -141,21 +169,75 @@ export class SportsPage extends Component<SportsPageProps, SportsPageState> {
 
   };
 
+  bucketFor = (match: SportsMatch, nowSecs: number): "live" | "soon" | "upcoming" | "past" => {
+
+    // Prefer authoritative scoreboard lifecycle when ESPN enrichment attached.
+    if (match.status === "in" || match.live) return "live";
+
+    if (match.status === "post") return "past";
+
+    const hasScore = match.homeScore !== undefined && match.awayScore !== undefined;
+    const delta = match.startsAt - nowSecs;
+
+    // Scored fixtures that are not live are finished (or mislabeled starts) —
+    // never park them under Upcoming / Starting Soon.
+    if (hasScore) {
+
+      if (delta > 0 && match.status === "pre") return delta <= STARTING_SOON_WINDOW_SECS ? "soon" : "upcoming";
+
+      return "past";
+
+    }
+
+    if (delta <= 0) return "past";
+
+    if (delta <= STARTING_SOON_WINDOW_SECS) return "soon";
+
+    return "upcoming";
+
+  };
+
   render() {
 
-    const { loading, showAllLive, showAllSoon, showAllPast } = this.state;
+    const { loading, showAllLive, showAllSoon } = this.state;
 
     const matches = this.filtered();
 
     const nowSecs = Date.now() / 1000;
 
-    const live = matches.filter((m) => m.live);
-    const startingSoon = matches.filter((m) => !m.live && m.startsAt - nowSecs <= STARTING_SOON_WINDOW_SECS && m.startsAt - nowSecs > 0);
-    const upcoming = matches.filter((m) => !m.live && m.startsAt - nowSecs > STARTING_SOON_WINDOW_SECS);
-    const past = matches.filter((m) => !m.live && m.startsAt <= nowSecs);
+    const live: SportsMatch[] = [];
+    const startingSoon: SportsMatch[] = [];
+    const upcoming: SportsMatch[] = [];
+    const past: SportsMatch[] = [];
 
-    // Prioritize a live match for the banner, but always show something.
-    const featured = live[0] ?? startingSoon[0] ?? upcoming[0] ?? past[0];
+    for (const match of matches) {
+
+      switch (this.bucketFor(match, nowSecs)) {
+
+        case "live":
+          live.push(match);
+          break;
+        case "soon":
+          startingSoon.push(match);
+          break;
+        case "upcoming":
+          upcoming.push(match);
+          break;
+        default:
+          past.push(match);
+          break;
+
+      }
+
+    }
+
+    // Featured: prefer a live game that actually has a score, then any live, then soon.
+    const featured =
+      live.find((m) => m.homeScore !== undefined && m.awayScore !== undefined)
+      ?? live[0]
+      ?? startingSoon[0]
+      ?? upcoming[0]
+      ?? past[0];
 
     if (loading) {
 
@@ -222,7 +304,7 @@ export class SportsPage extends Component<SportsPageProps, SportsPageState> {
 
                   <div className="flex items-center gap-2">
 
-                    {featured.live && (
+                    {(featured.live || featured.status === "in") && (
 
                       <span className="flex flex-shrink-0 items-center gap-1 rounded-full bg-red-500/90 px-2 py-0.5 text-[11px] font-semibold text-white">
 
@@ -241,6 +323,32 @@ export class SportsPage extends Component<SportsPageProps, SportsPageState> {
                   </div>
 
                   <MatchTitle title={featured.title} className="text-2xl font-bold text-white sm:text-3xl" />
+
+                  {(featured.homeScore !== undefined && featured.awayScore !== undefined) && (
+
+                    <div className="flex items-baseline gap-3">
+
+                      <span className="text-3xl font-bold tabular-nums text-white sm:text-4xl">
+
+                        {featured.homeScore}
+                        <span className="mx-2 font-normal text-white/40">–</span>
+                        {featured.awayScore}
+
+                      </span>
+
+                      {featured.statusDetail && (
+
+                        <span className="text-sm text-white/60">
+
+                          {featured.statusDetail}
+
+                        </span>
+
+                      )}
+
+                    </div>
+
+                  )}
 
                 </div>
 
@@ -266,27 +374,9 @@ export class SportsPage extends Component<SportsPageProps, SportsPageState> {
 
         {this.renderSection("Starting Soon", startingSoon, showAllSoon, () => this.setState({ showAllSoon: !showAllSoon }))}
 
-        {this.renderSection("Past", past, showAllPast, () => this.setState({ showAllPast: !showAllPast }), PAST_PREVIEW_COUNT)}
+        {this.renderSection("Upcoming", upcoming.slice(0, UPCOMING_CAP), true, () => {}, UPCOMING_CAP)}
 
-        {upcoming.length > 0 && (
-
-          <section className="px-4 sm:px-8">
-
-            <h2 className="mb-3 text-sm font-medium tracking-wide text-foreground-muted uppercase">Upcoming</h2>
-
-            <div className="flex flex-col gap-2.5">
-
-              {upcoming.map((match) => (
-
-                <SportsRow key={match.id} match={match} onSelect={this.props.onSelectChannel} />
-
-              ))}
-
-            </div>
-
-          </section>
-
-        )}
+        {this.renderSection("Past", past, true, () => {}, Number.MAX_SAFE_INTEGER)}
 
       </div>
 

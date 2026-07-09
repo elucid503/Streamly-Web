@@ -51,6 +51,12 @@ type SportsMatchDTO struct {
 	HomeTeam string `json:"homeTeam,omitempty"`
 	AwayTeam string `json:"awayTeam,omitempty"`
 
+	HomeScore    *int   `json:"homeScore,omitempty"`
+	AwayScore    *int   `json:"awayScore,omitempty"`
+	StatusDetail string `json:"statusDetail,omitempty"`
+	// Status is scoreboard lifecycle when known: pre / in / post.
+	Status string `json:"status,omitempty"`
+
 	StartsAt int64 `json:"startsAt"`
 	Live     bool  `json:"live"`
 

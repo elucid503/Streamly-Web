@@ -26,7 +26,6 @@ const (
 
 // Client fetches sports matches from ntv.cx and matches them to 24/7 channels.
 type Client struct {
-
 	baseURL string
 	server  string
 
@@ -36,7 +35,6 @@ type Client struct {
 	mu        sync.RWMutex
 	matches   []Match
 	matchesAt time.Time
-
 }
 
 // New builds a sports Client. tvClient supplies the channel catalog used for
@@ -138,6 +136,11 @@ func (c *Client) refresh() ([]Match, error) {
 
 	}
 
+	c.enrichScores(matches)
+
+	// Re-sort after score enrichment may flip Live flags.
+	sortMatches(matches)
+
 	c.mu.Lock()
 	c.matches = matches
 	c.matchesAt = time.Now()
@@ -189,17 +192,28 @@ func (c *Client) fetchRawMatches() ([]rawMatch, error) {
 
 	}
 
+	// Prefer Live over All/NonLive — ntv's "all" payload always stamps
+	// live:false even for matches that also appear in the live list.
 	seen := make(map[string]rawMatch)
 
-	for _, group := range [][]rawMatch{parsed.All, parsed.Live, parsed.NonLive} {
+	for _, group := range [][]rawMatch{parsed.Live, parsed.NonLive, parsed.All} {
 
 		for _, m := range group {
 
-			if _, exists := seen[m.ID]; !exists {
+			if existing, exists := seen[m.ID]; exists {
 
-				seen[m.ID] = m
+				if !existing.Live && m.Live {
+
+					existing.Live = true
+					seen[m.ID] = existing
+
+				}
+
+				continue
 
 			}
+
+			seen[m.ID] = m
 
 		}
 
@@ -225,9 +239,22 @@ const (
 
 func bucketFor(m Match, now time.Time) int {
 
-	if m.Live {
+	if m.Live || m.Status == StatusIn {
 
 		return bucketLive
+
+	}
+
+	if m.Status == StatusPost {
+
+		return bucketPast
+
+	}
+
+	// Scored non-live fixtures are finished; keep them out of the upcoming bucket.
+	if m.HomeScore != nil && m.AwayScore != nil && m.Status != StatusPre {
+
+		return bucketPast
 
 	}
 

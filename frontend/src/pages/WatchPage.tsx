@@ -1,5 +1,7 @@
 import { api, ApiError } from "@/api/client";
 
+import type { MultiviewStream } from "@/components/player/LiveStreamPane";
+import { MULTIVIEW_MAX_STREAMS } from "@/components/player/PlayerOptionsMenu";
 import { VideoPlayer } from "@/components/player/VideoPlayer";
 import { Button } from "@/components/ui/Button";
 import { SettingsPanel } from "@/pages/SettingsPanel";
@@ -7,7 +9,7 @@ import { SettingsPanel } from "@/pages/SettingsPanel";
 import { history, navigate, saveReturnPath, type NavigateFn } from "@/lib/navigation";
 import { store } from "@/lib/store";
 
-import type { Episode, IntroInfo, NextEpisode, Season, StreamInfo, StreamQuality, SubtitleTrack, WatchHistoryItem, } from "@/lib/types";
+import type { Episode, IntroInfo, LiveChannel, NextEpisode, Season, StreamInfo, StreamQuality, SubtitleTrack, WatchHistoryItem, } from "@/lib/types";
 import { closestAvailableHeight, dedupeQualitiesByHeight, nextLowerQualityHeight, } from "@/lib/stream";
 import { pickQualityByHeight, qualityPlaybackUrl, streamFromQuality, streamPlaybackUrl, } from "@/lib/streamClient";
 
@@ -68,6 +70,10 @@ interface WatchPageState {
 
   settingsOpen: boolean;
 
+  multiviewStreams: MultiviewStream[];
+  multiviewChannels: LiveChannel[];
+  multiviewLoading: boolean;
+
 }
 
 const EMPTY_STATE: Omit<WatchPageState, "loading" | "error" | "ready"> = {
@@ -107,6 +113,10 @@ const EMPTY_STATE: Omit<WatchPageState, "loading" | "error" | "ready"> = {
   episodeCache: {},
 
   settingsOpen: false,
+
+  multiviewStreams: [],
+  multiviewChannels: [],
+  multiviewLoading: false,
 
 };
 
@@ -765,6 +775,215 @@ export class WatchPage extends Component<WatchPageProps, WatchPageState> {
 
       poster: stream.channel?.logo,
 
+      // Reset multiview when switching the primary live channel.
+      multiviewStreams: [],
+      multiviewChannels: [],
+      multiviewLoading: false,
+
+    });
+
+  };
+
+  handleMultiviewSearch = async (query: string) => {
+
+    if (this.state.kind !== "live") return;
+
+    this.setState({ multiviewLoading: true });
+
+    try {
+
+      const channels = query.trim()
+        ? await api.liveSearch(query.trim())
+        : await api.livePopular(48);
+
+      this.setState({ multiviewChannels: channels ?? [], multiviewLoading: false });
+
+    } catch {
+
+      this.setState({ multiviewLoading: false });
+
+    }
+
+  };
+
+  private multiviewLoadGen = new Map<string, number>();
+
+  bumpMultiviewGen = (channelId: string) => {
+
+    const next = (this.multiviewLoadGen.get(channelId) ?? 0) + 1;
+    this.multiviewLoadGen.set(channelId, next);
+    return next;
+
+  };
+
+  handleMultiviewToggle = async (channel: LiveChannel) => {
+
+    if (this.state.kind !== "live") return;
+
+    const { channelId, multiviewStreams } = this.state;
+
+    if (channel.id === channelId) return;
+
+    const existing = multiviewStreams.find((s) => s.channelId === channel.id);
+
+    if (existing) {
+
+      this.bumpMultiviewGen(channel.id);
+
+      this.setState({
+
+        multiviewStreams: multiviewStreams.filter((s) => s.channelId !== channel.id),
+
+      });
+
+      return;
+
+    }
+
+    // Primary + additional streams cap.
+    if (1 + multiviewStreams.length >= MULTIVIEW_MAX_STREAMS) return;
+
+    const loadGen = this.bumpMultiviewGen(channel.id);
+
+    // Optimistically open the pane so layout/selection update immediately.
+    const pending: MultiviewStream = {
+
+      channelId: channel.id,
+      name: channel.name,
+      streamUrl: "",
+      isHls: true,
+      logo: channel.logo,
+      pending: true,
+
+    };
+
+    this.setState((s) => {
+
+      if (s.channelId !== channelId) return null;
+
+      if (s.multiviewStreams.some((m) => m.channelId === channel.id)) return null;
+
+      if (1 + s.multiviewStreams.length >= MULTIVIEW_MAX_STREAMS) return null;
+
+      return { multiviewStreams: [...s.multiviewStreams, pending] };
+
+    });
+
+    try {
+
+      const stream = await api.liveStream(channel.id);
+
+      if (this.multiviewLoadGen.get(channel.id) !== loadGen) return;
+
+      if (!stream.streamUrl?.trim()) {
+
+        this.setState((s) => ({
+
+          multiviewStreams: s.multiviewStreams.map((m) =>
+
+            m.channelId === channel.id
+              ? { ...m, pending: false, error: true, streamUrl: "" }
+              : m
+
+          ),
+
+        }));
+
+        return;
+
+      }
+
+      const ready: MultiviewStream = {
+
+        channelId: channel.id,
+        name: stream.channel?.name?.trim() || channel.name,
+        streamUrl: stream.streamUrl,
+        isHls: stream.isHls !== false,
+        logo: stream.channel?.logo || channel.logo,
+        pending: false,
+
+      };
+
+      this.setState((s) => {
+
+        if (s.channelId !== channelId) return null;
+
+        if (!s.multiviewStreams.some((m) => m.channelId === channel.id)) return null;
+
+        return {
+
+          multiviewStreams: s.multiviewStreams.map((m) =>
+
+            m.channelId === channel.id ? ready : m
+
+          ),
+
+        };
+
+      });
+
+    } catch {
+
+      if (this.multiviewLoadGen.get(channel.id) !== loadGen) return;
+
+      this.setState((s) => ({
+
+        multiviewStreams: s.multiviewStreams.map((m) =>
+
+          m.channelId === channel.id
+            ? { ...m, pending: false, error: true, streamUrl: "" }
+            : m
+
+        ),
+
+      }));
+
+    }
+
+  };
+
+  handleMultiviewRemove = (removeId: string) => {
+
+    this.bumpMultiviewGen(removeId);
+
+    const { channelId, multiviewStreams, streamUrl, poster } = this.state;
+
+    // Removing a secondary pane.
+    if (removeId !== channelId) {
+
+      this.setState({
+
+        multiviewStreams: multiviewStreams.filter((m) => m.channelId !== removeId),
+
+      });
+
+      return;
+
+    }
+
+    // Removing the primary pane: promote the first ready secondary stream.
+    const remaining = multiviewStreams.filter((m) => m.channelId !== removeId);
+    const nextPrimary = remaining.find((m) => m.streamUrl.trim() && !m.error) ?? remaining[0];
+
+    if (!nextPrimary) {
+
+      this.setState({ multiviewStreams: [] });
+      return;
+
+    }
+
+    const rest = remaining.filter((m) => m.channelId !== nextPrimary.channelId);
+
+    this.setState({
+
+      channelId: nextPrimary.channelId,
+      streamUrl: nextPrimary.streamUrl || streamUrl,
+      isHls: nextPrimary.isHls,
+      title: nextPrimary.name,
+      subtitle: "",
+      poster: nextPrimary.logo || poster,
+      multiviewStreams: rest,
+
     });
 
   };
@@ -961,7 +1180,7 @@ export class WatchPage extends Component<WatchPageProps, WatchPageState> {
 
   render() {
 
-    const { streamUrl, isHls, qualities, selectedHeight, subtitleTracks, title, subtitle, episodeTitle, description, poster, intro, nextEpisode, startPositionMs, loading, error, ready, seasons, menuEpisodes, menuSeason, menuEpisodesLoading, season, episode, kind, mediaId, channelId, settingsOpen } = this.state;
+    const { streamUrl, isHls, qualities, selectedHeight, subtitleTracks, title, subtitle, episodeTitle, description, poster, intro, nextEpisode, startPositionMs, loading, error, ready, seasons, menuEpisodes, menuSeason, menuEpisodesLoading, season, episode, kind, mediaId, channelId, settingsOpen, multiviewStreams, multiviewChannels, multiviewLoading } = this.state;
     const settings = store.settings;
 
     if (loading) {
@@ -1080,6 +1299,14 @@ export class WatchPage extends Component<WatchPageProps, WatchPageState> {
           menuSeason={kind === "show" ? menuSeason : undefined}
 
           episodesLoading={kind === "show" ? menuEpisodesLoading : undefined}
+
+          primaryChannelId={kind === "live" ? channelId : undefined}
+          multiviewStreams={kind === "live" ? multiviewStreams : undefined}
+          multiviewChannels={kind === "live" ? multiviewChannels : undefined}
+          multiviewLoading={kind === "live" ? multiviewLoading : undefined}
+          onMultiviewSearch={kind === "live" ? this.handleMultiviewSearch : undefined}
+          onMultiviewToggle={kind === "live" ? this.handleMultiviewToggle : undefined}
+          onMultiviewRemove={kind === "live" ? this.handleMultiviewRemove : undefined}
 
         />
 

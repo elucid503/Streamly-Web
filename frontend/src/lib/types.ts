@@ -152,6 +152,12 @@ export interface SportsMatch {
   homeTeam?: string;
   awayTeam?: string;
 
+  homeScore?: number;
+  awayScore?: number;
+  statusDetail?: string;
+  /** Scoreboard lifecycle when known: pre / in / post. */
+  status?: "pre" | "in" | "post" | string;
+
   startsAt: number;
   live: boolean;
 

@@ -1,9 +1,10 @@
 import type HLS from "hls.js";
-import { Component, createRef, type PointerEvent as ReactPointerEvent, type RefObject } from "react";
-import { ArrowLeft, Clapperboard, FastForward, Maximize, Minimize, Pause, Play, Rewind, SkipForward } from "lucide-react";
+import { Component, createRef, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type RefObject } from "react";
+import { ArrowLeft, Clapperboard, FastForward, Maximize, Minimize, Pause, Play, Rewind, SkipForward, Volume2, VolumeX, X } from "lucide-react";
 
 import { AmbienceLayer } from "@/components/player/AmbienceLayer";
 import { EpisodePickerPanel } from "@/components/player/EpisodePickerPanel";
+import { LiveStreamPane, multiviewLayout, paneSpanClass, type MultiviewStream, } from "@/components/player/LiveStreamPane";
 import { PauseOverlay } from "@/components/player/PauseOverlay";
 
 import { PlayerActionFeedbackOverlay, type PlayerActionFeedback, } from "@/components/player/PlayerActions";
@@ -15,7 +16,7 @@ import { store } from "@/lib/store";
 import { hasIntroWindow, isInIntroWindow } from "@/lib/intro";
 import { isProxiedStream, isWebPlayableUrl } from "@/lib/streamClient";
 import { cn, formatDuration } from "@/lib/utils";
-import type { Episode, IntroInfo, NextEpisode, Season, StreamQuality, SubtitleTrack, } from "@/lib/types";
+import type { Episode, IntroInfo, LiveChannel, NextEpisode, Season, StreamQuality, SubtitleTrack, } from "@/lib/types";
 
 type HlsLevelLike = {
 
@@ -140,6 +141,15 @@ interface VideoPlayerProps {
   onSeasonChange?: (season: number) => void;
   onEpisodeSelect?: (season: number, episode: number) => void;
 
+  // Live TV multiview
+  primaryChannelId?: string;
+  multiviewStreams?: MultiviewStream[];
+  multiviewChannels?: LiveChannel[];
+  multiviewLoading?: boolean;
+  onMultiviewSearch?: (query: string) => void;
+  onMultiviewToggle?: (channel: LiveChannel) => void;
+  onMultiviewRemove?: (channelId: string) => void;
+
 }
 
 interface VideoPlayerState {
@@ -170,6 +180,9 @@ interface VideoPlayerState {
 
   // Heights (in px) for which HDR content has been detected. Persists across  quality switches.
   hdrHeights: Set<number>;
+
+  // Channel id whose pane currently routes audio (live multiview).
+  audioChannelId: string | null;
 
 }
 
@@ -256,9 +269,17 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
 
     hdrHeights: new Set(),
 
+    audioChannelId: null,
+
   };
 
   componentDidMount() {
+
+    if (this.props.live && this.props.primaryChannelId) {
+
+      this.setState({ audioChannelId: this.props.primaryChannelId });
+
+    }
 
     this.attachSource();
 
@@ -303,6 +324,26 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
 
       const video = this.videoRef.current;
       if (video) this.checkSkipIntro(video.currentTime * 1000);
+
+    }
+
+    if (this.props.primaryChannelId && this.props.primaryChannelId !== prev.primaryChannelId) {
+
+      this.setState({ audioChannelId: this.props.primaryChannelId });
+
+    }
+
+    // Drop audio selection if the chosen multiview pane was removed.
+    const audioId = this.state.audioChannelId;
+    const multiviewIds = new Set((this.props.multiviewStreams ?? []).map((s) => s.channelId));
+
+    if (audioId && audioId !== this.props.primaryChannelId && !multiviewIds.has(audioId)) {
+
+      this.setState({ audioChannelId: this.props.primaryChannelId ?? null }, () => this.syncPrimaryAudio());
+
+    } else {
+
+      this.syncPrimaryAudio();
 
     }
 
@@ -610,6 +651,13 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
 
     if (!video) return;
 
+    // In multiview, primary may be force-muted while another pane has audio —
+    // don't clobber the shared volume preference from that forced mute.
+    const multiviewActive = (this.props.multiviewStreams?.length ?? 0) > 0;
+    const primaryHasAudio = !multiviewActive || this.state.audioChannelId === (this.props.primaryChannelId ?? null);
+
+    if (!primaryHasAudio) return;
+
     try {
 
       localStorage.setItem("player:volume", String(video.volume));
@@ -620,6 +668,50 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
     this.setState({ volume: video.volume, muted: video.muted });
 
   };
+
+  syncPrimaryAudio = () => {
+
+    const video = this.videoRef.current;
+
+    if (!video || !this.props.live) return;
+
+    const multiviewActive = (this.props.multiviewStreams?.length ?? 0) > 0;
+
+    if (!multiviewActive) return;
+
+    const primaryId = this.props.primaryChannelId ?? null;
+    const primaryHasAudio = this.state.audioChannelId === primaryId;
+
+    video.muted = !primaryHasAudio || this.state.muted;
+    video.volume = primaryHasAudio ? this.state.volume : 0;
+
+  };
+
+  selectAudioChannel = (channelId: string) => {
+
+    this.setState({ audioChannelId: channelId }, () => this.syncPrimaryAudio());
+
+  };
+
+  multiviewSelectedIds = (): string[] => {
+
+    const ids = [this.props.primaryChannelId].filter(Boolean) as string[];
+
+    for (const stream of this.props.multiviewStreams ?? []) {
+
+      if (!ids.includes(stream.channelId)) ids.push(stream.channelId);
+
+    }
+
+    return ids;
+
+  };
+
+  multiviewPendingIds = (): string[] =>
+
+    (this.props.multiviewStreams ?? [])
+      .filter((stream) => stream.pending || !stream.streamUrl.trim())
+      .map((stream) => stream.channelId);
 
   clearTimers = () => {
 
@@ -941,6 +1033,7 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
 
       video.volume = this.state.volume;
       video.muted = this.state.muted;
+      this.syncPrimaryAudio();
 
       // Don't mark loading:false here — onCanPlay/onPlaying handle that so the spinner stays visible through any initial seek without oscillating.
       video.play().catch(() => this.setState({ loading: false, playing: false }));
@@ -1268,38 +1361,59 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
 
   setVolume = (volume: number) => {
 
-    const video = this.videoRef.current;
-    if (!video) return;
-
     const clamped = Math.max(0, Math.min(volume, 1));
+    const muted = clamped === 0;
 
-    video.volume = clamped;
-    video.muted = clamped === 0;
+    try {
 
-    this.setState({ volume: clamped, muted: video.muted });
+      localStorage.setItem("player:volume", String(clamped));
+      localStorage.setItem("player:muted", String(muted));
+
+    } catch { /* storage unavailable */ }
+
+    this.setState({ volume: clamped, muted }, () => this.syncPrimaryAudio());
+
+    const multiviewActive = (this.props.multiviewStreams?.length ?? 0) > 0;
+    const primaryHasAudio = !multiviewActive || this.state.audioChannelId === (this.props.primaryChannelId ?? null);
+    const video = this.videoRef.current;
+
+    if (video && primaryHasAudio) {
+
+      video.volume = clamped;
+      video.muted = muted;
+
+    }
 
   };
 
   toggleMute = () => {
 
-    const video = this.videoRef.current;
+    const { muted, volume } = this.state;
 
-    if (!video) return;
+    if (muted || volume === 0) {
 
-    if (video.muted || video.volume === 0) {
+      const nextVolume = volume > 0 ? volume : 0.8;
 
-      const nextVolume = video.volume > 0 ? video.volume : 0.8;
-
-      video.muted = false;
-      video.volume = nextVolume;
+      this.setVolume(nextVolume);
 
     } else {
 
-      video.muted = true;
+      const video = this.videoRef.current;
+
+      try {
+
+        localStorage.setItem("player:muted", "true");
+
+      } catch { /* storage unavailable */ }
+
+      this.setState({ muted: true }, () => this.syncPrimaryAudio());
+
+      const multiviewActive = (this.props.multiviewStreams?.length ?? 0) > 0;
+      const primaryHasAudio = !multiviewActive || this.state.audioChannelId === (this.props.primaryChannelId ?? null);
+
+      if (video && primaryHasAudio) video.muted = true;
 
     }
-
-    this.setState({ muted: video.muted, volume: video.volume });
 
   };
 
@@ -1564,15 +1678,45 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
 
   render() {
 
-    const { title, subtitle, episodeTitle, description, poster, qualities = [], selectedHeight = 1080, preferredHeight, nextEpisode, onBack, ambienceEnabled, live, onQualityChange, onOpenSettings, seasons, episodes, currentSeason, currentEpisode, menuSeason, episodesLoading, onSeasonChange, onEpisodeSelect, } = this.props;
-    const { playing, muted, volume, showControls, showOptions, showEpisodes, showSkipIntro, showUpNext, showUpNextMini, upNextCountdown, fullscreen, loading, seeking, holdPauseActive, activeSubtitleId, actionFeedback, hdrHeights, } = this.state;
+    const { title, subtitle, episodeTitle, description, poster, qualities = [], selectedHeight = 1080, preferredHeight, nextEpisode, onBack, ambienceEnabled, live, onQualityChange, onOpenSettings, seasons, episodes, currentSeason, currentEpisode, menuSeason, episodesLoading, onSeasonChange, onEpisodeSelect, primaryChannelId, multiviewStreams = [], multiviewChannels, multiviewLoading, onMultiviewSearch, onMultiviewToggle, onMultiviewRemove, } = this.props;
+    const { playing, muted, volume, showControls, showOptions, showEpisodes, showSkipIntro, showUpNext, showUpNextMini, upNextCountdown, fullscreen, loading, seeking, holdPauseActive, activeSubtitleId, actionFeedback, hdrHeights, audioChannelId, } = this.state;
 
-    const showPauseOverlay = !playing && !loading && !seeking && !holdPauseActive && !showEpisodes && store.settings?.disablePauseOverlay !== true;
+    // Live always uses a stable grid shell so adding multiview panes does not remount
+    // the primary <video> (which would tear down the HLS MediaSource attachment).
+    const multiviewActive = !!live && multiviewStreams.length > 0;
+    const multiviewCount = multiviewActive ? 1 + multiviewStreams.length : 1;
+    const layout = multiviewLayout(multiviewCount);
+    const primaryAudio = !multiviewActive || audioChannelId === (primaryChannelId ?? null);
+
+    const showPauseOverlay = !multiviewActive && !playing && !loading && !seeking && !holdPauseActive && !showEpisodes && store.settings?.disablePauseOverlay !== true;
 
     const qualityEnabled = !live && qualities.length > 0 && !!onQualityChange;
     const episodesEnabled = !live && !!onEpisodeSelect && !!onSeasonChange;
 
     const episodeStill = !!episodeTitle;
+
+    const videoHandlers = {
+
+      onEnded: this.onEnded,
+      onPointerDown: multiviewActive ? undefined : this.beginHoldPause,
+      onPointerUp: multiviewActive ? undefined : this.endHoldPause,
+      onPointerCancel: multiviewActive ? undefined : this.cancelHoldPause,
+      onClick: (e: ReactMouseEvent<HTMLVideoElement>) => {
+
+        e.stopPropagation();
+
+        if (this.suppressNextVideoClick) {
+
+          this.suppressNextVideoClick = false;
+          return;
+
+        }
+
+        this.togglePlay();
+
+      },
+
+    };
 
     return (
 
@@ -1583,46 +1727,168 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
         onClick={this.showControlsTemporarily}
 
       >
-        <AmbienceLayer
+        {!multiviewActive && (
 
-          videoRef={this.videoRef as RefObject<HTMLVideoElement>}
-          enabled={!!ambienceEnabled}
+          <AmbienceLayer
 
-        />
+            videoRef={this.videoRef as RefObject<HTMLVideoElement>}
+            enabled={!!ambienceEnabled}
 
-        <video className="relative z-10 h-full w-full object-contain"
+          />
 
-          ref={this.videoRef}
-          playsInline
-          crossOrigin={ambienceEnabled ? "anonymous" : undefined}
+        )}
 
-          onEnded={this.onEnded}
-          onPointerDown={this.beginHoldPause}
-          onPointerUp={this.endHoldPause}
-          onPointerCancel={this.cancelHoldPause}
-          onClick={(e) => {
+        {live ? (
 
-            e.stopPropagation();
+          <div className={cn(
 
-            if (this.suppressNextVideoClick) {
+              "relative z-10 grid h-full w-full bg-black",
+              multiviewActive ? cn("gap-0.5", layout.className) : "grid-cols-1 grid-rows-1"
 
-              this.suppressNextVideoClick = false;
-              return;
+            )}
 
-            }
+          >
 
-            this.togglePlay();
+            <div className={cn(
 
-          }}
+                "group relative flex min-h-0 min-w-0 items-center justify-center overflow-hidden bg-black",
+                multiviewActive && paneSpanClass(0, layout)
 
-        />
+              )}
 
-        <SubtitleDisplay
+            >
 
-          videoRef={this.videoRef}
-          track={showPauseOverlay || showEpisodes ? null : this.activeSubtitleTrack()}
+              <video
 
-        />
+                className="h-full w-full object-contain object-center"
+                ref={this.videoRef}
+                playsInline
+                // Keep crossOrigin stable across multiview toggles — flipping it
+                // reloads the media element and kills the active live stream.
+                crossOrigin={ambienceEnabled ? "anonymous" : undefined}
+                {...videoHandlers}
+
+              />
+
+              {multiviewActive && (
+
+                <div className="absolute top-2 left-1/2 z-40 flex -translate-x-1/2 items-center gap-1.5">
+
+                  <div className="pointer-events-none max-w-[10rem] truncate rounded-md bg-black/65 px-2 py-1 text-[11px] font-medium text-white backdrop-blur-sm sm:max-w-[14rem]">
+
+                    {title}
+
+                  </div>
+
+                  <button
+
+                    type="button"
+                    onClick={(e) => {
+
+                      e.stopPropagation();
+
+                      if (primaryChannelId) this.selectAudioChannel(primaryChannelId);
+
+                    }}
+                    className={cn(
+
+                      "rounded-md p-1.5 backdrop-blur-sm transition-colors",
+                      primaryAudio
+                        ? "bg-accent text-black"
+                        : "bg-black/65 text-white/80 hover:bg-black/80 hover:text-white"
+
+                    )}
+                    aria-label={primaryAudio ? "Audio from this pane" : "Route audio to this pane"}
+
+                  >
+
+                    {primaryAudio ? <Volume2 size={14} /> : <VolumeX size={14} />}
+
+                  </button>
+
+                  {onMultiviewRemove && primaryChannelId && (
+
+                    <button
+
+                      type="button"
+                      onClick={(e) => {
+
+                        e.stopPropagation();
+                        onMultiviewRemove(primaryChannelId);
+
+                      }}
+                      className="rounded-md bg-black/65 p-1.5 text-white/80 backdrop-blur-sm transition-colors hover:bg-black/80 hover:text-white"
+                      aria-label={`Remove ${title}`}
+
+                    >
+
+                      <X size={14} />
+
+                    </button>
+
+                  )}
+
+                </div>
+
+              )}
+
+              {loading && multiviewActive && (
+
+                <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/50">
+
+                  <div className="h-6 w-6 animate-spin rounded-full border-2 border-white/20 border-t-white" />
+
+                </div>
+
+              )}
+
+            </div>
+
+            {multiviewStreams.map((stream, index) => (
+
+              <div key={stream.channelId} className={cn("min-h-0 min-w-0", paneSpanClass(index + 1, layout))}>
+
+                <LiveStreamPane
+
+                  stream={stream}
+                  audioActive={audioChannelId === stream.channelId}
+                  volume={muted ? 0 : volume}
+                  removable
+                  onSelectAudio={this.selectAudioChannel}
+                  onRemove={onMultiviewRemove}
+
+                />
+
+              </div>
+
+            ))}
+
+          </div>
+
+        ) : (
+
+          <video
+
+            className="relative z-10 h-full w-full object-contain object-center"
+            ref={this.videoRef}
+            playsInline
+            crossOrigin={ambienceEnabled ? "anonymous" : undefined}
+            {...videoHandlers}
+
+          />
+
+        )}
+
+        {!multiviewActive && (
+
+          <SubtitleDisplay
+
+            videoRef={this.videoRef}
+            track={showPauseOverlay || showEpisodes ? null : this.activeSubtitleTrack()}
+
+          />
+
+        )}
 
         <PauseOverlay
 
@@ -1641,7 +1907,7 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
 
         />
 
-        {loading && (
+        {loading && !multiviewActive && (
 
           <div className="absolute inset-0 z-20 flex items-center justify-center bg-surface/60 backdrop-blur-md">
 
@@ -1655,8 +1921,9 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
 
         <div className={cn(
 
-            "absolute top-4 right-4 left-4 z-30 flex items-start justify-between gap-4 transition-opacity duration-300",
-            showControls ? "opacity-100" : "pointer-events-none opacity-0"
+            // Pass clicks through empty top band so multiview pane chrome stays usable.
+            "pointer-events-none absolute top-4 right-4 left-4 z-30 flex items-start justify-between gap-4 transition-opacity duration-300",
+            showControls ? "opacity-100" : "opacity-0"
 
           )}
 
@@ -1670,7 +1937,7 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
 
                 onBack();
 
-              }} className="flex shrink-0 items-center gap-2 rounded-md border border-border-subtle bg-surface/80 px-3 py-1.5 text-xs backdrop-blur-md transition-colors hover:bg-surface-overlay" >
+              }} className="pointer-events-auto flex shrink-0 items-center gap-2 rounded-md border border-border-subtle bg-surface/80 px-3 py-1.5 text-xs backdrop-blur-md transition-colors hover:bg-surface-overlay" >
 
               <ArrowLeft size={14} />
 
@@ -1684,21 +1951,27 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
 
           )}
 
-          <div className="max-w-[55%] min-w-0 rounded-md border border-border-subtle bg-surface/80 px-3 py-1.5 text-right backdrop-blur-md">
+          <div className="pointer-events-none max-w-[55%] min-w-0 rounded-md border border-border-subtle bg-surface/80 px-3 py-1.5 text-right backdrop-blur-md">
 
             {/* For tv shows, a bit of a different layout. Not ideally done, but works */}
 
             <p className="truncate text-sm font-medium">
 
-              {title} {episodeTitle ? <span className="text-foreground-muted">{subtitle}</span> : null}
+              {multiviewActive ? "Multiview" : (
+                <>
+                  {title} {episodeTitle ? <span className="text-foreground-muted">{subtitle}</span> : null}
+                </>
+              )}
 
             </p>
 
-            {subtitle && (
+            {(multiviewActive || subtitle) && (
 
               <p className="truncate text-xs text-foreground-muted">
 
-                {episodeTitle ? `${episodeTitle}` : subtitle}
+                {multiviewActive
+                  ? `${multiviewCount} Channel${multiviewCount === 1 ? "" : "s"}`
+                  : episodeTitle ? `${episodeTitle}` : subtitle}
 
               </p>
 
@@ -1789,9 +2062,11 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
 
         <div className={cn(
 
-            "absolute inset-x-0 bottom-0 z-20 px-4 pb-4 transition-opacity duration-300 sm:px-6",
+            // Outer shell is pointer-events-none so its padding doesn't block
+            // multiview pane chrome (audio/remove) under the bottom control band.
+            "pointer-events-none absolute inset-x-0 bottom-0 z-20 px-4 pb-4 transition-opacity duration-300 sm:px-6",
             showEpisodes ? "pt-2" : "pt-10",
-            showControls || showEpisodes ? "opacity-100" : "pointer-events-none opacity-0"
+            showControls || showEpisodes ? "opacity-100" : "opacity-0"
 
         )}
 
@@ -1799,34 +2074,43 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
 
           {episodesEnabled && onSeasonChange && onEpisodeSelect && (
 
-            <EpisodePickerPanel
+            <div className={showEpisodes ? "pointer-events-auto" : undefined}>
 
-              open={showEpisodes}
-              seasons={seasons ?? []}
-              episodes={episodes ?? []}
+              <EpisodePickerPanel
 
-              currentSeason={currentSeason}
-              currentEpisode={currentEpisode}
-              menuSeason={menuSeason ?? currentSeason ?? 1}
-              episodesLoading={episodesLoading}
+                open={showEpisodes}
+                seasons={seasons ?? []}
+                episodes={episodes ?? []}
 
-              onClose={() => this.setState({ showEpisodes: false })}
-              onSeasonChange={onSeasonChange}
-              onEpisodeSelect={(season, episode) => {
+                currentSeason={currentSeason}
+                currentEpisode={currentEpisode}
+                menuSeason={menuSeason ?? currentSeason ?? 1}
+                episodesLoading={episodesLoading}
 
-                this.setState({ showEpisodes: false });
+                onClose={() => this.setState({ showEpisodes: false })}
+                onSeasonChange={onSeasonChange}
+                onEpisodeSelect={(season, episode) => {
 
-                onEpisodeSelect(season, episode);
+                  this.setState({ showEpisodes: false });
 
-              }}
+                  onEpisodeSelect(season, episode);
 
-            />
+                }}
+
+              />
+
+            </div>
 
           )}
 
           {!live && (
 
-            <div className="group mb-3 h-2 cursor-pointer rounded-full py-0.5" onClick={(e) => {
+            <div className={cn(
+
+                "group mb-3 h-2 cursor-pointer rounded-full py-0.5",
+                (showControls || showEpisodes) && "pointer-events-auto"
+
+              )} onClick={(e) => {
 
                 e.stopPropagation();
 
@@ -1860,7 +2144,13 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
 
           )}
 
-          <div className="relative flex items-center justify-between">
+          <div className={cn(
+
+              "relative flex items-center justify-between",
+              (showControls || showEpisodes) && "pointer-events-auto"
+
+            )}
+          >
 
             <div className="flex items-center gap-3">
 
@@ -1958,6 +2248,15 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
                 subtitleTracks={this.allSubtitleTracks()}
                 activeSubtitleId={activeSubtitleId}
                 qualityEnabled={qualityEnabled}
+
+                multiviewEnabled={!!live && !!onMultiviewToggle}
+                multiviewChannels={multiviewChannels}
+                multiviewSelectedIds={this.multiviewSelectedIds()}
+                multiviewPendingIds={this.multiviewPendingIds()}
+                multiviewPrimaryId={primaryChannelId}
+                multiviewLoading={multiviewLoading}
+                onMultiviewSearch={onMultiviewSearch}
+                onMultiviewToggle={onMultiviewToggle}
 
                 onToggle={this.toggleOptions}
                 onClose={() => this.setState({ showOptions: false })}

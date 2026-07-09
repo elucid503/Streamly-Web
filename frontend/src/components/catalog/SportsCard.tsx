@@ -76,10 +76,36 @@ export function MatchTitle({ title, className }: { title: string; className?: st
 
 }
 
+function hasScore(match: SportsMatch): boolean {
+
+  return match.homeScore !== undefined && match.awayScore !== undefined;
+
+}
+
+function Scoreline({ match, className }: { match: SportsMatch; className?: string }) {
+
+  if (!hasScore(match)) return null;
+
+  // ntv titles are typically "Home vs Away"; keep scores in that left-to-right order.
+  return (
+
+    <span className={cn("tabular-nums font-semibold", className)}>
+
+      {match.homeScore}
+      <span className="mx-1 font-normal text-foreground-faint">–</span>
+      {match.awayScore}
+
+    </span>
+
+  );
+
+}
+
 export function SportsRow({ match, onSelect }: SportsRowProps) {
 
   const channel = match.channel ? matchedChannelToLiveChannel(match.channel, match.category) : null;
   const { day, time } = splitStart(match.startsAt);
+  const scored = hasScore(match);
 
   return (
 
@@ -100,9 +126,47 @@ export function SportsRow({ match, onSelect }: SportsRowProps) {
 
       <div className="hidden md:flex w-30 flex-shrink-0 flex-col items-center justify-center whitespace-nowrap border-r border-border-subtle pr-4 text-center">
 
-        {match.live ? (
+        {(match.live || match.status === "in") ? (
 
-          <span className="text-sm font-bold text-red-500">LIVE</span>
+          <>
+
+            <span className="text-sm font-bold text-red-500">LIVE</span>
+
+            {scored && (
+
+              <Scoreline match={match} className="mt-0.5 text-base text-foreground" />
+
+            )}
+
+            {match.statusDetail && (
+
+              <span className="mt-0.5 max-w-[7rem] truncate text-[10px] text-foreground-faint">
+
+                {match.statusDetail}
+
+              </span>
+
+            )}
+
+          </>
+
+        ) : scored || match.status === "post" ? (
+
+          <>
+
+            <Scoreline match={match} className="text-base text-foreground-muted" />
+
+            {match.statusDetail && (
+
+              <span className="mt-0.5 max-w-[7rem] truncate text-[10px] text-foreground-faint">
+
+                {match.statusDetail}
+
+              </span>
+
+            )}
+
+          </>
 
         ) : (
 
@@ -122,7 +186,7 @@ export function SportsRow({ match, onSelect }: SportsRowProps) {
 
         <div className="mb-1 flex items-center gap-2">
 
-          {match.live && (
+          {(match.live || match.status === "in") && (
 
             <span className="flex flex-shrink-0 items-center gap-1 rounded-full bg-red-500/15 px-2 py-0.5 text-[11px] font-semibold text-red-500">
 
@@ -137,6 +201,12 @@ export function SportsRow({ match, onSelect }: SportsRowProps) {
             {prettyCategory(match.category)}
 
           </span>
+
+          {scored && (
+
+            <Scoreline match={match} className="md:hidden text-xs text-foreground" />
+
+          )}
 
         </div>
 

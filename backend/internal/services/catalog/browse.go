@@ -331,6 +331,11 @@ func sportsMatchFromMatch(m mediakit.Match) SportsMatchDTO {
 		Title:    m.Title,
 		Category: m.Category,
 
+		HomeScore:    m.HomeScore,
+		AwayScore:    m.AwayScore,
+		StatusDetail: m.StatusDetail,
+		Status:       m.Status,
+
 		StartsAt: m.StartTime.Unix(),
 		Live:     m.Live,
 	}

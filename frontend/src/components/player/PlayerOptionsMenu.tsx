@@ -1,10 +1,12 @@
 import { cn } from "@/lib/utils";
-import type { StreamQuality, SubtitleTrack } from "@/lib/types";
+import type { LiveChannel, StreamQuality, SubtitleTrack } from "@/lib/types";
 
 import { Component, createRef, type ReactNode } from "react";
-import { Check, Gauge, Settings, Settings2, Subtitles, X } from "lucide-react";
+import { Check, Gauge, LayoutGrid, Loader2, Search, Settings, Settings2, Subtitles, X } from "lucide-react";
 
-type OptionsPanel = "quality" | "subtitles";
+type OptionsPanel = "quality" | "subtitles" | "multiview";
+
+export const MULTIVIEW_MAX_STREAMS = 6;
 
 interface PlayerOptionsMenuProps {
 
@@ -20,6 +22,13 @@ interface PlayerOptionsMenuProps {
   preferredHeight?: number;
   hdrHeights?: Set<number>;
 
+  multiviewEnabled?: boolean;
+  multiviewChannels?: LiveChannel[];
+  multiviewSelectedIds?: string[];
+  multiviewPendingIds?: string[];
+  multiviewPrimaryId?: string;
+  multiviewLoading?: boolean;
+
   onToggle: () => void;
   onClose: () => void;
   onOutsideClose?: (event: PointerEvent) => void;
@@ -28,11 +37,15 @@ interface PlayerOptionsMenuProps {
   onSubtitleChange: (trackId: string | null) => void;
   onOpenSettings?: () => void;
 
+  onMultiviewSearch?: (query: string) => void;
+  onMultiviewToggle?: (channel: LiveChannel) => void;
+
 }
 
 interface PlayerOptionsMenuState {
 
   panel: OptionsPanel;
+  multiviewQuery: string;
 
 }
 
@@ -82,9 +95,10 @@ const subtitleTrackDetail = (track: SubtitleTrack) => {
 
 export class PlayerOptionsMenu extends Component<PlayerOptionsMenuProps, PlayerOptionsMenuState> {
 
-  state: PlayerOptionsMenuState = { panel: "quality" };
+  state: PlayerOptionsMenuState = { panel: "quality", multiviewQuery: "" };
 
   private rootRef = createRef<HTMLDivElement>();
+  private searchTimer: ReturnType<typeof setTimeout> | null = null;
 
   panelOrder = (): OptionsPanel[] => {
 
@@ -93,6 +107,8 @@ export class PlayerOptionsMenu extends Component<PlayerOptionsMenuProps, PlayerO
     if (this.props.qualityEnabled) order.push("quality");
 
     order.push("subtitles");
+
+    if (this.props.multiviewEnabled) order.push("multiview");
 
     return order;
 
@@ -104,7 +120,13 @@ export class PlayerOptionsMenu extends Component<PlayerOptionsMenuProps, PlayerO
 
     if (this.props.open && !prev.open) {
 
-      this.setState({ panel: this.defaultPanel() });
+      this.setState({ panel: this.defaultPanel(), multiviewQuery: "" });
+
+      if (this.props.multiviewEnabled) {
+
+        this.props.onMultiviewSearch?.("");
+
+      }
 
     }
 
@@ -128,6 +150,8 @@ export class PlayerOptionsMenu extends Component<PlayerOptionsMenuProps, PlayerO
 
     document.removeEventListener("pointerdown", this.handleOutsidePointerDown, true);
 
+    if (this.searchTimer) clearTimeout(this.searchTimer);
+
   }
 
   handleOutsidePointerDown = (event: PointerEvent) => {
@@ -142,6 +166,20 @@ export class PlayerOptionsMenu extends Component<PlayerOptionsMenuProps, PlayerO
 
     this.props.onOutsideClose?.(event);
     this.props.onClose();
+
+  };
+
+  handleMultiviewQuery = (value: string) => {
+
+    this.setState({ multiviewQuery: value });
+
+    if (this.searchTimer) clearTimeout(this.searchTimer);
+
+    this.searchTimer = setTimeout(() => {
+
+      this.props.onMultiviewSearch?.(value);
+
+    }, 200);
 
   };
 
@@ -173,33 +211,53 @@ export class PlayerOptionsMenu extends Component<PlayerOptionsMenuProps, PlayerO
 
   };
 
-  renderOption = (active: boolean, label: string, detail: string | undefined, onClick: () => void, key: string) => (
+  renderOption = (
+    active: boolean,
+    label: string,
+    detail: string | undefined,
+    onClick: () => void,
+    key: string,
+    disabled = false,
+    loading = false,
+  ) => (
 
-    <button key={key} onClick={(e) => {
+    <button key={key} disabled={disabled} onClick={(e) => {
 
         e.stopPropagation();
+
+        if (disabled) return;
 
         onClick();
 
       }} className={cn(
 
         "flex w-full items-center gap-3 rounded-lg px-3.5 py-3 text-left transition-colors",
-        active ? "bg-white/10 text-foreground ring-1 ring-white/10" : "text-foreground-muted hover:bg-white/6 hover:text-foreground"
+        disabled && "cursor-not-allowed opacity-40",
+        !disabled && (active || loading) && "bg-white/10 text-foreground ring-1 ring-white/10",
+        !disabled && !active && !loading && "text-foreground-muted hover:bg-white/6 hover:text-foreground"
 
       )} >
 
-      <span className={cn(
+      {loading ? (
 
-          "flex h-4 w-4 shrink-0 items-center justify-center rounded-full border transition-colors",
-          active ? "border-accent bg-accent text-black" : "border-white/20 bg-transparent"
+        <Loader2 size={16} className="h-4 w-4 shrink-0 animate-spin text-foreground-muted" strokeWidth={2.5} />
 
-        )}
+      ) : (
 
-      >
+        <span className={cn(
 
-        {active && <Check size={10} strokeWidth={3} />}
+            "flex h-4 w-4 shrink-0 items-center justify-center rounded-full border transition-colors",
+            active ? "border-accent bg-accent text-black" : "border-white/20 bg-transparent"
 
-      </span>
+          )}
+
+        >
+
+          {active && <Check size={10} strokeWidth={3} />}
+
+        </span>
+
+      )}
 
       <div className="min-w-0 flex-1">
 
@@ -225,9 +283,146 @@ export class PlayerOptionsMenu extends Component<PlayerOptionsMenuProps, PlayerO
 
   );
 
+  renderMultiviewPanel = () => {
+
+    const {
+      multiviewChannels = [],
+      multiviewSelectedIds = [],
+      multiviewPendingIds = [],
+      multiviewPrimaryId,
+      multiviewLoading,
+      onMultiviewToggle,
+    } = this.props;
+
+    const { multiviewQuery } = this.state;
+
+    const selectedSet = new Set(multiviewSelectedIds);
+    const pendingSet = new Set(multiviewPendingIds);
+    const selectedCount = multiviewSelectedIds.length;
+    const atCap = selectedCount >= MULTIVIEW_MAX_STREAMS;
+
+    return (
+
+      <div className="max-h-72 w-full flex-shrink-0 overflow-hidden pr-1">
+
+        <div className="mb-2 flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-2.5 py-2">
+
+          <Search size={13} className="shrink-0 text-foreground-faint" />
+
+          <input
+
+            type="search"
+            value={multiviewQuery}
+            placeholder="Search channels…"
+            onChange={(e) => this.handleMultiviewQuery(e.target.value)}
+            onClick={(e) => e.stopPropagation()}
+            className="min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none placeholder:text-foreground-faint"
+
+          />
+
+          {multiviewQuery && (
+
+            <button
+
+              type="button"
+              onClick={(e) => {
+
+                e.stopPropagation();
+                this.handleMultiviewQuery("");
+
+              }}
+              className="rounded p-0.5 text-foreground-faint hover:text-foreground"
+
+            >
+
+              <X size={12} />
+
+            </button>
+
+          )}
+
+        </div>
+
+        <p className="mb-2 px-1 text-[11px] text-foreground-faint">
+
+          {selectedCount}/{MULTIVIEW_MAX_STREAMS} streams selected
+
+        </p>
+
+        <div className="max-h-48 space-y-1 overflow-y-auto">
+
+          {multiviewLoading && multiviewChannels.length === 0 && (
+
+            <div className="rounded-lg px-4 py-6 text-center text-sm text-foreground-muted">
+
+              Loading channels…
+
+            </div>
+
+          )}
+
+          {!multiviewLoading && multiviewChannels.length === 0 && (
+
+            <div className="rounded-lg px-4 py-6 text-center">
+
+              <LayoutGrid size={20} className="mx-auto mb-2 text-foreground-faint" />
+
+              <p className="text-sm text-foreground-muted">
+
+                No channels found
+
+              </p>
+
+            </div>
+
+          )}
+
+          {multiviewChannels.map((channel) => {
+
+            const isPrimary = channel.id === multiviewPrimaryId;
+            const pending = pendingSet.has(channel.id);
+            const selected = selectedSet.has(channel.id) || isPrimary;
+
+            const detail = isPrimary
+              ? "Current channel"
+              : selected
+                ? "In multiview — click to remove"
+                : atCap
+                  ? "Limit reached"
+                  : channel.category || undefined;
+
+            return this.renderOption(
+
+              selected && !pending,
+              channel.name,
+              detail,
+              () => {
+
+                if (isPrimary) return;
+
+                onMultiviewToggle?.(channel);
+
+              },
+              `mv-${channel.id}`,
+              // Allow deselecting / cancelling even at the cap; only block new adds.
+              isPrimary || (!selected && !pending && atCap),
+              pending
+
+            );
+
+          })}
+
+        </div>
+
+      </div>
+
+    );
+
+  };
+
   render() {
 
-    const { open, qualities, selectedHeight, subtitleTracks, activeSubtitleId, qualityEnabled, preferredHeight, hdrHeights, onToggle, onClose, onQualityChange, onSubtitleChange, onOpenSettings, } = this.props;
+    const { open, qualities, selectedHeight, subtitleTracks, activeSubtitleId, qualityEnabled, preferredHeight, hdrHeights, multiviewEnabled, onToggle, onClose, onQualityChange, onSubtitleChange, onOpenSettings, } = this.props;
     const { panel } = this.state;
 
     const sortedQualities = [...qualities].sort((a, b) => b.height - a.height);
@@ -303,6 +498,8 @@ export class PlayerOptionsMenu extends Component<PlayerOptionsMenuProps, PlayerO
                 {qualityEnabled && this.renderTab("quality", "Quality", <Gauge size={13} className="opacity-80" />)}
 
                 {this.renderTab("subtitles", "Subtitles", <Subtitles size={13} className="opacity-80" />)}
+
+                {multiviewEnabled && this.renderTab("multiview", "Multiview", <LayoutGrid size={13} className="opacity-80" />)}
 
               </div>
 
@@ -437,6 +634,8 @@ export class PlayerOptionsMenu extends Component<PlayerOptionsMenuProps, PlayerO
                   </div>
 
                 </div>
+
+                {multiviewEnabled && this.renderMultiviewPanel()}
 
               </div>
 
