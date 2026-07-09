@@ -12,7 +12,6 @@ import { Component, createRef } from "react";
 
 const STARTING_SOON_WINDOW_SECS = 3 * 60 * 60;
 const ROW_PREVIEW_COUNT = 5;
-const UPCOMING_CAP = 5;
 const FEATURED_TEAM_KEY = "streamly:sportsFeaturedTeam";
 
 interface SportsPageProps {
@@ -32,6 +31,7 @@ interface SportsPageState {
 
   showAllLive: boolean;
   showAllSoon: boolean;
+  showAllUpcoming: boolean;
 
   /** Preferred team name from localStorage; applied only when still in Live Now. */
   featuredTeam: string;
@@ -190,9 +190,6 @@ class FeaturedTeamSelect extends Component<FeaturedTeamSelectProps, FeaturedTeam
         <button
           type="button"
           className={cn(
-            // Finite radii only — rounded-*-full (9999px) forces the browser to crush
-            // adjacent corner radii when they sum past the box size (CSS Spec).
-            // Outer end = half of h-9 (pill); facing end is softer but clearly rounded.
             "field-focus flex h-9 min-w-[132px] max-w-[11rem] items-center justify-between gap-2 rounded-l-[5px] rounded-r-[18px] border border-border-subtle bg-surface-raised px-3 text-left text-xs font-medium text-foreground hover:border-border hover:bg-surface-overlay",
             open && "border-border bg-surface-overlay"
           )}
@@ -326,6 +323,7 @@ export class SportsPage extends Component<SportsPageProps, SportsPageState> {
 
     showAllLive: false,
     showAllSoon: false,
+    showAllUpcoming: false,
 
     featuredTeam: readFeaturedTeam(),
 
@@ -520,7 +518,7 @@ export class SportsPage extends Component<SportsPageProps, SportsPageState> {
 
   render() {
 
-    const { loading, showAllLive, showAllSoon, featuredTeam } = this.state;
+    const { loading, showAllLive, showAllSoon, showAllUpcoming, featuredTeam } = this.state;
 
     const matches = this.filtered();
 
@@ -713,7 +711,7 @@ export class SportsPage extends Component<SportsPageProps, SportsPageState> {
 
         {this.renderSection("Starting Soon", startingSoon, showAllSoon, () => this.setState({ showAllSoon: !showAllSoon }))}
 
-        {this.renderSection("Upcoming", upcoming.slice(0, UPCOMING_CAP), true, () => {}, UPCOMING_CAP)}
+        {this.renderSection("Upcoming", upcoming, showAllUpcoming, () => this.setState({ showAllUpcoming: !showAllUpcoming }))}
 
         {this.renderSection("Past", past, true, () => {}, Number.MAX_SAFE_INTEGER)}
 
