@@ -680,8 +680,7 @@ export class SportsPage extends Component<SportsPageProps, SportsPageState> {
                     onClick={() => this.props.onSelectChannel(matchedChannelToLiveChannel(featured.channel!, featured.category))}
                     className={cn(
                       "flex h-9 items-center gap-2 bg-white px-5 text-sm font-semibold text-black transition-opacity hover:opacity-90",
-                      // Avoid rounded-*-full when pairing: 9999px outer radii collapse the
-                      // facing corners via the CSS border-radius overlap reduction rule.
+                      // Avoid rounded-*-full when pairing: 9999px outer radii collapse the facing corners via the CSS border-radius overlap reduction rule.
                       teamOptions.length > 0 ? "rounded-l-[18px] rounded-r-[5px]" : "rounded-full"
                     )}
                   >
