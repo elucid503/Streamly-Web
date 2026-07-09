@@ -4,12 +4,16 @@ import { SportsRow, MatchTitle, matchedChannelToLiveChannel, prettyCategory } fr
 
 import { sportsBackgroundImage } from "@/lib/sportsBackgrounds";
 import type { LiveChannel, SportsMatch } from "@/lib/types";
+import { cn } from "@/lib/utils";
 
-import { Component } from "react";
+import { AnimatePresence, motion } from "framer-motion";
+import { Check, ChevronDown } from "lucide-react";
+import { Component, createRef } from "react";
 
 const STARTING_SOON_WINDOW_SECS = 3 * 60 * 60;
 const ROW_PREVIEW_COUNT = 5;
 const UPCOMING_CAP = 5;
+const FEATURED_TEAM_KEY = "streamly:sportsFeaturedTeam";
 
 interface SportsPageProps {
 
@@ -29,6 +33,286 @@ interface SportsPageState {
   showAllLive: boolean;
   showAllSoon: boolean;
 
+  /** Preferred team name from localStorage; applied only when still in Live Now. */
+  featuredTeam: string;
+
+}
+
+function readFeaturedTeam(): string {
+
+  try {
+
+    return localStorage.getItem(FEATURED_TEAM_KEY) ?? "";
+
+  } catch {
+
+    return "";
+
+  }
+
+}
+
+function writeFeaturedTeam(team: string) {
+
+  try {
+
+    if (!team) localStorage.removeItem(FEATURED_TEAM_KEY);
+    else localStorage.setItem(FEATURED_TEAM_KEY, team);
+
+  } catch {
+
+    // ignore quota / private mode
+
+  }
+
+}
+
+/** Team names for a match — prefers structured fields, falls back to "A vs B" title. */
+function teamsForMatch(match: SportsMatch): string[] {
+
+  const teams: string[] = [];
+
+  if (match.homeTeam) teams.push(match.homeTeam);
+
+  if (match.awayTeam) teams.push(match.awayTeam);
+
+  if (teams.length > 0) return teams;
+
+  const parsed = match.title.match(/^(.*?)\s+vs\.?\s+(.*)$/i);
+
+  if (parsed) return [parsed[1].trim(), parsed[2].trim()].filter(Boolean);
+
+  return match.title.trim() ? [match.title.trim()] : [];
+
+}
+
+function matchHasTeam(match: SportsMatch, team: string): boolean {
+
+  const needle = team.trim().toLowerCase();
+
+  if (!needle) return false;
+
+  return teamsForMatch(match).some((t) => t.toLowerCase() === needle);
+
+}
+
+/** Unique live teams in Live Now order (home then away per match). */
+function liveTeamOptions(live: SportsMatch[]): string[] {
+
+  const seen = new Set<string>();
+  const options: string[] = [];
+
+  for (const match of live) {
+
+    for (const team of teamsForMatch(match)) {
+
+      const key = team.toLowerCase();
+
+      if (seen.has(key)) continue;
+
+      seen.add(key);
+      options.push(team);
+
+    }
+
+  }
+
+  return options;
+
+}
+
+interface FeaturedTeamSelectProps {
+
+  value: string;
+  options: string[];
+  onChange: (team: string) => void;
+
+}
+
+interface FeaturedTeamSelectState {
+
+  open: boolean;
+
+}
+
+/** Subtle light-themed select, styled to sit flush with the banner Watch button. */
+class FeaturedTeamSelect extends Component<FeaturedTeamSelectProps, FeaturedTeamSelectState> {
+
+  private rootRef = createRef<HTMLDivElement>();
+
+  state: FeaturedTeamSelectState = {
+
+    open: false,
+
+  };
+
+  componentDidMount() {
+
+    document.addEventListener("mousedown", this.handleDocumentMouseDown);
+
+  }
+
+  componentWillUnmount() {
+
+    document.removeEventListener("mousedown", this.handleDocumentMouseDown);
+
+  }
+
+  handleDocumentMouseDown = (event: MouseEvent) => {
+
+    const root = this.rootRef.current;
+
+    if (!root || root.contains(event.target as Node)) return;
+
+    this.setState({ open: false });
+
+  };
+
+  toggleOpen = () => {
+
+    this.setState((s) => ({ open: !s.open }));
+
+  };
+
+  render() {
+
+    const { value, options, onChange } = this.props;
+    const { open } = this.state;
+
+    // Only show a team label when that team is currently selectable (in Live Now).
+    const activeValue = value && options.some((t) => t.toLowerCase() === value.toLowerCase()) ? value : "";
+    const triggerLabel = activeValue || "Auto";
+
+    return (
+
+      <div ref={this.rootRef} className="relative">
+
+        <button
+          type="button"
+          className={cn(
+            // Finite radii only — rounded-*-full (9999px) forces the browser to crush
+            // adjacent corner radii when they sum past the box size (CSS Spec).
+            // Outer end = half of h-9 (pill); facing end is softer but clearly rounded.
+            "field-focus flex h-9 min-w-[132px] max-w-[11rem] items-center justify-between gap-2 rounded-l-[5px] rounded-r-[18px] border border-border-subtle bg-surface-raised px-3 text-left text-xs font-medium text-foreground hover:border-border hover:bg-surface-overlay",
+            open && "border-border bg-surface-overlay"
+          )}
+          aria-haspopup="listbox"
+          aria-expanded={open}
+          aria-label="Featured team"
+          title="Feature a team in the banner"
+          onClick={this.toggleOpen}
+        >
+
+          <span className="truncate">{triggerLabel}</span>
+          <ChevronDown size={14} className={cn("shrink-0 text-foreground-muted transition-transform", open && "rotate-180")} />
+
+        </button>
+
+        <AnimatePresence>
+
+          {open && (
+
+            <motion.div
+              className="absolute right-0 top-[calc(100%+8px)] z-50 min-w-[16rem] overflow-hidden rounded-[1.25rem] border border-border-subtle bg-surface/95 p-1.5 shadow-2xl ring-1 ring-white/[0.04] backdrop-blur-lg"
+              initial={{ opacity: 0, scale: 0.96, y: -6 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.96, y: -6 }}
+              transition={{ type: "spring", stiffness: 500, damping: 32 }}
+              style={{ transformOrigin: "top right" }}
+            >
+
+              {/* Same surface language as SelectMenu, with roomier rows for long team lists. */}
+              <div role="listbox" aria-label="Featured team" className="flex max-h-72 flex-col gap-0.5 overflow-y-auto">
+
+                <button
+                  type="button"
+                  role="option"
+                  aria-selected={!activeValue}
+                  className={cn(
+                    "flex min-h-10 w-full items-center justify-between gap-2.5 rounded-xl px-3 py-2 text-left text-sm font-medium transition-colors",
+                    !activeValue
+                      ? "bg-surface-raised text-foreground shadow-sm"
+                      : "text-foreground-muted hover:bg-surface-overlay/80 hover:text-foreground"
+                  )}
+                  onClick={() => {
+
+                    onChange("");
+                    this.setState({ open: false });
+
+                  }}
+                >
+
+                  <span className="truncate">Auto</span>
+
+                  {!activeValue && (
+
+                    <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-foreground/10">
+
+                      <Check size={11} className="text-foreground" strokeWidth={2.5} />
+
+                    </span>
+
+                  )}
+
+                </button>
+
+                {options.map((team) => {
+
+                  const isSelected = activeValue.toLowerCase() === team.toLowerCase();
+
+                  return (
+
+                    <button
+                      key={team}
+                      type="button"
+                      role="option"
+                      aria-selected={isSelected}
+                      className={cn(
+                        "flex min-h-10 w-full items-center justify-between gap-2.5 rounded-xl px-3 py-2 text-left text-sm font-medium transition-colors",
+                        isSelected
+                          ? "bg-surface-raised text-foreground shadow-sm"
+                          : "text-foreground-muted hover:bg-surface-overlay/80 hover:text-foreground"
+                      )}
+                      onClick={() => {
+
+                        onChange(team);
+                        this.setState({ open: false });
+
+                      }}
+                    >
+
+                      <span className="truncate leading-snug">{team}</span>
+
+                      {isSelected && (
+
+                        <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-foreground/10">
+
+                          <Check size={11} className="text-foreground" strokeWidth={2.5} />
+
+                        </span>
+
+                      )}
+
+                    </button>
+
+                  );
+
+                })}
+
+              </div>
+
+            </motion.div>
+
+          )}
+
+        </AnimatePresence>
+
+      </div>
+
+    );
+
+  }
+
 }
 
 export class SportsPage extends Component<SportsPageProps, SportsPageState> {
@@ -42,6 +326,8 @@ export class SportsPage extends Component<SportsPageProps, SportsPageState> {
 
     showAllLive: false,
     showAllSoon: false,
+
+    featuredTeam: readFeaturedTeam(),
 
   };
 
@@ -100,6 +386,13 @@ export class SportsPage extends Component<SportsPageProps, SportsPageState> {
       if (initial) this.setState({ loading: false });
 
     }
+
+  };
+
+  setFeaturedTeam = (team: string) => {
+
+    writeFeaturedTeam(team);
+    this.setState({ featuredTeam: team });
 
   };
 
@@ -197,9 +490,37 @@ export class SportsPage extends Component<SportsPageProps, SportsPageState> {
 
   };
 
+  resolveFeatured = (
+    live: SportsMatch[],
+    startingSoon: SportsMatch[],
+    upcoming: SportsMatch[],
+    past: SportsMatch[],
+  ): SportsMatch | undefined => {
+
+    const { featuredTeam } = this.state;
+
+    // Preferred team only applies while that team is still in Live Now.
+    if (featuredTeam) {
+
+      const preferred = live.find((m) => matchHasTeam(m, featuredTeam));
+
+      if (preferred) return preferred;
+
+    }
+
+    return (
+      live.find((m) => m.homeScore !== undefined && m.awayScore !== undefined)
+      ?? live[0]
+      ?? startingSoon[0]
+      ?? upcoming[0]
+      ?? past[0]
+    );
+
+  };
+
   render() {
 
-    const { loading, showAllLive, showAllSoon } = this.state;
+    const { loading, showAllLive, showAllSoon, featuredTeam } = this.state;
 
     const matches = this.filtered();
 
@@ -231,13 +552,8 @@ export class SportsPage extends Component<SportsPageProps, SportsPageState> {
 
     }
 
-    // Featured: prefer a live game that actually has a score, then any live, then soon.
-    const featured =
-      live.find((m) => m.homeScore !== undefined && m.awayScore !== undefined)
-      ?? live[0]
-      ?? startingSoon[0]
-      ?? upcoming[0]
-      ?? past[0];
+    const featured = this.resolveFeatured(live, startingSoon, upcoming, past);
+    const teamOptions = liveTeamOptions(live);
 
     if (loading) {
 
@@ -285,18 +601,23 @@ export class SportsPage extends Component<SportsPageProps, SportsPageState> {
 
           <div className="mb-8 px-4 sm:px-8">
 
-            <div className="relative overflow-hidden rounded-xl">
+            {/* Overflow only on media layers so the team menu can open outside the card. */}
+            <div className="relative rounded-xl">
 
-              <div
+              <div className="pointer-events-none absolute inset-0 overflow-hidden rounded-xl">
 
-                className="absolute inset-0 bg-cover bg-center"
-                style={{ backgroundImage: `url(${sportsBackgroundImage(featured.category)})` }}
+                <div
 
-              />
+                  className="absolute inset-0 bg-cover bg-center"
+                  style={{ backgroundImage: `url(${sportsBackgroundImage(featured.category)})` }}
 
-              <div className="absolute inset-0 bg-black/55" />
+                />
 
-              <div className="absolute inset-0 bg-gradient-to-t from-black via-black/85 to-black/40" />
+                <div className="absolute inset-0 bg-black/55" />
+
+                <div className="absolute inset-0 bg-gradient-to-t from-black via-black/85 to-black/40" />
+
+              </div>
 
               <div className="relative flex min-h-[280px] flex-col justify-end gap-4 p-6 sm:flex-row sm:items-end sm:justify-between sm:p-8">
 
@@ -352,15 +673,34 @@ export class SportsPage extends Component<SportsPageProps, SportsPageState> {
 
                 </div>
 
-                <button type="button" onClick={() => this.props.onSelectChannel(matchedChannelToLiveChannel(featured.channel!, featured.category))}
+                <div className="flex w-fit flex-shrink-0 items-center gap-1.5">
 
-                  className="flex w-fit flex-shrink-0 items-center gap-2 rounded-full bg-white px-5 py-2.5 text-sm font-semibold text-black transition-opacity hover:opacity-90"
+                  <button
+                    type="button"
+                    onClick={() => this.props.onSelectChannel(matchedChannelToLiveChannel(featured.channel!, featured.category))}
+                    className={cn(
+                      "flex h-9 items-center gap-2 bg-white px-5 text-sm font-semibold text-black transition-opacity hover:opacity-90",
+                      // Avoid rounded-*-full when pairing: 9999px outer radii collapse the
+                      // facing corners via the CSS border-radius overlap reduction rule.
+                      teamOptions.length > 0 ? "rounded-l-[18px] rounded-r-[5px]" : "rounded-full"
+                    )}
+                  >
 
-                >
+                    Watch on {featured.channel!.name}
 
-                  Watch on {featured.channel!.name}
+                  </button>
 
-                </button>
+                  {teamOptions.length > 0 && (
+
+                    <FeaturedTeamSelect
+                      value={featuredTeam}
+                      options={teamOptions}
+                      onChange={this.setFeaturedTeam}
+                    />
+
+                  )}
+
+                </div>
 
               </div>
 
