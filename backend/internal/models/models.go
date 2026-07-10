@@ -45,6 +45,7 @@ type UserSettings struct {
 	DisablePauseOverlay bool `bson:"disablePauseOverlay" json:"disablePauseOverlay"`
 	AmbienceEnabled  bool `bson:"ambienceEnabled" json:"ambienceEnabled"`
 	SubtitlesEnabled bool `bson:"subtitlesEnabled" json:"subtitlesEnabled"`
+	ProxyLiveStreams bool `bson:"proxyLiveStreams" json:"proxyLiveStreams"`
 
 	UpdatedAt time.Time `bson:"updatedAt" json:"updatedAt"`
 

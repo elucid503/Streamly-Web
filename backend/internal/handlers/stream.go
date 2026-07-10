@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 
+	"streamly/internal/middleware"
 	"streamly/internal/services"
 
 	"github.com/gin-gonic/gin"
@@ -16,14 +17,15 @@ type StreamHandler struct {
 
 	media *services.MediaService
 	proxy *services.ProxyService
+	settings *services.SettingsService
 
 	subtitles *services.SubtitleResolver
 
 }
 
-func NewStreamHandler(media *services.MediaService, proxy *services.ProxyService, subtitles *services.SubtitleResolver) *StreamHandler {
+func NewStreamHandler(media *services.MediaService, proxy *services.ProxyService, settings *services.SettingsService, subtitles *services.SubtitleResolver) *StreamHandler {
 
-	return &StreamHandler{media: media, proxy: proxy, subtitles: subtitles}
+	return &StreamHandler{media: media, proxy: proxy, settings: settings, subtitles: subtitles}
 
 }
 
@@ -316,10 +318,10 @@ func (h *StreamHandler) NextEpisode(c *gin.Context) {
 
 }
 
-// LiveStream resolves a channel to its direct HLS playlist URL. ntv.cx's
-// cdnlivetv.tv playlists send Access-Control-Allow-Origin: * and don't
-// enforce a Referer check, so the frontend plays them directly with hls.js —
-// no proxy session needed here.
+// LiveStream resolves a channel to its HLS playlist URL. By default the
+// frontend plays cdnlive URLs directly (CORS allows it). When the user
+// enables proxyLiveStreams (e.g. ISP blocks the CDN), playlists and segments
+// are routed through /api/proxy instead.
 func (h *StreamHandler) LiveStream(c *gin.Context) {
 
 	id := c.Param("id")
@@ -333,6 +335,22 @@ func (h *StreamHandler) LiveStream(c *gin.Context) {
 
 	}
 
+	if h.shouldProxyLiveStreams(c) {
+
+		session, err := h.proxy.CreateSession(c.Request.Context(), streamURL, "", true)
+
+		if err != nil {
+
+			streamDebugf("live %s proxy session failed: %v", id, err)
+			writeError(c, http.StatusBadGateway, "failed to create proxy session")
+			return
+
+		}
+
+		streamURL = baseURL(c) + session.ProxyPath
+
+	}
+
 	channel, _ := h.media.LiveChannel(id)
 
 	c.JSON(http.StatusOK, gin.H{
@@ -342,6 +360,34 @@ func (h *StreamHandler) LiveStream(c *gin.Context) {
 		"channel": channel,
 
 	})
+
+}
+
+func (h *StreamHandler) shouldProxyLiveStreams(c *gin.Context) bool {
+
+	if h.settings == nil {
+
+		return false
+
+	}
+
+	userID := c.GetString(middleware.UserIDKey)
+
+	if userID == "" {
+
+		return false
+
+	}
+
+	settings, err := h.settings.Get(c.Request.Context(), userID)
+
+	if err != nil || settings == nil {
+
+		return false
+
+	}
+
+	return settings.ProxyLiveStreams
 
 }
 

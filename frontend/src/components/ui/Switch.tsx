@@ -6,6 +6,7 @@ interface SwitchProps {
 
   checked: boolean;
   label: string;
+  description?: string;
 
   onChange: (checked: boolean) => void;
 
@@ -17,13 +18,23 @@ export class Switch extends Component<SwitchProps> {
 
   render() {
 
-    const { checked, onChange, label } = this.props;
+    const { checked, onChange, label, description } = this.props;
 
     return (
 
       <label className={`flex cursor-pointer items-center justify-between gap-4 py-2 ${this.props.className || ""}`}>
 
-        <span className="text-sm text-foreground-muted">{label}</span>
+        <span className="min-w-0">
+
+          <span className="block text-sm text-foreground-muted">{label}</span>
+
+          {description ? (
+
+            <span className="mt-0.5 block text-xs text-foreground-muted/70">{description}</span>
+
+          ) : null}
+
+        </span>
 
         <div className="relative flex-shrink-0">
 

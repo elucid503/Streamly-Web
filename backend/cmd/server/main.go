@@ -135,7 +135,7 @@ func main() {
 	favoritesHandler := handlers.NewFavoritesHandler(favoritesSvc)
 	socialHandler := handlers.NewSocialHandler(socialSvc)
 	catalogHandler := handlers.NewCatalogHandler(mediaSvc)
-	streamHandler := handlers.NewStreamHandler(mediaSvc, proxySvc, subtitleSvc)
+	streamHandler := handlers.NewStreamHandler(mediaSvc, proxySvc, settingsSvc, subtitleSvc)
 	proxyHandler := handlers.NewProxyHandler(proxySvc)
 	adminHandler := handlers.NewAdminHandler(authSvc, db)
 

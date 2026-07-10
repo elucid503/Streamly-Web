@@ -52,6 +52,7 @@ func (s *SettingsService) Get(ctx context.Context, userID string) (*models.UserS
 			AmbienceEnabled:  true,
 			DisablePauseOverlay: false,
 			SubtitlesEnabled: true,
+			ProxyLiveStreams: false,
 			UpdatedAt:        now,
 
 		}
@@ -88,6 +89,7 @@ type SettingsUpdate struct {
 	AmbienceEnabled  *bool `json:"ambienceEnabled"`
 	DisablePauseOverlay *bool `json:"disablePauseOverlay"`
 	SubtitlesEnabled *bool `json:"subtitlesEnabled"`
+	ProxyLiveStreams *bool `json:"proxyLiveStreams"`
 
 }
 
@@ -148,6 +150,14 @@ func (s *SettingsService) Update(ctx context.Context, userID string, update Sett
 		set["disablePauseOverlay"] = *update.DisablePauseOverlay
 
 		settings.DisablePauseOverlay = *update.DisablePauseOverlay
+
+	}
+
+	if update.ProxyLiveStreams != nil {
+
+		set["proxyLiveStreams"] = *update.ProxyLiveStreams
+
+		settings.ProxyLiveStreams = *update.ProxyLiveStreams
 
 	}
 

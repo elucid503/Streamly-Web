@@ -15,6 +15,7 @@ export interface UserSettings {
   disablePauseOverlay: boolean;
   ambienceEnabled: boolean;
   subtitlesEnabled: boolean;
+  proxyLiveStreams: boolean;
 
 }
 

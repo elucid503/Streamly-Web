@@ -138,6 +138,7 @@ func (s *AuthService) Register(ctx context.Context, email, password, accessCode 
 		SkipIntro: true,
 		AmbienceEnabled: true,
 		SubtitlesEnabled: true,
+		ProxyLiveStreams: false,
 		UpdatedAt: now,
 
 	}
