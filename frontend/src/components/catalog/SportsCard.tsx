@@ -37,7 +37,8 @@ export function prettyCategory(category: string): string {
     afl: "AFL",
     mma: "MMA",
     ufc: "UFC",
-    football: "Soccer",
+    football: "Football",
+    soccer: "Football",
     "american-football": "American Football",
     "motor-sports": "Formula 1",
 
