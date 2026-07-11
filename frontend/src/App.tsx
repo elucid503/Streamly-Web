@@ -8,8 +8,8 @@ import { isIOS } from "@/lib/platform";
 import { PWAInstallDesktop } from "@/components/layout/PWAInstallDesktop";
 import { PWAInstallGate } from "@/components/layout/PWAInstallGate";
 
-import { Component, lazy, Suspense, type ReactNode } from "react";
-import { MotionConfig } from "framer-motion";
+import { Component, createRef, lazy, Suspense, type ReactNode } from "react";
+import { motion, MotionConfig, type PanInfo } from "framer-motion";
 import type { Location } from "history";
 
 // Lazy loads pages for better performance.
@@ -23,26 +23,42 @@ interface AppState {
 
   location: Location;
   booting: boolean; // Indicates whether the app is still booting (used to show a loading spinner).
+  activeWatchPath: string | null;
+  playerReady: boolean;
+  miniPlayerCorner: "top-left" | "top-right" | "bottom-left" | "bottom-right";
 
 }
 
 export class App extends Component<object, AppState> {
 
   private unlisten = () => {};
+  private miniPlayerBounds = createRef<HTMLDivElement>();
+  private suppressMiniPlayerReturnUntil = 0;
 
   state: AppState = {
 
     location: history.location,
 
     booting: true,
+    activeWatchPath: parseRoute(history.location).watchPath ?? null,
+    playerReady: false,
+    miniPlayerCorner: "bottom-right",
 
   };
 
   async componentDidMount() {
 
-    this.unlisten = history.listen(() => {
+    this.unlisten = history.listen(({ location }) => {
 
-      this.setState({ location: history.location });
+      const route = parseRoute(location);
+
+      this.setState((previous) => ({
+
+        location,
+        activeWatchPath: route.name === "watch" ? route.watchPath ?? null : previous.activeWatchPath,
+        playerReady: route.name === "watch" && route.watchPath !== previous.activeWatchPath ? false : previous.playerReady,
+
+      }));
 
     });
 
@@ -168,7 +184,7 @@ export class App extends Component<object, AppState> {
 
       case "watch":
 
-        return this.renderShell(<WatchPage navigate={navigate} watchPath={route.watchPath!} />);
+        return null;
 
       case "home":
 
@@ -196,6 +212,80 @@ export class App extends Component<object, AppState> {
 
   }
 
+  renderPlayer() {
+
+    const { activeWatchPath, location, miniPlayerCorner, playerReady } = this.state;
+
+    if (!activeWatchPath || !store.isAuthenticated) return null;
+
+    const route = parseRoute(location);
+    const minimized = route.name !== "watch";
+    const verticalCorner = miniPlayerCorner.startsWith("top")
+      ? "top-0"
+      : "bottom-[calc(env(safe-area-inset-bottom,0px)+4.5rem)] sm:bottom-0";
+    const horizontalCorner = miniPlayerCorner.endsWith("left") ? "left-0" : "right-0";
+
+    const returnToPlayer = () => {
+
+      if (Date.now() < this.suppressMiniPlayerReturnUntil) return;
+
+      navigate(`/watch/${activeWatchPath}`);
+
+    };
+
+    const snapToCorner = (_event: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
+
+      this.suppressMiniPlayerReturnUntil = Date.now() + 300;
+
+      const vertical = info.point.y < window.innerHeight / 2 ? "top" : "bottom";
+      const horizontal = info.point.x < window.innerWidth / 2 ? "left" : "right";
+
+      this.setState({ miniPlayerCorner: `${vertical}-${horizontal}` as AppState["miniPlayerCorner"] });
+
+    };
+
+    return (
+
+      <div ref={this.miniPlayerBounds} className={minimized ? "pointer-events-none fixed inset-3 z-[80] sm:inset-5" : "fixed inset-0 z-[80]"}>
+
+        <motion.div
+          layout
+          drag={minimized ? true : false}
+          dragConstraints={this.miniPlayerBounds}
+          dragElastic={0.05}
+          dragMomentum={false}
+          dragSnapToOrigin
+          onDragStart={() => { this.suppressMiniPlayerReturnUntil = Number.POSITIVE_INFINITY; }}
+          onDragEnd={snapToCorner}
+          animate={{ x: 0, y: 0 }}
+          transition={{ type: "spring", stiffness: 360, damping: 34 }}
+          className={minimized
+            ? `${playerReady ? "pointer-events-auto visible" : "pointer-events-none invisible"} absolute ${verticalCorner} ${horizontalCorner} aspect-video w-[min(22rem,calc(100vw-1.5rem))] overflow-hidden rounded-xl border border-border-subtle bg-black shadow-2xl`
+            : "absolute inset-0 bg-black"}
+        >
+
+          {this.renderShell(
+
+            <WatchPage
+              navigate={navigate}
+              watchPath={activeWatchPath}
+              minimized={minimized}
+              onMinimize={navigate}
+              onReturn={returnToPlayer}
+              onDismiss={() => this.setState({ activeWatchPath: null, playerReady: false })}
+              onReadyChange={(ready) => this.setState({ playerReady: ready })}
+            />
+
+          )}
+
+        </motion.div>
+
+      </div>
+
+    );
+
+  }
+
   render() {
 
     const { booting } = this.state;
@@ -219,6 +309,7 @@ export class App extends Component<object, AppState> {
       <MotionConfig reducedMotion={isIOS() ? "always" : "user"}>
 
         {this.renderPage()}
+        {this.renderPlayer()}
 
         <PWAInstallGate />
 

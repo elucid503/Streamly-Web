@@ -100,6 +100,9 @@ interface VideoPlayerProps {
   isHls: boolean;
   live?: boolean;
   lowLatency?: boolean;
+  compact?: boolean;
+  onReturn?: () => void;
+  onDismiss?: () => void;
 
   title: string;
   subtitle?: string;
@@ -124,6 +127,7 @@ interface VideoPlayerProps {
   onBack?: () => void;
   onSubtitlesEnabledChange?: (enabled: boolean) => void;
   onProgress?: (positionMs: number, durationMs: number) => void;
+  onPlaybackStateChange?: (playing: boolean) => void;
   onEnded?: () => void;
   onNextEpisode?: () => void;
   onQualityChange?: (height: number, positionMs: number) => void;
@@ -636,12 +640,14 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
 
     this.clearBuffering();
     this.setState({ playing: true });
+    this.props.onPlaybackStateChange?.(true);
 
   };
 
   onPause = () => {
 
     this.setState({ playing: false });
+    this.props.onPlaybackStateChange?.(false);
 
   };
 
@@ -1678,7 +1684,7 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
 
   render() {
 
-    const { title, subtitle, episodeTitle, description, poster, qualities = [], selectedHeight = 1080, preferredHeight, nextEpisode, onBack, ambienceEnabled, live, onQualityChange, onOpenSettings, seasons, episodes, currentSeason, currentEpisode, menuSeason, episodesLoading, onSeasonChange, onEpisodeSelect, primaryChannelId, multiviewStreams = [], multiviewChannels, multiviewLoading, onMultiviewSearch, onMultiviewToggle, onMultiviewRemove, } = this.props;
+    const { title, subtitle, episodeTitle, description, poster, qualities = [], selectedHeight = 1080, preferredHeight, nextEpisode, onBack, ambienceEnabled, live, compact, onReturn, onDismiss, onQualityChange, onOpenSettings, seasons, episodes, currentSeason, currentEpisode, menuSeason, episodesLoading, onSeasonChange, onEpisodeSelect, primaryChannelId, multiviewStreams = [], multiviewChannels, multiviewLoading, onMultiviewSearch, onMultiviewToggle, onMultiviewRemove, } = this.props;
     const { playing, muted, volume, showControls, showOptions, showEpisodes, showSkipIntro, showUpNext, showUpNextMini, upNextCountdown, fullscreen, loading, seeking, holdPauseActive, activeSubtitleId, actionFeedback, hdrHeights, audioChannelId, } = this.state;
 
     // Live always uses a stable grid shell so adding multiview panes does not remount
@@ -1720,14 +1726,14 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
 
     return (
 
-      <div className="relative flex h-full w-full flex-col bg-black"
+      <div className={cn("relative flex h-full w-full flex-col bg-black", compact && "group/miniplayer")}
 
         ref={this.containerRef}
         onMouseMove={this.showControlsTemporarily}
         onClick={this.showControlsTemporarily}
 
       >
-        {!multiviewActive && (
+        {!multiviewActive && !compact && (
 
           <AmbienceLayer
 
@@ -1879,7 +1885,7 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
 
         )}
 
-        {!multiviewActive && (
+        {!multiviewActive && !compact && (
 
           <SubtitleDisplay
 
@@ -1890,7 +1896,7 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
 
         )}
 
-        <PauseOverlay
+        {!compact && <PauseOverlay
 
           visible={showPauseOverlay}
           poster={poster}
@@ -1905,7 +1911,7 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
           pausedAt={this.videoRef.current ? this.videoRef.current.currentTime : 0}
           totalDuration={this.videoRef.current ? this.videoRef.current.duration : 0}
 
-        />
+        />}
 
         {loading && !multiviewActive && (
 
@@ -1917,9 +1923,46 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
 
         )}
 
-        <PlayerActionFeedbackOverlay feedback={actionFeedback} />
+        {!compact && <PlayerActionFeedbackOverlay feedback={actionFeedback} />}
 
-        <div className={cn(
+        {compact && (
+
+          <div className="absolute inset-0 z-50">
+
+            <button type="button" onClick={onReturn} className="absolute inset-0" aria-label="Return to full player" />
+
+            <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-black/55 opacity-0 transition-opacity duration-200 group-hover/miniplayer:opacity-100 group-focus-within/miniplayer:opacity-100">
+
+              <div className="absolute inset-x-0 top-0 flex items-center justify-between gap-2 p-2.5">
+
+                <div className="min-w-0 rounded-md bg-black/55 px-2 py-1 backdrop-blur-md">
+
+                  <p className="truncate text-xs font-medium text-white">{title}</p>
+                  {(episodeTitle || subtitle) && <p className="truncate text-[10px] text-white/65">{episodeTitle || subtitle}</p>}
+
+                </div>
+
+                <button type="button" onClick={(event) => { event.stopPropagation(); onDismiss?.(); }} className="pointer-events-auto rounded-full bg-black/60 p-1.5 text-white backdrop-blur-md transition-colors hover:bg-black/80" aria-label="Dismiss miniplayer">
+
+                  <X size={15} />
+
+                </button>
+
+              </div>
+
+              <button type="button" onClick={(event) => { event.stopPropagation(); this.togglePlay(); }} className="pointer-events-auto absolute bottom-2.5 left-2.5 rounded-full bg-white/95 p-2 text-black shadow-lg transition-transform hover:scale-105" aria-label={playing ? "Pause" : "Play"}>
+
+                {playing ? <Pause size={16} fill="currentColor" /> : <Play size={16} fill="currentColor" />}
+
+              </button>
+
+            </div>
+
+          </div>
+
+        )}
+
+        {!compact && <div className={cn(
 
             // Pass clicks through empty top band so multiview pane chrome stays usable.
             "pointer-events-none absolute top-4 right-4 left-4 z-30 flex items-start justify-between gap-4 transition-opacity duration-300",
@@ -1979,7 +2022,7 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
 
           </div>
 
-        </div>
+        </div>}
 
         {!live && showSkipIntro && (
 
@@ -2060,7 +2103,7 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
 
         )}
 
-        <div className={cn(
+        {!compact && <div className={cn(
 
             // Outer shell is pointer-events-none so its padding doesn't block
             // multiview pane chrome (audio/remove) under the bottom control band.
@@ -2288,7 +2331,7 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
 
           </div>
 
-        </div>
+        </div>}
 
       </div>
 

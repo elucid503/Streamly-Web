@@ -23,6 +23,11 @@ interface WatchPageProps {
   navigate: NavigateFn;
 
   watchPath: string;
+  minimized?: boolean;
+  onMinimize?: (path: string) => void;
+  onReturn?: () => void;
+  onDismiss?: () => void;
+  onReadyChange?: (ready: boolean) => void;
 
 }
 
@@ -139,6 +144,7 @@ export class WatchPage extends Component<WatchPageProps, WatchPageState> {
 
   private progressDebounce: ReturnType<typeof setTimeout> | null = null;
   private lastProgressSave = 0;
+  private liveActivityTimer: ReturnType<typeof setInterval> | null = null;
 
   private pendingProgress: { positionMs: number; durationMs: number } | null = null;
 
@@ -176,11 +182,17 @@ export class WatchPage extends Component<WatchPageProps, WatchPageState> {
 
   }
 
-  componentDidUpdate(prev: WatchPageProps) {
+  componentDidUpdate(prev: WatchPageProps, prevState: WatchPageState) {
 
     if (prev.watchPath !== this.props.watchPath) {
 
       this.tryLoad();
+
+    }
+
+    if (prevState.ready !== this.state.ready) {
+
+      this.props.onReadyChange?.(this.state.ready);
 
     }
 
@@ -191,6 +203,7 @@ export class WatchPage extends Component<WatchPageProps, WatchPageState> {
     this.unsubscribe();
 
     if (this.progressDebounce) clearTimeout(this.progressDebounce);
+    if (this.liveActivityTimer) clearInterval(this.liveActivityTimer);
 
     if (this.pendingProgress) {
 
@@ -249,6 +262,9 @@ export class WatchPage extends Component<WatchPageProps, WatchPageState> {
   load = async () => {
 
     const gen = ++this.loadGen;
+
+    this.stopLiveActivity();
+    this.props.onReadyChange?.(false);
 
     const route = parseWatchPath(this.props.watchPath);
 
@@ -784,6 +800,28 @@ export class WatchPage extends Component<WatchPageProps, WatchPageState> {
 
   };
 
+  startLiveActivity = () => {
+
+    this.stopLiveActivity();
+    void this.writeProgress(0, 0);
+
+    this.liveActivityTimer = setInterval(() => {
+
+      void this.writeProgress(0, 0);
+
+    }, 60_000);
+
+  };
+
+  stopLiveActivity = () => {
+
+    if (!this.liveActivityTimer) return;
+
+    clearInterval(this.liveActivityTimer);
+    this.liveActivityTimer = null;
+
+  };
+
   handleMultiviewSearch = async (query: string) => {
 
     if (this.state.kind !== "live") return;
@@ -1162,7 +1200,17 @@ export class WatchPage extends Component<WatchPageProps, WatchPageState> {
 
     const { kind, mediaId } = this.state;
 
-    if (kind === "movie" && mediaId) {
+    const destination = kind === "movie" && mediaId
+      ? `/movie/${mediaId}`
+      : kind === "show" && mediaId
+        ? `/show/${mediaId}`
+        : "/";
+
+    if (this.props.onMinimize) {
+
+      this.props.onMinimize(destination);
+
+    } else if (kind === "movie" && mediaId) {
 
       this.props.navigate(`/movie/${mediaId}`);
 
@@ -1244,7 +1292,7 @@ export class WatchPage extends Component<WatchPageProps, WatchPageState> {
 
     return (
 
-      <div className="relative h-screen overflow-hidden bg-black">
+      <div className={this.props.minimized ? "relative h-full overflow-hidden bg-black" : "relative h-screen overflow-hidden bg-black"}>
 
         <VideoPlayer
 
@@ -1281,12 +1329,21 @@ export class WatchPage extends Component<WatchPageProps, WatchPageState> {
           onSubtitlesEnabledChange={this.handleSubtitlesEnabledChange}
           onSeasonChange={kind === "show" ? this.loadMenuEpisodes : undefined}
           onProgress={this.state.kind === "live" ? undefined : this.saveProgress}
+          onPlaybackStateChange={this.state.kind === "live" ? (playing) => {
+
+            if (playing) this.startLiveActivity();
+            else this.stopLiveActivity();
+
+          } : undefined}
           onEpisodeSelect={kind === "show" ? this.handleEpisodeSelect : undefined}
           onDurationReady={this.state.kind === "live" ? undefined : this.loadIntro}
           onQualityChange={this.state.kind === "live" ? undefined : this.handleQualityChange}
           onOpenSettings={() => this.setState({ settingsOpen: true })}
           onPlaybackError={this.state.kind === "live" ? undefined : this.handlePlaybackError}
           onFatalError={this.handleFatalError}
+          compact={this.props.minimized}
+          onReturn={this.props.onReturn}
+          onDismiss={this.props.onDismiss}
 
           startPositionMs={this.state.kind === "live" ? 0 : startPositionMs}
 

@@ -547,6 +547,8 @@ function HistoryRow({ item, accentColor, showProgress, progressExtra }: HistoryR
 
   const progress = item.durationMs > 0 ? Math.min(1, item.positionMs / item.durationMs) : 0;
   const episodeSubtitle = historyEpisodeSubtitle(item);
+  const liveActivity = item.kind === "live";
+  const currentlyLive = liveActivity && Math.abs(Date.now() - new Date(item.updatedAt).getTime()) <= 2 * 60_000;
 
   return (
 
@@ -554,7 +556,12 @@ function HistoryRow({ item, accentColor, showProgress, progressExtra }: HistoryR
 
       {item.poster ? (
 
-        <img src={item.poster} alt="" className="h-20 w-[52px] flex-shrink-0 rounded-lg object-cover" />
+        <img src={item.poster} alt="" className={cn(
+
+          "h-20 w-[52px] flex-shrink-0 rounded-lg",
+          liveActivity ? "bg-black/70 object-contain p-1.5" : "object-cover"
+
+        )} />
 
       ) : (
 
@@ -586,7 +593,16 @@ function HistoryRow({ item, accentColor, showProgress, progressExtra }: HistoryR
 
           <div className="mt-auto flex items-center gap-2 pb-2">
 
-            {!item.completed && item.durationMs > 0 ? (
+            {liveActivity ? (
+
+              <p className={cn("flex flex-1 items-center gap-1.5 text-xs", currentlyLive ? "font-medium text-red-400" : "text-foreground-faint")}>
+
+                {currentlyLive && <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-red-500" />}
+                {currentlyLive ? "Live" : "Was Live"}
+
+              </p>
+
+            ) : !item.completed && item.durationMs > 0 ? (
 
               <div className="h-0.5 flex-1 rounded-full bg-surface-overlay">
 
@@ -1742,7 +1758,7 @@ class PublicProfileView extends Component<PublicProfileViewProps, PublicProfileV
 
                   <Clock size={12} />
 
-                  Recently Watched
+                  Recent Activity
 
                 </p>
 
@@ -1754,7 +1770,12 @@ class PublicProfileView extends Component<PublicProfileViewProps, PublicProfileV
 
                       {item.poster && (
 
-                        <img src={item.poster} alt="" className="h-9 w-6 flex-shrink-0 rounded object-cover" />
+                        <img src={item.poster} alt="" className={cn(
+
+                          "h-9 w-6 flex-shrink-0 rounded",
+                          item.kind === "live" ? "bg-black/70 object-contain p-0.5" : "object-cover"
+
+                        )} />
 
                       )}
 
@@ -1771,6 +1792,21 @@ class PublicProfileView extends Component<PublicProfileViewProps, PublicProfileV
                       </div>
 
                       <span className="ml-auto flex-shrink-0 text-xs text-foreground-faint">{timeAgo(item.updatedAt)}</span>
+
+                      {item.kind === "live" && (
+
+                        <span className={cn(
+
+                          "flex-shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium",
+                          Math.abs(Date.now() - new Date(item.updatedAt).getTime()) <= 2 * 60_000 ? "bg-red-500/15 text-red-400" : "bg-surface-overlay text-foreground-faint"
+
+                        )}>
+
+                          {Math.abs(Date.now() - new Date(item.updatedAt).getTime()) <= 2 * 60_000 ? "Live" : "Was Live"}
+
+                        </span>
+
+                      )}
 
                     </div>
 
