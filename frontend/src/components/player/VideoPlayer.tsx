@@ -2105,8 +2105,7 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
 
         {!compact && <div className={cn(
 
-            // Outer shell is pointer-events-none so its padding doesn't block
-            // multiview pane chrome (audio/remove) under the bottom control band.
+            // Outer shell is pointer-events-none so its padding doesn't block multiview pane chrome (audio/remove) under the bottom control band.
             "pointer-events-none absolute inset-x-0 bottom-0 z-20 px-4 pb-4 transition-opacity duration-300 sm:px-6",
             showEpisodes ? "pt-2" : "pt-10",
             showControls || showEpisodes ? "opacity-100" : "opacity-0"
