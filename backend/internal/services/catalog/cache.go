@@ -134,6 +134,16 @@ func (c *Cache) refreshSports() {
 
 	c.mu.Lock()
 
+	// Don't clobber a good listing with a transient empty upstream response.
+	if len(matches) == 0 && len(c.snap.sportsMatches) > 0 {
+
+		kept := len(c.snap.sportsMatches)
+		c.mu.Unlock()
+		log.Printf("[catalog-cache] sports refresh returned 0 matches; keeping %d cached", kept)
+		return
+
+	}
+
 	c.snap.sportsMatches = matches
 	c.snap.refreshedAt = time.Now()
 

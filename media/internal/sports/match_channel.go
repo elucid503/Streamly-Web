@@ -90,7 +90,8 @@ func matchedChannelFromChannel(ch tv.Channel) *MatchedChannel {
 // broadcasterLabels fetches a match's watch page and returns every identifiable broadcaster name from its source-select option labels, in page order.
 func (c *Client) broadcasterLabels(matchID string) ([]string, error) {
 
-	watchURL := fmt.Sprintf("%s/watch/%s/%s", c.baseURL, c.server, matchID)
+	// Watch pages are server-scoped; use the server that supplied the listing.
+	watchURL := fmt.Sprintf("%s/watch/%s/%s", c.baseURL, c.activeServer(), matchID)
 
 	response, err := c.get(watchURL)
 
