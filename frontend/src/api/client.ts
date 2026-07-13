@@ -1,4 +1,4 @@
-import type { AccessCode, Category, ChannelGuideEntry, Episode, FavoriteItem, FriendRequestItem, FriendSummary, IntroInfo, LiveChannel, NextEpisode, ProfileMedia, PublicProfile, SearchHit, Season, ServiceInterruption, SportsMatch, StreamQuality, SubtitleTrack, TitleDetails, User, UserProfile, UserSettings, WatchHistoryItem, } from "@/lib/types";
+import type { AccessCode, Category, ChannelGuideEntry, Episode, FavoriteItem, FriendRequestItem, FriendSummary, HomeFeed, IntroInfo, LiveChannel, NextEpisode, ProfileMedia, PublicProfile, ResolveResult, SearchHit, Season, ServiceInterruption, SportsMatch, StreamQuality, SubtitleTrack, TitleDetails, User, UserProfile, UserSettings, WatchHistoryItem, } from "@/lib/types";
 
 export class ApiError extends Error {
 
@@ -231,6 +231,29 @@ export const api = {
   search(q: string) {
 
     return request<SearchHit[]>(`/api/search?q=${encodeURIComponent(q)}`);
+
+  },
+
+  homeFeed(kind: "movie" | "show") {
+
+    return request<HomeFeed>(kind === "movie" ? "/api/feed/movies" : "/api/feed/shows");
+
+  },
+
+  resolveTitle(item: { tmdbId?: number; kind: "movie" | "show"; title?: string; year?: number }) {
+
+    const params = new URLSearchParams({
+
+      kind: item.kind,
+      tmdbId: String(item.tmdbId ?? 0),
+
+    });
+
+    if (item.title) params.set("title", item.title);
+
+    if (item.year) params.set("year", String(item.year));
+
+    return request<ResolveResult>(`/api/resolve?${params}`);
 
   },
 

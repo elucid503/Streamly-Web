@@ -15,6 +15,8 @@ interface TitleCardProps {
   title: string;
   poster?: string;
   year?: number | string;
+  rating?: string;
+  genres?: string[];
 
   onClick: () => void;
   onFavoriteToggle?: () => void;
@@ -83,10 +85,11 @@ export class TitleCard extends Component<TitleCardProps, TitleCardState> {
 
   render() {
 
-    const { title, poster, year, onClick, onFavoriteToggle, onResume, onRemoveFromHistory, compact, favorite, progressMs, durationMs, progressLabel } = this.props;
+    const { title, poster, year, rating, genres, onClick, onFavoriteToggle, onResume, onRemoveFromHistory, compact, favorite, progressMs, durationMs, progressLabel } = this.props;
     const { menuPos } = this.state;
 
     const progress = progressPercent(progressMs, durationMs);
+    const genreLabel = genres?.slice(0, 1)[0];
 
     return (
 
@@ -112,6 +115,16 @@ export class TitleCard extends Component<TitleCardProps, TitleCardState> {
                 className={cn("w-full", compact ? "aspect-[2/3] h-auto" : "aspect-[2/3]")}
 
               />
+
+              {rating && (
+
+                <span className="absolute left-2 top-2 rounded-full border border-border-subtle bg-surface/80 px-1.5 py-0.5 text-[10px] font-medium text-foreground backdrop-blur-md">
+
+                  ★ {rating}
+
+                </span>
+
+              )}
 
               {progress > 2 && (
 
@@ -141,11 +154,15 @@ export class TitleCard extends Component<TitleCardProps, TitleCardState> {
 
               <p className="text-xs text-foreground-muted">{progressLabel}</p>
 
-            ) : year ? (
+            ) : (
 
-              <p className="text-xs text-foreground-muted">{year}</p>
+              <p className="text-xs text-foreground-muted">
 
-            ) : null}
+                {[year, genreLabel].filter(Boolean).join(" · ")}
+
+              </p>
+
+            )}
 
           </button>
 

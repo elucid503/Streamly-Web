@@ -10,6 +10,7 @@ import (
 	"mediakit/internal/meta"
 	"mediakit/internal/quality"
 	"mediakit/internal/sports"
+	"mediakit/internal/tmdb"
 	"mediakit/internal/tv"
 	"mediakit/internal/vod"
 )
@@ -84,6 +85,36 @@ type MatchedChannel = sports.MatchedChannel
 
 // TopCategory is a curated Showbox ranking list.
 type TopCategory = discover.TopCategory
+
+// TMDBClient fetches TMDB discover/trending lists.
+type TMDBClient = tmdb.Client
+
+// TMDBItem is a TMDB list result.
+type TMDBItem = tmdb.Item
+
+// TMDBKind is movie or tv for TMDB endpoints.
+type TMDBKind = tmdb.MediaKind
+
+const (
+
+	TMDBMovie = tmdb.KindMovie
+	TMDBTV = tmdb.KindTV
+
+)
+
+// TMDBGenreName returns a display name for a TMDB genre id.
+func TMDBGenreName(id int) string {
+
+	return tmdb.GenreName(id)
+
+}
+
+// TMDBGenreNames maps genre ids to display names.
+func TMDBGenreNames(ids []int) []string {
+
+	return tmdb.GenreNames(ids)
+
+}
 
 // New builds a Client with optional configuration.
 func New(opts ...Option) *Client {

@@ -115,6 +115,8 @@ export class HomePage extends Component<HomePageProps, HomePageState> {
     void this.fetchRequestCount();
     this.connectSSE();
 
+    document.addEventListener("visibilitychange", this.handleVisibility);
+
   }
 
   componentWillUnmount() {
@@ -127,7 +129,19 @@ export class HomePage extends Component<HomePageProps, HomePageState> {
 
     if (this.sseReconnect) clearTimeout(this.sseReconnect);
 
+    document.removeEventListener("visibilitychange", this.handleVisibility);
+
   }
+
+  handleVisibility = () => {
+
+    if (document.visibilityState === "visible") {
+
+      void this.loadHomeData();
+
+    }
+
+  };
 
   connectSSE = () => {
 

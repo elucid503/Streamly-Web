@@ -6,9 +6,10 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 interface ContentRowProps {
 
   title: string;
+  subtitle?: string;
   sectionId?: string;
 
-  children: ReactNode;
+  children?: ReactNode;
 
   loading?: boolean;
 
@@ -28,7 +29,7 @@ export class ContentRow extends Component<ContentRowProps> {
 
   render() {
 
-    const { title, sectionId, children, loading } = this.props;
+    const { title, subtitle, sectionId, children, loading } = this.props;
 
     return (
 
@@ -36,11 +37,29 @@ export class ContentRow extends Component<ContentRowProps> {
 
         <div className="mb-3 flex items-center justify-between px-4 sm:px-8">
 
-          <h2 className="text-sm font-medium tracking-wide text-foreground-muted uppercase">
+          <div className="min-w-0">
 
-            {title}
+            {title ? (
 
-          </h2>
+              <h2 className="text-sm font-medium text-foreground">
+
+                {title}
+
+              </h2>
+
+            ) : null}
+
+            {subtitle && (
+
+              <p className="mt-0.5 text-xs text-foreground-muted">
+
+                {subtitle}
+
+              </p>
+
+            )}
+
+          </div>
 
           <div className="hidden gap-1 sm:flex">
 

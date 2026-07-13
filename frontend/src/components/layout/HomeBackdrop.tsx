@@ -24,7 +24,6 @@ interface HomeBackdropState {
 const VIEW_ORDER: MainView[] = ["shows", "movies", "live", "friends"];
 
 const GRID_TILE_COUNT = 48;
-const CATEGORY_SAMPLE = 6;
 
 class PosterCollector {
 
@@ -85,31 +84,42 @@ export class HomeBackdrop extends Component<HomeBackdropProps, HomeBackdropState
 
   loadCatalogPosters = async (collector: PosterCollector, kind: "show" | "movie") => {
 
-    const trending = kind === "show" ? await api.showTrending(24).catch(() => []) : await api.movieTrending(24).catch(() => []);
+    const feed = await api.homeFeed(kind).catch(() => null);
 
-    for (const hit of trending ?? []) {
+    if (feed?.featured) {
 
-      collector.add(hit.poster);
+      for (const item of feed.featured) {
 
-      if (collector.full()) return;
+        collector.add(item.poster);
+        collector.add(item.backdrop);
+
+      }
 
     }
 
-    const categories = kind === "show" ? await api.showCategories().catch(() => []) : await api.movieCategories().catch(() => []);
+    for (const section of feed?.sections ?? []) {
 
-    for (const category of (categories ?? []).slice(0, CATEGORY_SAMPLE)) {
-
-      if (collector.full()) return;
-
-      const titles = kind === "show" ? await api.showCategoryTitles(category.id).catch(() => []) : await api.movieCategoryTitles(category.id).catch(() => []);
-
-      for (const hit of titles ?? []) {
+      for (const hit of section.items) {
 
         collector.add(hit.poster);
 
         if (collector.full()) return;
 
       }
+
+    }
+
+    if (collector.full()) return;
+
+    const trending = kind === "show"
+      ? await api.showTrending(24).catch(() => [])
+      : await api.movieTrending(24).catch(() => []);
+
+    for (const hit of trending ?? []) {
+
+      collector.add(hit.poster);
+
+      if (collector.full()) return;
 
     }
 

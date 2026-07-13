@@ -17,6 +17,7 @@ import (
 	"streamly/internal/handlers"
 	"streamly/internal/middleware"
 	"streamly/internal/services"
+	"streamly/internal/services/discover"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
@@ -139,6 +140,12 @@ func main() {
 	proxyHandler := handlers.NewProxyHandler(proxySvc)
 	adminHandler := handlers.NewAdminHandler(authSvc, db)
 
+	feedSvc := discover.New(mediaSvc.Client(), filepath.Join("data", "bridge.cache.json"), mediaSvc)
+	feedSvc.Start(cacheCtx, cfg.CatalogCacheTTL)
+	defer feedSvc.Stop()
+
+	feedHandler := handlers.NewFeedHandler(feedSvc, historySvc, favoritesSvc)
+
 	gin.SetMode(gin.ReleaseMode)
 
 	r := gin.New()
@@ -226,6 +233,10 @@ func main() {
 	// Catalog
 
 	protected.GET("/search", middleware.SearchRateLimit, catalogHandler.Search)
+
+	protected.GET("/feed/movies", feedHandler.Movies)
+	protected.GET("/feed/shows", feedHandler.Shows)
+	protected.GET("/resolve", middleware.SearchRateLimit, feedHandler.Resolve)
 
 	movies := protected.Group("/movies")
 

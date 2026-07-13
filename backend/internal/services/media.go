@@ -195,6 +195,34 @@ func (s *MediaService) TrendingHits(kind mediakit.MediaKind, limit int) ([]Searc
 
 }
 
+func (s *MediaService) CatalogTrendingHits(kind mediakit.MediaKind, limit int) []SearchResultDTO {
+
+	return s.catalog.TrendingHits(kind, limit)
+
+}
+
+// CatalogIndex returns the in-memory Showbox catalog for local title matching.
+func (s *MediaService) CatalogIndex() []SearchResultDTO {
+
+	return s.catalog.Snapshot().SearchIndex()
+
+}
+
+// SearchTitles runs the same search path as the UI search box.
+func (s *MediaService) SearchTitles(query string) []SearchResultDTO {
+
+	results, err := s.search.Search(query)
+
+	if err != nil || results == nil {
+
+		return nil
+
+	}
+
+	return results
+
+}
+
 func (s *MediaService) Trending(kind mediakit.MediaKind, limit int) ([]string, error) {
 
 	return s.client.Trending(kind, limit)

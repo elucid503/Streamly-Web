@@ -15,6 +15,7 @@ import (
 	"mediakit/internal/quality"
 	"mediakit/internal/showbox"
 	"mediakit/internal/sports"
+	"mediakit/internal/tmdb"
 	"mediakit/internal/tv"
 	"mediakit/internal/vod"
 
@@ -154,6 +155,7 @@ type Client struct {
 	tv        *tv.Client
 	sports    *sports.Client
 	imdb      *imdb.Client
+	tmdb      *tmdb.Client
 	intro introFetcher
 	resolver  *providers.Resolver
 
@@ -200,6 +202,7 @@ func New(opts ...Option) *Client {
 		tv:       tvClient,
 		sports:   sports.New(cfg.tvBaseURL, tvClient),
 		imdb:  imdb.New(cfg.tmdbAPIKey),
+		tmdb:  tmdb.New(cfg.tmdbAPIKey),
 		intro: intro,
 		resolver: providers.New(cfg.tmdbAPIKey),
 
@@ -207,6 +210,99 @@ func New(opts ...Option) *Client {
 		movieTitles: make(map[int]titleCacheEntry),
 		shareKeys:   make(map[string]shareKeyCacheEntry),
 	}
+
+}
+
+// TMDB returns the TMDB discover client.
+func (c *Client) TMDB() *tmdb.Client {
+
+	return c.tmdb
+
+}
+
+// SearchKind queries Showbox limited to movies or TV series.
+func (c *Client) SearchKind(query string, kind meta.MediaKind) ([]meta.SearchHit, error) {
+
+	mediaType := showbox.MediaMovie
+
+	if kind == meta.MediaShow {
+
+		mediaType = showbox.MediaTV
+
+	}
+
+	results, err := c.showbox.Search(query, mediaType, 1, 20)
+
+	hits := make([]meta.SearchHit, 0, 20)
+
+	appendHits := func(results []showbox.SearchResult, assumeKind meta.MediaKind) {
+
+		for _, result := range results {
+
+			hit := meta.HitFromResult(result)
+
+			// Typed Search5 responses often omit box_type (0). Treat as the
+			// requested kind rather than dropping every candidate.
+			if hit.Kind == 0 {
+
+				hit.Kind = assumeKind
+
+			}
+
+			if hit.Kind != kind {
+
+				continue
+
+			}
+
+			hits = append(hits, hit)
+
+		}
+
+	}
+
+	if err == nil {
+
+		appendHits(results, kind)
+
+	}
+
+	// Typed TV search is unreliable on Showbox — always merge an untyped pass.
+	if kind == meta.MediaShow || len(hits) == 0 {
+
+		all, allErr := c.showbox.Search(query, showbox.MediaAll, 1, 20)
+
+		if allErr == nil {
+
+			appendHits(all, kind)
+
+		}
+
+	}
+
+	seen := make(map[int]struct{}, len(hits))
+	out := make([]meta.SearchHit, 0, len(hits))
+
+	for _, hit := range hits {
+
+		if _, ok := seen[hit.ID]; ok {
+
+			continue
+
+		}
+
+		seen[hit.ID] = struct{}{}
+		out = append(out, hit)
+
+	}
+
+	if len(out) == 0 && err != nil {
+
+		return nil, err
+
+	}
+
+	return out, nil
 
 }
 

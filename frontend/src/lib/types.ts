@@ -31,6 +31,60 @@ export interface SearchHit {
   description: string;
   rating: string;
 
+  backdrop?: string;
+  genres?: string[];
+  runtime?: number;
+  matchReason?: string;
+
+}
+
+export interface FeedItem {
+
+  id: number;
+  tmdbId?: number;
+  kind: "movie" | "show";
+
+  title: string;
+  year: number;
+  poster: string;
+
+  description: string;
+  rating: string;
+
+  backdrop?: string;
+  genres?: string[];
+  runtime?: number;
+  matchReason?: string;
+
+}
+
+export interface ResolveResult {
+
+  id: number;
+  tmdbId: number;
+  kind: "movie" | "show";
+  title: string;
+  year: number;
+  poster: string;
+
+}
+
+export interface FeedSection {
+
+  id: string;
+  title: string;
+  subtitle?: string;
+  kind: string;
+  items: FeedItem[];
+
+}
+
+export interface HomeFeed {
+
+  featured?: FeedItem[];
+  sections: FeedSection[];
+  refreshedAt: string;
+
 }
 
 export interface TitleDetails {

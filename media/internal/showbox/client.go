@@ -303,16 +303,21 @@ func (c *Client) Search(query string, mediaType MediaType, page, pageLimit int) 
 
 	}
 
-	c.searchMu.Lock()
+	// Never cache empty results — soft failures / rate-limit blanks poison the cache.
+	if len(results) > 0 {
 
-	c.searchCache[key] = searchCacheEntry{
+		c.searchMu.Lock()
 
-		results: append([]SearchResult(nil), results...),
-		expires: time.Now().Add(searchCacheTTL),
+		c.searchCache[key] = searchCacheEntry{
+
+			results: append([]SearchResult(nil), results...),
+			expires: time.Now().Add(searchCacheTTL),
+
+		}
+
+		c.searchMu.Unlock()
 
 	}
-
-	c.searchMu.Unlock()
 
 	return results, nil
 
