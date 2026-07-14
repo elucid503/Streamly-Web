@@ -21,14 +21,25 @@ interface FeaturedHeroProps {
 interface FeaturedHeroState {
 
   index: number;
+  direction: 1 | -1;
 
 }
 
 const ROTATE_MS = 8000;
 
+const slideTransition = { duration: 0.45, ease: [0.32, 0.72, 0, 1] as const };
+
+const slideVariants = {
+
+  enter: (dir: number) => ({ x: dir > 0 ? "100%" : "-100%" }),
+  center: { x: 0 },
+  exit: (dir: number) => ({ x: dir > 0 ? "-100%" : "100%" }),
+
+};
+
 export class FeaturedHero extends Component<FeaturedHeroProps, FeaturedHeroState> {
 
-  state: FeaturedHeroState = { index: 0 };
+  state: FeaturedHeroState = { index: 0, direction: 1 };
 
   private timer: ReturnType<typeof setInterval> | null = null;
 
@@ -42,7 +53,7 @@ export class FeaturedHero extends Component<FeaturedHeroProps, FeaturedHeroState
 
     if (prevProps.items !== this.props.items) {
 
-      this.setState({ index: 0 });
+      this.setState({ index: 0, direction: 1 });
       this.startTimer();
 
     }
@@ -77,6 +88,7 @@ export class FeaturedHero extends Component<FeaturedHeroProps, FeaturedHeroState
       this.setState((state) => ({
 
         index: (state.index + 1) % this.props.items.length,
+        direction: 1,
 
       }));
 
@@ -93,8 +105,28 @@ export class FeaturedHero extends Component<FeaturedHeroProps, FeaturedHeroState
     this.setState((state) => ({
 
       index: (state.index + dir + items.length) % items.length,
+      direction: dir,
 
     }));
+
+    this.startTimer();
+
+  };
+
+  goTo = (nextIndex: number) => {
+
+    this.setState((state) => {
+
+      if (nextIndex === state.index) return null;
+
+      return {
+
+        index: nextIndex,
+        direction: nextIndex > state.index ? 1 : -1,
+
+      };
+
+    });
 
     this.startTimer();
 
@@ -107,6 +139,7 @@ export class FeaturedHero extends Component<FeaturedHeroProps, FeaturedHeroState
     if (items.length === 0) return null;
 
     const index = this.state.index % items.length;
+    const { direction } = this.state;
     const item = items[index];
     const favorite = item.id > 0 && favoriteIds.has(item.id);
 
@@ -126,16 +159,18 @@ export class FeaturedHero extends Component<FeaturedHeroProps, FeaturedHeroState
 
         <div className="relative overflow-hidden rounded-xl">
 
-          <AnimatePresence mode="wait">
+          <AnimatePresence initial={false} custom={direction} mode="popLayout">
 
             <motion.div
 
               key={item.tmdbId || item.id}
-              className="absolute inset-0"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.45 }}
+              custom={direction}
+              variants={slideVariants}
+              initial="enter"
+              animate="center"
+              exit="exit"
+              transition={slideTransition}
+              className="relative flex min-h-[280px] flex-col justify-end gap-4 p-6 sm:min-h-[320px] sm:p-8"
 
             >
 
@@ -161,154 +196,145 @@ export class FeaturedHero extends Component<FeaturedHeroProps, FeaturedHeroState
 
               <div className="absolute inset-0 bg-gradient-to-t from-surface via-surface/70 to-transparent" />
 
+              <div className="relative flex max-w-xl flex-col gap-3">
+
+                {item.matchReason && (
+
+                  <p className="text-xs font-medium text-foreground-muted">
+
+                    {item.matchReason}
+
+                  </p>
+
+                )}
+
+                <h2 className="text-2xl font-bold text-white sm:text-3xl">
+
+                  {item.title}
+
+                </h2>
+
+                {meta && (
+
+                  <p className="text-sm text-white/70">
+
+                    {meta}
+
+                  </p>
+
+                )}
+
+                {item.description && (
+
+                  <p className="line-clamp-2 text-sm text-white/60">
+
+                    {item.description}
+
+                  </p>
+
+                )}
+
+                <div className="mt-1 flex flex-wrap items-center gap-2">
+
+                  <button
+
+                    type="button"
+                    onClick={() => onPlay(item)}
+                    className="flex h-9 items-center gap-2 rounded-full bg-white px-5 text-sm font-semibold text-black transition-opacity hover:opacity-90"
+
+                  >
+
+                    <Play size={14} fill="currentColor" />
+                    Play
+
+                  </button>
+
+                  <button
+
+                    type="button"
+                    onClick={() => onFavoriteToggle(item)}
+                    className={cn(
+
+                      "flex h-9 w-9 items-center justify-center rounded-full border border-white/20 bg-white/10 text-white backdrop-blur-md transition-colors hover:bg-white/15",
+                      favorite && "text-accent"
+
+                    )}
+                    aria-label={favorite ? "Remove from favorites" : "Add to favorites"}
+
+                  >
+
+                    <Star size={14} fill={favorite ? "currentColor" : "none"} />
+
+                  </button>
+
+                </div>
+
+              </div>
+
             </motion.div>
 
           </AnimatePresence>
 
-          <div className="relative flex min-h-[280px] flex-col justify-end gap-4 p-6 sm:min-h-[320px] sm:p-8">
+          {items.length > 1 && (
 
-            <div className="flex max-w-xl flex-col gap-3">
+            <div className="absolute right-4 top-4 z-10 flex items-center gap-1 sm:right-6 sm:top-6">
 
-              {item.matchReason && (
+              <button
 
-                <p className="text-xs font-medium text-foreground-muted">
+                type="button"
+                onClick={() => this.go(-1)}
+                className="flex h-8 w-8 items-center justify-center rounded-full border border-white/15 bg-black/30 text-white/80 backdrop-blur-md transition-colors hover:bg-black/50 hover:text-white"
+                aria-label="Previous featured"
 
-                  {item.matchReason}
+              >
 
-                </p>
+                <ChevronLeft size={16} />
 
-              )}
+              </button>
 
-              <h2 className="text-2xl font-bold text-white sm:text-3xl">
+              <button
 
-                {item.title}
+                type="button"
+                onClick={() => this.go(1)}
+                className="flex h-8 w-8 items-center justify-center rounded-full border border-white/15 bg-black/30 text-white/80 backdrop-blur-md transition-colors hover:bg-black/50 hover:text-white"
+                aria-label="Next featured"
 
-              </h2>
+              >
 
-              {meta && (
+                <ChevronRight size={16} />
 
-                <p className="text-sm text-white/70">
-
-                  {meta}
-
-                </p>
-
-              )}
-
-              {item.description && (
-
-                <p className="line-clamp-2 text-sm text-white/60">
-
-                  {item.description}
-
-                </p>
-
-              )}
-
-              <div className="mt-1 flex flex-wrap items-center gap-2">
-
-                <button
-
-                  type="button"
-                  onClick={() => onPlay(item)}
-                  className="flex h-9 items-center gap-2 rounded-full bg-white px-5 text-sm font-semibold text-black transition-opacity hover:opacity-90"
-
-                >
-
-                  <Play size={14} fill="currentColor" />
-                  Play
-
-                </button>
-
-                <button
-
-                  type="button"
-                  onClick={() => onFavoriteToggle(item)}
-                  className={cn(
-
-                    "flex h-9 w-9 items-center justify-center rounded-full border border-white/20 bg-white/10 text-white backdrop-blur-md transition-colors hover:bg-white/15",
-                    favorite && "text-accent"
-
-                  )}
-                  aria-label={favorite ? "Remove from favorites" : "Add to favorites"}
-
-                >
-
-                  <Star size={14} fill={favorite ? "currentColor" : "none"} />
-
-                </button>
-
-              </div>
+              </button>
 
             </div>
 
-            {items.length > 1 && (
+          )}
 
-              <div className="absolute right-4 top-4 flex items-center gap-1 sm:right-6 sm:top-6">
+          {items.length > 1 && (
 
-                <button
+            <div className="absolute bottom-4 right-4 z-10 flex gap-1.5 sm:bottom-6 sm:right-6">
 
-                  type="button"
-                  onClick={() => this.go(-1)}
-                  className="flex h-8 w-8 items-center justify-center rounded-full border border-white/15 bg-black/30 text-white/80 backdrop-blur-md transition-colors hover:bg-black/50 hover:text-white"
-                  aria-label="Previous featured"
-
-                >
-
-                  <ChevronLeft size={16} />
-
-                </button>
+              {items.map((entry, i) => (
 
                 <button
 
+                  key={entry.tmdbId || entry.id}
                   type="button"
-                  onClick={() => this.go(1)}
-                  className="flex h-8 w-8 items-center justify-center rounded-full border border-white/15 bg-black/30 text-white/80 backdrop-blur-md transition-colors hover:bg-black/50 hover:text-white"
-                  aria-label="Next featured"
+                  aria-label={`Show featured ${i + 1}`}
+                  onClick={() => this.goTo(i)}
+                  className={cn(
 
-                >
+                    "h-1.5 rounded-full transition-all",
+                    i === index ? "w-5 bg-white" : "w-1.5 bg-white/35 hover:bg-white/55"
 
-                  <ChevronRight size={16} />
+                  )}
 
-                </button>
+                />
 
-              </div>
+              ))}
 
-            )}
+            </div>
 
-            {items.length > 1 && (
-
-              <div className="absolute bottom-4 right-4 flex gap-1.5 sm:bottom-6 sm:right-6">
-
-                {items.map((entry, i) => (
-
-                  <button
-
-                    key={entry.tmdbId || entry.id}
-                    type="button"
-                    aria-label={`Show featured ${i + 1}`}
-                    onClick={() => {
-
-                      this.setState({ index: i });
-                      this.startTimer();
-
-                    }}
-                    className={cn(
-
-                      "h-1.5 rounded-full transition-all",
-                      i === index ? "w-5 bg-white" : "w-1.5 bg-white/35 hover:bg-white/55"
-
-                    )}
-
-                  />
-
-                ))}
-
-              </div>
-
-            )}
-
-          </div>
+          )}
 
         </div>
 
