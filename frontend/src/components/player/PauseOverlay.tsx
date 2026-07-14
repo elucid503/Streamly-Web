@@ -2,12 +2,13 @@ import { cn, formatDuration } from "@/lib/utils";
 
 import { Component } from "react";
 
+type PauseLayout = "movie" | "episode" | "live";
+
 interface PauseOverlayProps {
 
   visible: boolean;
 
   poster?: string;
-  still?: boolean;
 
   title: string;
   subtitle?: string;
@@ -15,9 +16,10 @@ interface PauseOverlayProps {
   episodeTitle?: string;
   description?: string;
 
-  pausedAt: number; // in seconds
+  layout?: PauseLayout;
 
-  totalDuration?: number; // in seconds
+  pausedAt: number;
+  totalDuration?: number;
 
   onResume: () => void;
 
@@ -27,7 +29,21 @@ export class PauseOverlay extends Component<PauseOverlayProps> {
 
   render() {
 
-    const { visible, poster, still, title, subtitle, episodeTitle, description, onResume, pausedAt: progress, totalDuration } = this.props;
+    const {
+      visible,
+      poster,
+      title,
+      subtitle,
+      episodeTitle,
+      description,
+      layout = "movie",
+      onResume,
+      pausedAt: progress,
+      totalDuration,
+    } = this.props;
+
+    const isLive = layout === "live";
+    const showProgress = !isLive;
 
     return (
 
@@ -40,118 +56,113 @@ export class PauseOverlay extends Component<PauseOverlayProps> {
 
               onResume();
 
-            }} className="absolute inset-0 z-[40] flex animate-fade-in cursor-pointer items-center justify-center overflow-hidden bg-surface/60 px-4 backdrop-blur-md sm:px-8" aria-label="Resume playback" >
+            }} className="absolute inset-0 z-[40] flex animate-fade-in cursor-pointer items-center justify-center overflow-hidden bg-black/40 px-4 backdrop-blur-2xl sm:px-8" aria-label="Resume playback" >
 
-            <div className="pointer-events-none absolute inset-0">
+            <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/70 via-black/35 to-black/20" />
 
-              {poster && (
+            <div className="pointer-events-none relative z-10 flex w-full justify-center">
 
-                <img className={cn(
+              <div className={cn(
 
-                    "h-full w-full opacity-35 blur-2xl",
-                    still ? "object-cover" : "scale-110 object-cover"
+                  "flex animate-fade-in flex-col items-center gap-4",
+                  isLive ? "w-fit max-w-5xl md:flex-row md:items-center md:gap-7 md:text-left" : "w-full max-w-5xl -mt-3 md:flex-row md:items-center md:gap-7 md:text-left"
+
+                )}
+
+              >
+
+                {poster && isLive && (
+
+                  <div className="flex-shrink-0">
+
+                    <img
+                      src={poster}
+                      alt=""
+                      className="h-28 w-28 object-contain sm:h-36 sm:w-36"
+                    />
+
+                  </div>
+
+                )}
+
+                {poster && !isLive && (
+
+                  <div className={cn(
+
+                      "flex-shrink-0 overflow-hidden rounded-lg shadow-2xl ring-1 ring-white/10",
+                      layout === "episode" ? "aspect-video w-full max-w-xl md:w-[min(42vw,28rem)]" : "aspect-[2/3] w-28 sm:w-36 md:w-40"
+
+                    )}
+
+                  >
+
+                    <img src={poster} alt="" className="size-full object-cover object-center" />
+
+                  </div>
+
+                )}
+
+                <div className="min-w-0 space-y-1.5">
+
+                  <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl">
+
+                    {title}
+
+                  </h2>
+
+                  {subtitle && (
+
+                    <p className="text-sm font-medium tracking-wide text-foreground-muted uppercase">
+
+                      {subtitle}
+
+                    </p>
 
                   )}
 
-                  src={poster}
-                  alt=""
+                  {episodeTitle && (
 
-                />
+                    <p className="text-base text-foreground/90 sm:text-lg">
 
-              )}
+                      {episodeTitle}
 
-              <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/50 to-black/30" />
-
-            </div>
-
-            <div className={cn(
-
-                "pointer-events-none relative z-10 flex w-full animate-fade-in flex-col items-center gap-4",
-                still ? "max-w-5xl -mt-3 md:flex-row md:items-center md:gap-7 md:text-left" : "max-w-2xl text-center"
-
-              )}
-
-            >
-
-              {poster && (
-
-                <div className={cn(
-
-                    "flex-shrink-0 overflow-hidden rounded-lg shadow-2xl ring-1 ring-white/10",
-                    still ? "aspect-video w-full max-w-xl md:w-[min(42vw,28rem)]" : "aspect-[2/3] w-28 sm:w-36"
+                    </p>
 
                   )}
 
-                >
+                  {description && (
 
-                  <img src={poster} alt="" className="size-full object-cover object-center" />
+                    <p className={cn(
+
+                        "text-sm leading-relaxed text-foreground-muted sm:text-[15px] sm:leading-7",
+                        !isLive ? "max-w-3xl sm:line-clamp-none" : "line-clamp-4"
+
+                      )}
+
+                    >
+
+                      {description}
+
+                    </p>
+
+                  )}
 
                 </div>
-
-              )}
-
-              <div className={cn("min-w-0 space-y-1.5", still && "flex-1")}>
-
-                <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl">
-
-                  {title}
-
-                </h2>
-
-                {subtitle && (
-
-                  <p className={cn(
-
-                      "text-sm font-medium text-foreground-muted",
-                      !still && "tracking-wide uppercase"
-
-                    )}
-
-                  >
-
-                    {subtitle}
-
-                  </p>
-
-                )}
-
-                {episodeTitle && (
-
-                  <p className="text-base text-foreground/90 sm:text-lg">
-
-                    {episodeTitle}
-
-                  </p>
-
-                )}
-
-                {description && (
-
-                  <p className={cn(
-
-                      "text-sm leading-relaxed text-foreground-muted sm:text-[15px] sm:leading-7",
-                      still ? "max-w-3xl sm:line-clamp-none" : "line-clamp-4 max-w-xl"
-
-                    )}
-
-                  >
-
-                    {description}
-
-                  </p>
-
-                )}
 
               </div>
 
             </div>
 
-            <p className="pointer-events-none absolute inset-x-0 top-24 z-10 text-center text-xs tracking-wide text-foreground/40 sm:bottom-28 sm:text-sm">
+            {showProgress && (
 
-              Paused at {formatDuration(progress * 1000)} /{" "}
-              {totalDuration ? formatDuration(totalDuration * 1000) : "Unknown"}
+              <p className="pointer-events-none absolute inset-x-0 top-24 z-10 text-center text-xs tracking-wide text-foreground/40 sm:bottom-28 sm:text-sm">
 
-            </p>
+                Paused at {formatDuration(progress * 1000)} /{" "}
+                {totalDuration ? formatDuration(totalDuration * 1000) : "Unknown"}
+
+              </p>
+
+            )}
 
             <p className="pointer-events-none absolute inset-x-0 bottom-24 z-10 text-center text-xs tracking-wide text-foreground/40 sm:bottom-28 sm:text-sm">
 

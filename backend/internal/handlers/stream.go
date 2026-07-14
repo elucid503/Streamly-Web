@@ -326,6 +326,15 @@ func (h *StreamHandler) LiveStream(c *gin.Context) {
 
 	id := c.Param("id")
 
+	channel, ok := h.media.LiveChannel(id)
+
+	if !ok {
+
+		writeError(c, http.StatusNotFound, "channel not found")
+		return
+
+	}
+
 	streamURL, err := h.media.ResolveLiveStream(id)
 
 	if err != nil {
@@ -350,8 +359,6 @@ func (h *StreamHandler) LiveStream(c *gin.Context) {
 		streamURL = baseURL(c) + session.ProxyPath
 
 	}
-
-	channel, _ := h.media.LiveChannel(id)
 
 	c.JSON(http.StatusOK, gin.H{
 

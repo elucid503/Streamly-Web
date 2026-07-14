@@ -1,5 +1,6 @@
 import { api } from "@/api/client";
 
+import { LiveLogo } from "@/components/catalog/LiveLogo";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
@@ -8,7 +9,7 @@ import { Switch } from "@/components/ui/Switch";
 import { cn } from "@/lib/utils";
 import { store } from "@/lib/store";
 
-import type { FriendRequestItem, FriendSummary, ProfileMedia, PublicProfile, SearchHit, UserProfile } from "@/lib/types";
+import type { FriendRequestItem, FriendSummary, LiveChannel, ProfileMedia, PublicProfile, SearchHit, UserProfile, WatchHistoryItem } from "@/lib/types";
 
 import { Component } from "react";
 import { createPortal } from "react-dom";
@@ -45,6 +46,25 @@ function initials(name: string): string {
 function bannerStyle(banner: string): React.CSSProperties {
 
   return { background: BANNERS[banner] ?? BANNERS.aurora };
+
+}
+
+function liveChannelFromHistory(item: WatchHistoryItem): LiveChannel {
+
+  const logo = item.poster?.trim() ?? "";
+
+  return {
+
+    id: item.channelId ?? item.id,
+    name: item.title,
+    slug: "",
+    code: "",
+    logo,
+    country: "",
+    category: "",
+    enriched: logo.length > 0,
+
+  };
 
 }
 
@@ -554,14 +574,20 @@ function HistoryRow({ item, accentColor, showProgress, progressExtra }: HistoryR
 
     <div className="flex items-stretch gap-3">
 
-      {item.poster ? (
+      {liveActivity && item.poster ? (
 
-        <img src={item.poster} alt="" className={cn(
+        <LiveLogo className="h-14 w-14 flex-shrink-0 border border-border-subtle bg-surface-overlay"
 
-          "h-20 w-[52px] flex-shrink-0 rounded-lg",
-          liveActivity ? "bg-black/70 object-contain p-1.5" : "object-cover"
+          channel={liveChannelFromHistory(item)}
 
-        )} />
+          imgClassName="object-contain p-1.5"
+          rounded="rounded-full"
+
+        />
+
+      ) : item.poster ? (
+
+        <img src={item.poster} alt="" className="h-20 w-[52px] flex-shrink-0 rounded-lg object-cover" />
 
       ) : (
 
@@ -1768,16 +1794,22 @@ class PublicProfileView extends Component<PublicProfileViewProps, PublicProfileV
 
                     <div key={item.id} className="flex items-center gap-2.5 rounded-lg border border-border bg-surface-raised px-3 py-2">
 
-                      {item.poster && (
+                      {item.kind === "live" && item.poster ? (
 
-                        <img src={item.poster} alt="" className={cn(
+                        <LiveLogo className="h-9 w-9 flex-shrink-0 border border-border-subtle bg-surface-overlay"
 
-                          "h-9 w-6 flex-shrink-0 rounded",
-                          item.kind === "live" ? "bg-black/70 object-contain p-0.5" : "object-cover"
+                          channel={liveChannelFromHistory(item)}
 
-                        )} />
+                          imgClassName="object-contain p-1"
+                          rounded="rounded-full"
 
-                      )}
+                        />
+
+                      ) : item.poster ? (
+
+                        <img src={item.poster} alt="" className="h-9 w-6 flex-shrink-0 rounded object-cover" />
+
+                      ) : null}
 
                       <div className="min-w-0">
 

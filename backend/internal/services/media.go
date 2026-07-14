@@ -31,7 +31,6 @@ type CategoryDTO = catalog.CategoryDTO
 type LiveChannelDTO = catalog.LiveChannelDTO
 type SportsMatchDTO = catalog.SportsMatchDTO
 type MatchedChannelDTO = catalog.MatchedChannelDTO
-
 type SeasonDTO = vod.SeasonDTO
 type EpisodeDTO = vod.EpisodeDTO
 

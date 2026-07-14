@@ -1,7 +1,7 @@
 import { api, ApiError } from "@/api/client";
 
 import type { MultiviewStream } from "@/components/player/LiveStreamPane";
-import { MULTIVIEW_MAX_STREAMS } from "@/components/player/PlayerOptionsMenu";
+import { MULTIVIEW_MAX_STREAMS } from "@/components/player/MultiviewMenu";
 import { VideoPlayer } from "@/components/player/VideoPlayer";
 import { Button } from "@/components/ui/Button";
 import { SettingsPanel } from "@/pages/SettingsPanel";
@@ -271,9 +271,23 @@ export class WatchPage extends Component<WatchPageProps, WatchPageState> {
     this.failedQualityHeights.clear();
     this.userSelectedQuality = false;
 
+    const routeKind = route.valid
+      ? route.kind === "movie"
+        ? "movie" as const
+        : route.kind === "show"
+          ? "show" as const
+          : "live" as const
+      : this.state.kind;
+
     this.setState({
 
       ...EMPTY_STATE,
+
+      kind: routeKind,
+      mediaId: route.valid && route.kind === "movie" ? (route.id || 0) : route.valid && route.kind === "show" ? (route.showId || 0) : 0,
+      season: route.valid && route.kind === "show" ? (route.season || 1) : 0,
+      episode: route.valid && route.kind === "show" ? (route.episode || 1) : 0,
+      channelId: route.valid && route.kind === "live" ? (route.channelId || "") : "",
 
       loading: true,
       error: "",
@@ -1231,21 +1245,10 @@ export class WatchPage extends Component<WatchPageProps, WatchPageState> {
     const { streamUrl, isHls, qualities, selectedHeight, subtitleTracks, title, subtitle, episodeTitle, description, poster, intro, nextEpisode, startPositionMs, loading, error, ready, seasons, menuEpisodes, menuSeason, menuEpisodesLoading, season, episode, kind, mediaId, channelId, settingsOpen, multiviewStreams, multiviewChannels, multiviewLoading } = this.state;
     const settings = store.settings;
 
-    if (loading) {
+    const streamResolving = loading;
+    const fatalError = error && !streamResolving && !ready;
 
-      return (
-
-        <div className="flex h-screen items-center justify-center bg-black">
-
-          <div className="h-8 w-8 animate-spin rounded-full border-2 border-foreground/20 border-t-foreground" />
-
-        </div>
-
-      );
-
-    }
-
-    if (error || !ready || !streamUrl) {
+    if (fatalError) {
 
       return (
 
@@ -1297,7 +1300,7 @@ export class WatchPage extends Component<WatchPageProps, WatchPageState> {
         <VideoPlayer
 
           key={kind === "live" ? `live-${channelId}` : `${kind}-${mediaId}-${season}-${episode}`}
-          src={streamUrl}
+          src={ready ? streamUrl : ""}
 
           isHls={isHls}
 
@@ -1364,6 +1367,8 @@ export class WatchPage extends Component<WatchPageProps, WatchPageState> {
           onMultiviewSearch={kind === "live" ? this.handleMultiviewSearch : undefined}
           onMultiviewToggle={kind === "live" ? this.handleMultiviewToggle : undefined}
           onMultiviewRemove={kind === "live" ? this.handleMultiviewRemove : undefined}
+
+          streamResolving={streamResolving}
 
         />
 

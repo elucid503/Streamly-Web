@@ -407,7 +407,13 @@ export const api = {
 
   liveStream(channelId: string) {
 
-    return request<{ streamUrl: string; isHls: boolean; channel: LiveChannel }>(`/api/live/channels/${channelId}/stream`);
+    return request<{
+
+      streamUrl: string;
+      isHls: boolean;
+      channel: LiveChannel;
+
+    }>(`/api/live/channels/${channelId}/stream`);
 
   },
 

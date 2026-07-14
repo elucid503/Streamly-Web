@@ -8,6 +8,7 @@ import { LiveStreamPane, multiviewLayout, paneSpanClass, type MultiviewStream, }
 import { PauseOverlay } from "@/components/player/PauseOverlay";
 
 import { PlayerActionFeedbackOverlay, type PlayerActionFeedback, } from "@/components/player/PlayerActions";
+import { MultiviewMenu } from "@/components/player/MultiviewMenu";
 import { PlayerOptionsMenu } from "@/components/player/PlayerOptionsMenu";
 import { SubtitleDisplay } from "@/components/player/SubtitleDisplay";
 import { ControlButton, VolumeControl } from "@/components/player/VolumeControl";
@@ -154,6 +155,8 @@ interface VideoPlayerProps {
   onMultiviewToggle?: (channel: LiveChannel) => void;
   onMultiviewRemove?: (channelId: string) => void;
 
+  streamResolving?: boolean;
+
 }
 
 interface VideoPlayerState {
@@ -164,6 +167,7 @@ interface VideoPlayerState {
 
   showControls: boolean;
   showOptions: boolean;
+  showMultiview: boolean;
   showEpisodes: boolean;
   showSkipIntro: boolean;
   showUpNext: boolean;
@@ -187,6 +191,10 @@ interface VideoPlayerState {
 
   // Channel id whose pane currently routes audio (live multiview).
   audioChannelId: string | null;
+
+  playbackPrimed: boolean;
+
+  behindLive: boolean;
 
 }
 
@@ -245,7 +253,6 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
   private static readonly HOLD_PAUSE_DELAY_MS = 220;
   private static readonly UP_NEXT_VISIBLE_LEAD_MS = 150_000;
   private static readonly UP_NEXT_COUNTDOWN_LEAD_MS = 60_000;
-
   state: VideoPlayerState = {
 
     playing: false,
@@ -253,6 +260,7 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
 
     showControls: true,
     showOptions: false,
+    showMultiview: false,
     showEpisodes: false,
     showSkipIntro: false,
     showUpNext: false,
@@ -274,6 +282,10 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
     hdrHeights: new Set(),
 
     audioChannelId: null,
+
+    playbackPrimed: false,
+
+    behindLive: false,
 
   };
 
@@ -468,11 +480,11 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
 
   onTimeUpdate = () => {
 
-    if (this.props.live) return;
-
     const video = this.videoRef.current;
 
     if (!video || this.state.seeking) return;
+
+    if (this.props.live) return;
 
     const currentMs = video.currentTime * 1000;
 
@@ -632,21 +644,27 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
   onCanPlay = () => {
 
     this.clearBuffering();
-    this.setState({ seeking: false });
+    this.setState({ seeking: false, playbackPrimed: true });
 
   };
 
   onPlaying = () => {
 
     this.clearBuffering();
-    this.setState({ playing: true });
+    this.setState({ playing: true, playbackPrimed: true });
     this.props.onPlaybackStateChange?.(true);
 
   };
 
   onPause = () => {
 
-    this.setState({ playing: false });
+    this.setState({
+
+      playing: false,
+      behindLive: this.props.live ? true : this.state.behindLive,
+
+    });
+
     this.props.onPlaybackStateChange?.(false);
 
   };
@@ -999,6 +1017,8 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
     this.setState({
 
       loading: true,
+      playbackPrimed: false,
+      behindLive: false,
 
       showUpNext: false,
       showUpNextMini: false,
@@ -1028,6 +1048,30 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
     video.removeEventListener("error", this.onVideoError);
 
     video.addEventListener("error", this.onVideoError);
+
+    const proxied = isProxiedStream(src);
+
+    if (this.props.live) {
+
+      if (proxied) {
+
+        video.crossOrigin = "use-credentials";
+
+      } else {
+
+        video.removeAttribute("crossorigin");
+
+      }
+
+    } else if (this.props.ambienceEnabled || proxied) {
+
+      video.crossOrigin = proxied && !this.props.ambienceEnabled ? "use-credentials" : "anonymous";
+
+    } else {
+
+      video.removeAttribute("crossorigin");
+
+    }
 
     const onReady = () => {
 
@@ -1071,7 +1115,6 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
         return;
       }
 
-      const proxied = isProxiedStream(src);
       const live = !!this.props.live;
       const maxRecoveries = live ? VideoPlayer.MAX_LIVE_HLS_RECOVERIES : VideoPlayer.MAX_HLS_RECOVERIES;
 
@@ -1176,20 +1219,6 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
 
     } else {
 
-      if (isProxiedStream(src)) {
-
-        video.crossOrigin = this.props.ambienceEnabled ? "anonymous" : "use-credentials";
-
-      } else if (this.props.ambienceEnabled) {
-
-        video.crossOrigin = "anonymous";
-
-      } else {
-
-        video.removeAttribute("crossorigin");
-
-      }
-
       video.src = src;
 
       video.addEventListener("loadedmetadata", onReady, { once: true });
@@ -1270,6 +1299,58 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
 
   };
 
+  liveEdgePosition = (): number | null => {
+
+    const video = this.videoRef.current;
+
+    if (this.hls?.liveSyncPosition != null) {
+
+      return this.hls.liveSyncPosition;
+
+    }
+
+    if (!video || video.seekable.length === 0) return null;
+
+    return video.seekable.end(video.seekable.length - 1);
+
+  };
+
+  jumpToLive = () => {
+
+    const video = this.videoRef.current;
+
+    if (!video || !this.props.live) return;
+
+    const edge = this.liveEdgePosition();
+
+    if (edge == null || !Number.isFinite(edge)) return;
+
+    video.currentTime = Math.max(0, edge - 0.25);
+
+  };
+
+  jumpToLiveAndPlay = () => {
+
+    const video = this.videoRef.current;
+
+    if (!video || !this.props.live) return;
+
+    this.jumpToLive();
+
+    if (video.paused) {
+
+      video.play()
+        .then(() => this.setState({ playing: true, behindLive: false }))
+        .catch(() => this.setState({ playing: false }));
+
+    } else {
+
+      this.setState({ behindLive: false });
+
+    }
+
+  };
+
   togglePlay = () => {
 
     const video = this.videoRef.current;
@@ -1278,12 +1359,14 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
 
     if (video.paused) {
 
-      video.play().then(() => this.setState({ playing: true })).catch(() => this.setState({ playing: false }));
+      video.play()
+        .then(() => this.setState({ playing: true }))
+        .catch(() => this.setState({ playing: false }));
 
     } else {
 
       video.pause();
-      this.setState({ playing: false });
+      this.setState({ playing: false, behindLive: this.props.live ? true : this.state.behindLive });
 
     }
 
@@ -1626,6 +1709,12 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
 
     if (this.controlsTimer) clearTimeout(this.controlsTimer);
 
+    if (this.props.streamResolving) {
+
+      return;
+
+    }
+
     this.controlsTimer = setTimeout(() => {
 
       if (this.state.playing) this.setState({ showControls: false });
@@ -1639,7 +1728,19 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
     this.setState((s) => ({
 
       showOptions: !s.showOptions,
+      showMultiview: s.showOptions ? s.showMultiview : false,
       showEpisodes: s.showOptions ? s.showEpisodes : false,
+
+    }));
+
+  };
+
+  toggleMultiview = () => {
+
+    this.setState((s) => ({
+
+      showMultiview: !s.showMultiview,
+      showOptions: s.showMultiview ? s.showOptions : false,
 
     }));
 
@@ -1684,8 +1785,8 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
 
   render() {
 
-    const { title, subtitle, episodeTitle, description, poster, qualities = [], selectedHeight = 1080, preferredHeight, nextEpisode, onBack, ambienceEnabled, live, compact, onReturn, onDismiss, onQualityChange, onOpenSettings, seasons, episodes, currentSeason, currentEpisode, menuSeason, episodesLoading, onSeasonChange, onEpisodeSelect, primaryChannelId, multiviewStreams = [], multiviewChannels, multiviewLoading, onMultiviewSearch, onMultiviewToggle, onMultiviewRemove, } = this.props;
-    const { playing, muted, volume, showControls, showOptions, showEpisodes, showSkipIntro, showUpNext, showUpNextMini, upNextCountdown, fullscreen, loading, seeking, holdPauseActive, activeSubtitleId, actionFeedback, hdrHeights, audioChannelId, } = this.state;
+    const { title, subtitle, episodeTitle, description, poster, qualities = [], selectedHeight = 1080, preferredHeight, nextEpisode, onBack, ambienceEnabled, live, compact, onReturn, onDismiss, onQualityChange, onOpenSettings, seasons, episodes, currentSeason, currentEpisode, menuSeason, episodesLoading, onSeasonChange, onEpisodeSelect, primaryChannelId, multiviewStreams = [], multiviewChannels, multiviewLoading, onMultiviewSearch, onMultiviewToggle, onMultiviewRemove, streamResolving, } = this.props;
+    const { playing, muted, volume, showControls, showOptions, showMultiview, showEpisodes, showSkipIntro, showUpNext, showUpNextMini, upNextCountdown, fullscreen, loading, seeking, holdPauseActive, activeSubtitleId, actionFeedback, hdrHeights, audioChannelId, playbackPrimed, behindLive, } = this.state;
 
     // Live always uses a stable grid shell so adding multiview panes does not remount
     // the primary <video> (which would tear down the HLS MediaSource attachment).
@@ -1694,12 +1795,16 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
     const layout = multiviewLayout(multiviewCount);
     const primaryAudio = !multiviewActive || audioChannelId === (primaryChannelId ?? null);
 
-    const showPauseOverlay = !multiviewActive && !playing && !loading && !seeking && !holdPauseActive && !showEpisodes && store.settings?.disablePauseOverlay !== true;
+    const resolving = !!streamResolving;
+    const controlsPinned = resolving || loading || seeking;
+    const effectiveShowControls = showControls || controlsPinned;
+
+    const showPauseOverlay = !multiviewActive && !playing && !loading && !seeking && !holdPauseActive && !showEpisodes && !resolving && playbackPrimed && !!this.props.src.trim() && store.settings?.disablePauseOverlay !== true;
 
     const qualityEnabled = !live && qualities.length > 0 && !!onQualityChange;
     const episodesEnabled = !live && !!onEpisodeSelect && !!onSeasonChange;
 
-    const episodeStill = !!episodeTitle;
+    const pauseLayout = live ? "live" as const : episodeTitle ? "episode" as const : "movie" as const;
 
     const videoHandlers = {
 
@@ -1738,7 +1843,7 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
           <AmbienceLayer
 
             videoRef={this.videoRef as RefObject<HTMLVideoElement>}
-            enabled={!!ambienceEnabled}
+            enabled={!!ambienceEnabled && !live}
 
           />
 
@@ -1771,7 +1876,7 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
                 playsInline
                 // Keep crossOrigin stable across multiview toggles — flipping it
                 // reloads the media element and kills the active live stream.
-                crossOrigin={ambienceEnabled ? "anonymous" : undefined}
+                crossOrigin={isProxiedStream(this.props.src) ? "use-credentials" : undefined}
                 {...videoHandlers}
 
               />
@@ -1900,7 +2005,7 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
 
           visible={showPauseOverlay}
           poster={poster}
-          still={episodeStill}
+          layout={pauseLayout}
 
           title={title}
           subtitle={subtitle}
@@ -1913,11 +2018,17 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
 
         />}
 
-        {loading && !multiviewActive && (
+        {(loading || resolving) && !multiviewActive && (
 
-          <div className="absolute inset-0 z-20 flex items-center justify-center bg-surface/60 backdrop-blur-md">
+          <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-3 bg-surface/60 backdrop-blur-md">
 
-            <div className="h-8 w-8 animate-spin rounded-full border-2 border-foreground/20 border-t-foreground" />
+            <div className="h-9 w-9 animate-spin rounded-full border-2 border-foreground/20 border-t-foreground" />
+
+            <p className="max-w-xs text-center text-sm text-foreground-muted">
+
+              {streamResolving ? "Resolving stream…" : "Loading…"}
+
+            </p>
 
           </div>
 
@@ -1966,7 +2077,7 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
 
             // Pass clicks through empty top band so multiview pane chrome stays usable.
             "pointer-events-none absolute top-4 right-4 left-4 z-30 flex items-start justify-between gap-4 transition-opacity duration-300",
-            showControls ? "opacity-100" : "opacity-0"
+            effectiveShowControls ? "opacity-100" : "opacity-0"
 
           )}
 
@@ -2108,7 +2219,7 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
             // Outer shell is pointer-events-none so its padding doesn't block multiview pane chrome (audio/remove) under the bottom control band.
             "pointer-events-none absolute inset-x-0 bottom-0 z-20 px-4 pb-4 transition-opacity duration-300 sm:px-6",
             showEpisodes ? "pt-2" : "pt-10",
-            showControls || showEpisodes ? "opacity-100" : "opacity-0"
+            effectiveShowControls || showEpisodes ? "opacity-100" : "opacity-0"
 
         )}
 
@@ -2150,7 +2261,7 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
             <div className={cn(
 
                 "group mb-3 h-2 cursor-pointer rounded-full py-0.5",
-                (showControls || showEpisodes) && "pointer-events-auto"
+                (effectiveShowControls || showEpisodes) && "pointer-events-auto"
 
               )} onClick={(e) => {
 
@@ -2189,7 +2300,7 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
           <div className={cn(
 
               "relative flex items-center justify-between",
-              (showControls || showEpisodes) && "pointer-events-auto"
+              (effectiveShowControls || showEpisodes) && "pointer-events-auto"
 
             )}
           >
@@ -2234,19 +2345,39 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
 
               {live && (
 
-                <span className="flex items-center gap-1.5 text-[10px] font-medium tracking-wider text-red-400">
+                behindLive ? (
 
-                  <span className="relative flex h-1.5 w-1.5">
+                  <button type="button" onClick={(e) => {
 
-                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-500 opacity-60" />
+                      e.stopPropagation();
 
-                    <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-red-500" />
+                      this.jumpToLiveAndPlay();
+
+                    }} className="pointer-events-auto flex items-center gap-1.5 rounded-md px-1.5 py-0.5 text-[10px] font-medium tracking-wider text-foreground-muted transition-colors hover:text-foreground" aria-label="Jump to live" >
+
+                    <span className="h-1.5 w-1.5 rounded-full bg-foreground-muted" />
+
+                    Jump To Live
+
+                  </button>
+
+                ) : (
+
+                  <span className="flex items-center gap-1.5 text-[10px] font-medium tracking-wider text-red-400">
+
+                    <span className="relative flex h-1.5 w-1.5">
+
+                      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-500 opacity-60" />
+
+                      <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-red-500" />
+
+                    </span>
+
+                    LIVE
 
                   </span>
 
-                  LIVE
-
-                </span>
+                )
 
               )}
 
@@ -2279,46 +2410,62 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
 
               )}
 
-              <PlayerOptionsMenu
+              {live && onMultiviewToggle && (
 
-                open={showOptions}
-                qualities={qualities}
-                selectedHeight={selectedHeight}
-                preferredHeight={preferredHeight}
-                hdrHeights={hdrHeights}
+                <MultiviewMenu
 
-                subtitleTracks={this.allSubtitleTracks()}
-                activeSubtitleId={activeSubtitleId}
-                qualityEnabled={qualityEnabled}
+                  open={showMultiview}
+                  channels={multiviewChannels ?? []}
+                  selectedIds={this.multiviewSelectedIds()}
+                  pendingIds={this.multiviewPendingIds()}
+                  primaryId={primaryChannelId}
+                  loading={multiviewLoading}
 
-                multiviewEnabled={!!live && !!onMultiviewToggle}
-                multiviewChannels={multiviewChannels}
-                multiviewSelectedIds={this.multiviewSelectedIds()}
-                multiviewPendingIds={this.multiviewPendingIds()}
-                multiviewPrimaryId={primaryChannelId}
-                multiviewLoading={multiviewLoading}
-                onMultiviewSearch={onMultiviewSearch}
-                onMultiviewToggle={onMultiviewToggle}
+                  onToggle={this.toggleMultiview}
+                  onClose={() => this.setState({ showMultiview: false })}
+                  onOutsideClose={() => this.setState({ showMultiview: false })}
+                  onSearch={onMultiviewSearch}
+                  onToggleChannel={onMultiviewToggle}
 
-                onToggle={this.toggleOptions}
-                onClose={() => this.setState({ showOptions: false })}
-                onOutsideClose={this.closeOptionsFromOutside}
-                onQualityChange={(height) => {
+                />
 
-                  const video = this.videoRef.current;
+              )}
 
-                  const positionMs = video ? video.currentTime * 1000 : 0;
+              {!live && (
 
-                  this.setState({ showOptions: false });
+                <PlayerOptionsMenu
 
-                  onQualityChange?.(height, positionMs);
+                  open={showOptions}
+                  qualities={qualities}
+                  selectedHeight={selectedHeight}
+                  preferredHeight={preferredHeight}
+                  hdrHeights={hdrHeights}
 
-                }}
+                  subtitleTracks={this.allSubtitleTracks()}
+                  activeSubtitleId={activeSubtitleId}
+                  qualityEnabled={qualityEnabled}
 
-                onSubtitleChange={this.applySubtitleSelection}
-                onOpenSettings={onOpenSettings}
+                  onToggle={this.toggleOptions}
+                  onClose={() => this.setState({ showOptions: false })}
+                  onOutsideClose={this.closeOptionsFromOutside}
+                  onQualityChange={(height) => {
 
-              />
+                    const video = this.videoRef.current;
+
+                    const positionMs = video ? video.currentTime * 1000 : 0;
+
+                    this.setState({ showOptions: false });
+
+                    onQualityChange?.(height, positionMs);
+
+                  }}
+
+                  onSubtitleChange={this.applySubtitleSelection}
+                  onOpenSettings={onOpenSettings}
+
+                />
+
+              )}
 
               <ControlButton onClick={this.toggleFullscreen}>
 
