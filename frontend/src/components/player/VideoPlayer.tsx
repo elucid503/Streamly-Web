@@ -10,6 +10,7 @@ import { PauseOverlay } from "@/components/player/PauseOverlay";
 import { PlayerActionFeedbackOverlay, type PlayerActionFeedback, } from "@/components/player/PlayerActions";
 import { MultiviewMenu } from "@/components/player/MultiviewMenu";
 import { PlayerOptionsMenu } from "@/components/player/PlayerOptionsMenu";
+import { SeekPreview } from "@/components/player/SeekPreview";
 import { SubtitleDisplay } from "@/components/player/SubtitleDisplay";
 import { ControlButton, VolumeControl } from "@/components/player/VolumeControl";
 
@@ -226,6 +227,7 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
   private progressFillRef = createRef<HTMLDivElement>();
   private bufferFillRef = createRef<HTMLDivElement>();
   private timeLabelRef = createRef<HTMLSpanElement>();
+  private seekPreviewRef = createRef<SeekPreview>();
 
   private hls: HLS | null = null;
 
@@ -1523,6 +1525,30 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
 
   };
 
+  scrubberRatioFromEvent = (e: ReactMouseEvent<HTMLElement>) => {
+
+    const rect = e.currentTarget.getBoundingClientRect();
+
+    if (rect.width <= 0) return 0;
+
+    return Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+
+  };
+
+  onScrubberMove = (e: ReactMouseEvent<HTMLDivElement>) => {
+
+    if (this.props.live || this.durationMs <= 0) return;
+
+    this.seekPreviewRef.current?.update(this.scrubberRatioFromEvent(e), this.durationMs);
+
+  };
+
+  onScrubberLeave = () => {
+
+    this.seekPreviewRef.current?.hide();
+
+  };
+
   seekBy = (deltaMs: number) => {
 
     if (this.props.live) return;
@@ -2260,20 +2286,24 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
 
             <div className={cn(
 
-                "group mb-3 h-2 cursor-pointer rounded-full py-0.5",
+                "group relative mb-3 h-2 cursor-pointer rounded-full py-0.5",
                 (effectiveShowControls || showEpisodes) && "pointer-events-auto"
 
               )} onClick={(e) => {
 
                 e.stopPropagation();
 
-                const rect = e.currentTarget.getBoundingClientRect();
+                this.seek(this.scrubberRatioFromEvent(e) * this.durationMs);
 
-                const pct = (e.clientX - rect.left) / rect.width;
+              }} onMouseMove={this.onScrubberMove} onMouseLeave={this.onScrubberLeave} >
 
-                this.seek(pct * this.durationMs);
+              <SeekPreview
 
-              }} >
+                ref={this.seekPreviewRef}
+                src={this.props.src}
+                isHls={this.props.isHls}
+
+              />
 
               <div className="relative h-1 overflow-hidden rounded-full bg-white/20 transition-all duration-150 group-hover:h-1.5">
 
