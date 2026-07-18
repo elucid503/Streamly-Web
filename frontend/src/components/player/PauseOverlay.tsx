@@ -25,7 +25,35 @@ interface PauseOverlayProps {
 
 }
 
-export class PauseOverlay extends Component<PauseOverlayProps> {
+interface PauseOverlayState {
+
+  posterFailed: boolean;
+
+}
+
+export class PauseOverlay extends Component<PauseOverlayProps, PauseOverlayState> {
+
+  state: PauseOverlayState = {
+
+    posterFailed: false,
+
+  };
+
+  componentDidUpdate(prevProps: PauseOverlayProps) {
+
+    if (prevProps.poster !== this.props.poster) {
+
+      this.setState({ posterFailed: false });
+
+    }
+
+  }
+
+  handlePosterError = () => {
+
+    this.setState({ posterFailed: true });
+
+  };
 
   render() {
 
@@ -42,8 +70,11 @@ export class PauseOverlay extends Component<PauseOverlayProps> {
       totalDuration,
     } = this.props;
 
+    const { posterFailed } = this.state;
+
     const isLive = layout === "live";
     const showProgress = !isLive;
+    const showPoster = !!poster && !posterFailed;
 
     return (
 
@@ -71,7 +102,7 @@ export class PauseOverlay extends Component<PauseOverlayProps> {
 
               >
 
-                {poster && isLive && (
+                {showPoster && isLive && (
 
                   <div className="flex-shrink-0">
 
@@ -79,13 +110,14 @@ export class PauseOverlay extends Component<PauseOverlayProps> {
                       src={poster}
                       alt=""
                       className="h-28 w-28 object-contain sm:h-36 sm:w-36"
+                      onError={this.handlePosterError}
                     />
 
                   </div>
 
                 )}
 
-                {poster && !isLive && (
+                {showPoster && !isLive && (
 
                   <div className={cn(
 
@@ -96,7 +128,12 @@ export class PauseOverlay extends Component<PauseOverlayProps> {
 
                   >
 
-                    <img src={poster} alt="" className="size-full object-cover object-center" />
+                    <img
+                      src={poster}
+                      alt=""
+                      className="size-full object-cover object-center"
+                      onError={this.handlePosterError}
+                    />
 
                   </div>
 
