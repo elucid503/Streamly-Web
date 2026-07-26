@@ -535,10 +535,68 @@ func (s *MediaService) LiveSports() ([]SportsMatchDTO, error) {
 
 }
 
-// ResolveLiveStream returns the direct HLS playlist URL for a channel id.
-func (s *MediaService) ResolveLiveStream(id string) (string, error) {
+// LiveStreamRef is a resolved live TV stream (URL + optional playback headers).
+type LiveStreamRef struct {
 
-	return s.client.ResolveChannel(id)
+	URL string
+	IsHLS bool
+	Headers map[string]string
+	// Provider is an anonymized public key (auto/s1/s2/…), never an upstream brand.
+	Provider string
+
+}
+
+// LiveSourceOption is an anonymized provider choice for the player UI.
+type LiveSourceOption struct {
+
+	Key string `json:"key"`
+	Label string `json:"label"`
+	Description string `json:"description,omitempty"`
+
+}
+
+// LiveSourceProviders returns anonymized live source options.
+func (s *MediaService) LiveSourceProviders() []LiveSourceOption {
+
+	raw := s.client.LiveSourceProviders()
+	out := make([]LiveSourceOption, 0, len(raw))
+
+	for _, p := range raw {
+
+		out = append(out, LiveSourceOption{
+
+			Key: p.Key,
+			Label: p.Label,
+			Description: p.Description,
+
+		})
+
+	}
+
+	return out
+
+}
+
+// ResolveLiveStream returns a playable live stream for a catalog channel id.
+// providerKey is an optional public anonymized key; empty means automatic.
+func (s *MediaService) ResolveLiveStream(id string, providerKey string) (LiveStreamRef, error) {
+
+	stream, err := s.client.ResolveChannelStream(id, providerKey)
+
+	if err != nil {
+
+		return LiveStreamRef{}, err
+
+	}
+
+	return LiveStreamRef{
+
+		URL: stream.URL,
+		IsHLS: stream.IsHLS || mediakit.IsHLSURL(stream.URL),
+		Headers: stream.Headers,
+		Provider: stream.Provider,
+
+	}, nil
 
 }
 

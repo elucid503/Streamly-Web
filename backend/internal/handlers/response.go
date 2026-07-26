@@ -93,7 +93,10 @@ func isUpstreamUnavailable(err error) bool {
 		strings.Contains(msg, "503") ||
 		strings.Contains(msg, "504") ||
 		strings.Contains(msg, "525") ||
-		strings.Contains(msg, "febbox:")
+		strings.Contains(msg, "febbox:") ||
+		strings.Contains(msg, "no providers") ||
+		strings.Contains(msg, "no stream available") ||
+		strings.Contains(msg, "live/source")
 
 }
 

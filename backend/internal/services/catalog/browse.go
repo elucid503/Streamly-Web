@@ -288,14 +288,19 @@ func liveChannelFromChannel(ch mediakit.Channel) LiveChannelDTO {
 
 	return LiveChannelDTO{
 
-		ID:   ch.ID,
+		ID: ch.ID,
 		Name: ch.Name,
 		Slug: ch.Slug,
 		Code: ch.Code,
 		Logo: ch.Logo,
 
-		Country:  ch.Country.Code,
+		Country: ch.Country.Code,
+		CountryName: ch.Country.Name,
 		Category: ch.Category,
+		Categories: append([]string(nil), ch.Categories...),
+		Network: ch.Network,
+		Owners: append([]string(nil), ch.Owners...),
+		Website: ch.Website,
 		Enriched: ch.Enriched,
 	}
 
@@ -327,28 +332,34 @@ func sportsMatchFromMatch(m mediakit.Match) SportsMatchDTO {
 
 	dto := SportsMatchDTO{
 
-		ID:       m.ID,
-		Title:    m.Title,
+		ID: m.ID,
+		Title: m.Title,
 		Category: m.Category,
+		League: m.League,
 
-		HomeScore:    m.HomeScore,
-		AwayScore:    m.AwayScore,
+		HomeScore: m.HomeScore,
+		AwayScore: m.AwayScore,
 		StatusDetail: m.StatusDetail,
-		Status:       m.Status,
+		Status: m.Status,
 
 		StartsAt: m.StartTime.Unix(),
-		Live:     m.Live,
+		Live: m.Live,
+
+		Broadcast: m.Broadcast,
+		Broadcasts: append([]string(nil), m.Broadcasts...),
 	}
 
 	if m.HomeTeam != nil {
 
 		dto.HomeTeam = m.HomeTeam.Name
+		dto.HomeLogo = m.HomeTeam.Logo
 
 	}
 
 	if m.AwayTeam != nil {
 
 		dto.AwayTeam = m.AwayTeam.Name
+		dto.AwayLogo = m.AwayTeam.Logo
 
 	}
 
@@ -356,7 +367,7 @@ func sportsMatchFromMatch(m mediakit.Match) SportsMatchDTO {
 
 		dto.Channel = &MatchedChannelDTO{
 
-			ID:   m.Channel.ChannelID,
+			ID: m.Channel.ChannelID,
 			Name: m.Channel.Name,
 			Logo: m.Channel.Logo,
 		}
@@ -398,12 +409,8 @@ func rankPopularChannels(channels []LiveChannelDTO) []LiveChannelDTO {
 
 	sort.SliceStable(ranked, func(i, j int) bool {
 
-		// Channels without a real icon never outrank ones that have one,
-		// regardless of name. Enriched (not just Logo != "") is the signal
-		// that matters here — unenriched channels still carry ntv.cx's own
-		// raw channel_image URL, which is consistently unauthorized/broken,
-		// so Logo alone can't tell a working icon from a dead one.
-		hi, hj := ranked[i].Enriched, ranked[j].Enriched
+		// Prefer channels with verified metadata + logos.
+		hi, hj := ranked[i].Enriched && ranked[i].Logo != "", ranked[j].Enriched && ranked[j].Logo != ""
 
 		if hi != hj {
 

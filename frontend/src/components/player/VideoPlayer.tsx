@@ -18,7 +18,7 @@ import { store } from "@/lib/store";
 import { hasIntroWindow, isInIntroWindow } from "@/lib/intro";
 import { isProxiedStream, isWebPlayableUrl } from "@/lib/streamClient";
 import { cn, formatDuration } from "@/lib/utils";
-import type { Episode, IntroInfo, LiveChannel, NextEpisode, Season, StreamQuality, SubtitleTrack, } from "@/lib/types";
+import type { Episode, IntroInfo, LiveChannel, LiveSourceProvider, NextEpisode, Season, StreamQuality, SubtitleTrack, } from "@/lib/types";
 
 type HlsLevelLike = {
 
@@ -137,6 +137,12 @@ interface VideoPlayerProps {
   onDurationReady?: (durationMs: number) => void;
   onPlaybackError?: (positionMs: number) => void;
   onFatalError?: () => void;
+
+  /** Live TV: anonymized stream source switcher. */
+  sourceProviders?: LiveSourceProvider[];
+  selectedSourceKey?: string;
+  sourceSwitching?: boolean;
+  onSourceChange?: (key: string) => void;
 
   seasons?: Season[];
   episodes?: Episode[];
@@ -1811,7 +1817,7 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
 
   render() {
 
-    const { title, subtitle, episodeTitle, description, poster, qualities = [], selectedHeight = 1080, preferredHeight, nextEpisode, onBack, ambienceEnabled, live, compact, onReturn, onDismiss, onQualityChange, onOpenSettings, seasons, episodes, currentSeason, currentEpisode, menuSeason, episodesLoading, onSeasonChange, onEpisodeSelect, primaryChannelId, multiviewStreams = [], multiviewChannels, multiviewLoading, onMultiviewSearch, onMultiviewToggle, onMultiviewRemove, streamResolving, } = this.props;
+    const { title, subtitle, episodeTitle, description, poster, qualities = [], selectedHeight = 1080, preferredHeight, nextEpisode, onBack, ambienceEnabled, live, compact, onReturn, onDismiss, onQualityChange, onOpenSettings, seasons, episodes, currentSeason, currentEpisode, menuSeason, episodesLoading, onSeasonChange, onEpisodeSelect, primaryChannelId, multiviewStreams = [], multiviewChannels, multiviewLoading, onMultiviewSearch, onMultiviewToggle, onMultiviewRemove, streamResolving, sourceProviders, selectedSourceKey, sourceSwitching, onSourceChange, } = this.props;
     const { playing, muted, volume, showControls, showOptions, showMultiview, showEpisodes, showSkipIntro, showUpNext, showUpNextMini, upNextCountdown, fullscreen, loading, seeking, holdPauseActive, activeSubtitleId, actionFeedback, hdrHeights, audioChannelId, playbackPrimed, behindLive, } = this.state;
 
     // Live always uses a stable grid shell so adding multiview panes does not remount
@@ -1828,6 +1834,7 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
     const showPauseOverlay = !multiviewActive && !playing && !loading && !seeking && !holdPauseActive && !showEpisodes && !resolving && playbackPrimed && !!this.props.src.trim() && store.settings?.disablePauseOverlay !== true;
 
     const qualityEnabled = !live && qualities.length > 0 && !!onQualityChange;
+    const sourceEnabled = !!live && (sourceProviders?.length ?? 0) > 0 && !!onSourceChange;
     const episodesEnabled = !live && !!onEpisodeSelect && !!onSeasonChange;
 
     const pauseLayout = live ? "live" as const : episodeTitle ? "episode" as const : "movie" as const;
@@ -2461,7 +2468,7 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
 
               )}
 
-              {!live && (
+              {(qualityEnabled || sourceEnabled) && (
 
                 <PlayerOptionsMenu
 
@@ -2471,9 +2478,14 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
                   preferredHeight={preferredHeight}
                   hdrHeights={hdrHeights}
 
-                  subtitleTracks={this.allSubtitleTracks()}
+                  subtitleTracks={live ? [] : this.allSubtitleTracks()}
                   activeSubtitleId={activeSubtitleId}
                   qualityEnabled={qualityEnabled}
+
+                  sourceProviders={sourceEnabled ? sourceProviders : undefined}
+                  selectedSourceKey={selectedSourceKey}
+                  sourceSwitching={sourceSwitching}
+                  onSourceChange={sourceEnabled ? onSourceChange : undefined}
 
                   onToggle={this.toggleOptions}
                   onClose={() => this.setState({ showOptions: false })}
@@ -2491,7 +2503,7 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
                   }}
 
                   onSubtitleChange={this.applySubtitleSelection}
-                  onOpenSettings={onOpenSettings}
+                  onOpenSettings={live ? undefined : onOpenSettings}
 
                 />
 

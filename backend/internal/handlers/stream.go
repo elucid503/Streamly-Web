@@ -318,13 +318,14 @@ func (h *StreamHandler) NextEpisode(c *gin.Context) {
 
 }
 
-// LiveStream resolves a channel to its HLS playlist URL. By default the
-// frontend plays cdnlive URLs directly (CORS allows it). When the user
-// enables proxyLiveStreams (e.g. ISP blocks the CDN), playlists and segments
-// are routed through /api/proxy instead.
+// LiveStream resolves a channel to an HLS playlist URL via the source-provider
+// layer. Optional ?provider=s1|s2|… selects an anonymized source; empty/auto
+// walks the preferred order. Streams that require Referer/Origin (or when the
+// user enables proxyLiveStreams) are routed through /api/proxy.
 func (h *StreamHandler) LiveStream(c *gin.Context) {
 
 	id := c.Param("id")
+	providerKey := strings.TrimSpace(c.Query("provider"))
 
 	channel, ok := h.media.LiveChannel(id)
 
@@ -335,7 +336,7 @@ func (h *StreamHandler) LiveStream(c *gin.Context) {
 
 	}
 
-	streamURL, err := h.media.ResolveLiveStream(id)
+	stream, err := h.media.ResolveLiveStream(id, providerKey)
 
 	if err != nil {
 
@@ -344,9 +345,12 @@ func (h *StreamHandler) LiveStream(c *gin.Context) {
 
 	}
 
-	if h.shouldProxyLiveStreams(c) {
+	streamURL := stream.URL
+	needsProxy := h.shouldProxyLiveStreams(c) || len(stream.Headers) > 0
 
-		session, err := h.proxy.CreateSession(c.Request.Context(), streamURL, "", true)
+	if needsProxy {
+
+		session, err := h.proxy.CreateSessionWithHeaders(c.Request.Context(), stream.URL, stream.Headers, true)
 
 		if err != nil {
 
@@ -365,8 +369,16 @@ func (h *StreamHandler) LiveStream(c *gin.Context) {
 		"streamUrl": streamURL,
 		"isHls": true,
 		"channel": channel,
+		"provider": stream.Provider,
 
 	})
+
+}
+
+// LiveProviders returns anonymized live source options for the player menu.
+func (h *StreamHandler) LiveProviders(c *gin.Context) {
+
+	c.JSON(http.StatusOK, jsonSlice(h.media.LiveSourceProviders()))
 
 }
 

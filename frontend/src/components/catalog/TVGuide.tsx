@@ -98,6 +98,20 @@ function formatTime(unixSecs: number): string {
 
 }
 
+function programLabel(program?: ProgramEntry): string {
+
+  if (!program) return "";
+
+  if (program.episodeTitle && program.episodeTitle !== program.title) {
+
+    return `${program.title} · ${program.episodeTitle}`;
+
+  }
+
+  return program.title;
+
+}
+
 function progressPct(program: ProgramEntry): number {
 
   const now = Date.now() / 1000;
@@ -148,7 +162,7 @@ function GuideCard({ entry, onSelect }: GuideCardProps) {
 
           <>
 
-            <p className="truncate text-xs font-medium text-foreground">{current.title}</p>
+            <p className="truncate text-xs font-medium text-foreground">{programLabel(current)}</p>
 
             <div className="flex items-center gap-1.5">
 
@@ -175,7 +189,7 @@ function GuideCard({ entry, onSelect }: GuideCardProps) {
 
               <p className="truncate text-[10px] text-foreground-faint">
 
-                Next: {next.title} · {formatTime(next.startsAt)}
+                Next: {programLabel(next)} · {formatTime(next.startsAt)}
 
               </p>
 

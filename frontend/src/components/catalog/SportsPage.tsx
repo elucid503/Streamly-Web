@@ -14,6 +14,12 @@ const STARTING_SOON_WINDOW_SECS = 3 * 60 * 60;
 const ROW_PREVIEW_COUNT = 5;
 const FEATURED_TEAM_KEY = "streamly:sportsFeaturedTeam";
 
+function matchesOrEmpty(matches: SportsMatch[] | null | undefined): SportsMatch[] {
+
+  return matches ?? [];
+
+}
+
 interface SportsPageProps {
 
   onSelectChannel: (channel: LiveChannel) => void;
@@ -352,12 +358,9 @@ export class SportsPage extends Component<SportsPageProps, SportsPageState> {
 
     try {
 
-      const matches = await api.liveSports();
+      const matches = matchesOrEmpty(await api.liveSports());
 
-      // Only matches with a resolvable channel are watchable.
-      const watchable = (matches ?? []).filter((m) => m.channel);
-
-      this.setState({ matches: watchable, loading: false });
+      this.setState({ matches, loading: false });
 
       if (initial) {
 
@@ -366,7 +369,7 @@ export class SportsPage extends Component<SportsPageProps, SportsPageState> {
         const categories = Array.from(new Set([
 
           "motor-sports",
-          ...watchable.map((m) => m.category).filter(Boolean),
+          ...matches.map((m) => m.category).filter(Boolean),
 
         ])).sort();
 
@@ -583,7 +586,7 @@ export class SportsPage extends Component<SportsPageProps, SportsPageState> {
 
         <div className="px-4 py-16 text-center text-sm text-foreground-muted sm:px-8">
 
-          No watchable sports events available right now
+          No sports events available right now
 
         </div>
 
@@ -649,9 +652,9 @@ export class SportsPage extends Component<SportsPageProps, SportsPageState> {
 
                       <span className="text-3xl font-bold tabular-nums text-white sm:text-4xl">
 
-                        {featured.homeScore}
+                        {featured.awayScore ?? featured.homeScore}
                         <span className="mx-2 font-normal text-white/40">–</span>
-                        {featured.awayScore}
+                        {featured.homeScore ?? featured.awayScore}
 
                       </span>
 
@@ -673,19 +676,34 @@ export class SportsPage extends Component<SportsPageProps, SportsPageState> {
 
                 <div className="flex w-fit flex-shrink-0 items-center gap-1.5">
 
-                  <button
-                    type="button"
-                    onClick={() => this.props.onSelectChannel(matchedChannelToLiveChannel(featured.channel!, featured.category))}
-                    className={cn(
-                      "flex h-9 items-center gap-2 bg-white px-5 text-sm font-semibold text-black transition-opacity hover:opacity-90",
-                      // Avoid rounded-*-full when pairing: 9999px outer radii collapse the facing corners via the CSS border-radius overlap reduction rule.
+                  {featured.channel ? (
+
+                    <button
+                      type="button"
+                      onClick={() => this.props.onSelectChannel(matchedChannelToLiveChannel(featured.channel!, featured.category))}
+                      className={cn(
+                        "flex h-9 items-center gap-2 bg-white px-5 text-sm font-semibold text-black transition-opacity hover:opacity-90",
+                        // Avoid rounded-*-full when pairing: 9999px outer radii collapse the facing corners via the CSS border-radius overlap reduction rule.
+                        teamOptions.length > 0 ? "rounded-l-[18px] rounded-r-[5px]" : "rounded-full"
+                      )}
+                    >
+
+                      Watch on {featured.channel.name}
+
+                    </button>
+
+                  ) : (
+
+                    <span className={cn(
+                      "flex h-9 items-center bg-white/15 px-5 text-sm font-semibold text-white/70",
                       teamOptions.length > 0 ? "rounded-l-[18px] rounded-r-[5px]" : "rounded-full"
-                    )}
-                  >
+                    )}>
 
-                    Watch on {featured.channel!.name}
+                      Scores only
 
-                  </button>
+                    </span>
+
+                  )}
 
                   {teamOptions.length > 0 && (
 

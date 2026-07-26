@@ -1,6 +1,7 @@
 package client
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"sync"
@@ -10,13 +11,15 @@ import (
 	"mediakit/internal/febbox"
 	"mediakit/internal/imdb"
 	"mediakit/internal/introdb"
+	"mediakit/internal/live/catalog"
+	"mediakit/internal/live/guide"
+	livesports "mediakit/internal/live/sports"
+	"mediakit/internal/live/source"
 	"mediakit/internal/meta"
 	"mediakit/internal/providers"
 	"mediakit/internal/quality"
 	"mediakit/internal/showbox"
-	"mediakit/internal/sports"
 	"mediakit/internal/tmdb"
-	"mediakit/internal/tv"
 	"mediakit/internal/vod"
 
 	"golang.org/x/sync/singleflight"
@@ -31,8 +34,6 @@ type config struct {
 	febboxCookie string
 	introDBKey   string
 	tmdbAPIKey   string
-
-	tvBaseURL string
 
 	cacheIntro bool
 }
@@ -65,10 +66,11 @@ func WithTMDBAPIKey(key string) Option {
 
 }
 
-// WithTVBaseURL overrides the live TV catalog origin.
+// WithTVBaseURL is retained for API compatibility but no longer used.
+// Live catalog is metadata-only and does not depend on a stream provider origin.
 func WithTVBaseURL(baseURL string) Option {
 
-	return func(c *config) { c.tvBaseURL = baseURL }
+	return func(c *config) {}
 
 }
 
@@ -111,12 +113,6 @@ func applyDefaults(c *config) {
 
 	}
 
-	if c.tvBaseURL == "" {
-
-		c.tvBaseURL = os.Getenv("TV_BASE_URL")
-
-	}
-
 }
 
 type febboxBrowser interface {
@@ -150,23 +146,27 @@ type shareKeyCacheEntry struct {
 
 // Client is the entry point for catalogue search, VOD browsing, and live TV.
 type Client struct {
-	showbox   *showbox.Client
-	febbox    febboxBrowser
-	tv        *tv.Client
-	sports    *sports.Client
-	imdb      *imdb.Client
-	tmdb      *tmdb.Client
+	showbox *showbox.Client
+	febbox febboxBrowser
+
+	liveCatalog *catalog.Client
+	liveGuide *guide.Client
+	liveSports *livesports.Client
+	liveSource *source.Resolver
+
+	imdb *imdb.Client
+	tmdb *tmdb.Client
 	intro introFetcher
-	resolver  *providers.Resolver
+	resolver *providers.Resolver
 
 	titleMu sync.Mutex
-	titleGroup  singleflight.Group
-	showTitles  map[int]titleCacheEntry
+	titleGroup singleflight.Group
+	showTitles map[int]titleCacheEntry
 	movieTitles map[int]titleCacheEntry
 
-	shareKeyMu    sync.Mutex
+	shareKeyMu sync.Mutex
 	shareKeyGroup singleflight.Group
-	shareKeys     map[string]shareKeyCacheEntry
+	shareKeys map[string]shareKeyCacheEntry
 }
 
 // New builds a Client with optional configuration.
@@ -193,22 +193,32 @@ func New(opts ...Option) *Client {
 	}
 
 	febboxClient := febbox.New(febbox.Options{Cookie: cfg.febboxCookie})
-	tvClient := tv.New(tv.Options{BaseURL: cfg.tvBaseURL})
+
+	liveCatalog := catalog.New()
+	liveGuide := guide.New(liveCatalog)
+	liveSports := livesports.New(liveCatalog)
+
+	// FMHY-evaluated live TV sources: DaddyLive, NTV, Pluto, Vavoo.
+	liveSource := source.Default()
 
 	return &Client{
 
-		showbox:  showbox.New(showbox.Options{ChildMode: cfg.childMode}),
-		febbox:   febbox.NewCached(febboxClient),
-		tv:       tvClient,
-		sports:   sports.New(cfg.tvBaseURL, tvClient),
-		imdb:  imdb.New(cfg.tmdbAPIKey),
-		tmdb:  tmdb.New(cfg.tmdbAPIKey),
+		showbox: showbox.New(showbox.Options{ChildMode: cfg.childMode}),
+		febbox: febbox.NewCached(febboxClient),
+
+		liveCatalog: liveCatalog,
+		liveGuide: liveGuide,
+		liveSports: liveSports,
+		liveSource: liveSource,
+
+		imdb: imdb.New(cfg.tmdbAPIKey),
+		tmdb: tmdb.New(cfg.tmdbAPIKey),
 		intro: intro,
 		resolver: providers.New(cfg.tmdbAPIKey),
 
 		showTitles: make(map[int]titleCacheEntry),
 		movieTitles: make(map[int]titleCacheEntry),
-		shareKeys:   make(map[string]shareKeyCacheEntry),
+		shareKeys: make(map[string]shareKeyCacheEntry),
 	}
 
 }
@@ -309,7 +319,7 @@ func (c *Client) SearchKind(query string, kind meta.MediaKind) ([]meta.SearchHit
 // Warmup starts background live TV catalog refresh.
 func (c *Client) Warmup() {
 
-	c.tv.Warmup()
+	c.liveCatalog.Warmup()
 
 }
 
@@ -376,17 +386,17 @@ func (c *Client) ShowFromHit(hit meta.SearchHit) (*vod.Show, error) {
 
 }
 
-// Channels returns the current 24/7 live TV channel catalog.
-func (c *Client) Channels() (*tv.ChannelCatalog, error) {
+// Channels returns the current live TV channel catalog (metadata only).
+func (c *Client) Channels() (*catalog.Catalog, error) {
 
-	return c.tv.ListChannels()
+	return c.liveCatalog.List()
 
 }
 
 // SearchChannels finds channels whose name contains query.
-func (c *Client) SearchChannels(query string, limit int) ([]tv.Channel, error) {
+func (c *Client) SearchChannels(query string, limit int) ([]catalog.Channel, error) {
 
-	catalog, err := c.tv.ListChannels()
+	cat, err := c.liveCatalog.List()
 
 	if err != nil {
 
@@ -394,14 +404,15 @@ func (c *Client) SearchChannels(query string, limit int) ([]tv.Channel, error) {
 
 	}
 
-	return catalog.Search(query, limit), nil
+	return cat.Search(query, limit), nil
 
 }
 
-// ResolveChannel returns the direct HLS playlist URL for a channel id.
+// ResolveChannel resolves a playable stream for a catalog channel id via the
+// source-provider layer. With no providers registered, returns source.ErrNoProviders.
 func (c *Client) ResolveChannel(channelID string) (string, error) {
 
-	catalog, err := c.tv.ListChannels()
+	stream, err := c.ResolveChannelStream(channelID)
 
 	if err != nil {
 
@@ -409,23 +420,68 @@ func (c *Client) ResolveChannel(channelID string) (string, error) {
 
 	}
 
-	channel, ok := catalog.FindByID(channelID)
-
-	if !ok {
-
-		return "", fmt.Errorf("tv: channel %q not found", channelID)
-
-	}
-
-	return c.tv.ResolveStream(channel.PlayerURL)
+	return stream.URL, nil
 
 }
 
-// Matches returns current and upcoming sports matches, matched to channels
-// where a broadcaster could be identified.
-func (c *Client) Matches() ([]sports.Match, error) {
+// ResolveChannelStream resolves a full stream reference (URL + headers) for a channel.
+// providerKey is an optional public anonymized key ("auto", "s1", …); empty means auto.
+func (c *Client) ResolveChannelStream(channelID string, providerKey ...string) (source.Stream, error) {
 
-	return c.sports.Matches()
+	cat, err := c.liveCatalog.List()
+
+	if err != nil {
+
+		return source.Stream{}, err
+
+	}
+
+	ch, ok := cat.FindByID(channelID)
+
+	if !ok {
+
+		return source.Stream{}, fmt.Errorf("live: channel %q not found", channelID)
+
+	}
+
+	key := ""
+
+	if len(providerKey) > 0 {
+
+		key = providerKey[0]
+
+	}
+
+	return c.liveSource.ResolveWith(context.Background(), source.Request{
+
+		ChannelID: ch.ID,
+		Name: ch.Name,
+		AltNames: append([]string(nil), ch.AltNames...),
+		Network: ch.Network,
+		Country: ch.Country.Code,
+
+	}, key)
+
+}
+
+// LiveSourceProviders returns anonymized live source options for the client UI.
+func (c *Client) LiveSourceProviders() []source.PublicProvider {
+
+	return c.liveSource.PublicProviders()
+
+}
+
+// LiveSchedule returns guide entries for popular channels.
+func (c *Client) LiveSchedule() ([]guide.Entry, error) {
+
+	return c.liveGuide.Schedule()
+
+}
+
+// Matches returns current and upcoming sports fixtures from scoreboard sources.
+func (c *Client) Matches() ([]livesports.Match, error) {
+
+	return c.liveSports.Matches()
 
 }
 

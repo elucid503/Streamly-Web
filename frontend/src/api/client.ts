@@ -1,4 +1,4 @@
-import type { AccessCode, Category, ChannelGuideEntry, Episode, FavoriteItem, FriendRequestItem, FriendSummary, HomeFeed, IntroInfo, LiveChannel, NextEpisode, ProfileMedia, PublicProfile, ResolveResult, SearchHit, Season, ServiceInterruption, SportsMatch, StreamQuality, SubtitleTrack, TitleDetails, User, UserProfile, UserSettings, WatchHistoryItem, } from "@/lib/types";
+import type { AccessCode, Category, ChannelGuideEntry, Episode, FavoriteItem, FriendRequestItem, FriendSummary, HomeFeed, IntroInfo, LiveChannel, LiveSourceProvider, NextEpisode, ProfileMedia, PublicProfile, ResolveResult, SearchHit, Season, ServiceInterruption, SportsMatch, StreamQuality, SubtitleTrack, TitleDetails, User, UserProfile, UserSettings, WatchHistoryItem, } from "@/lib/types";
 
 export class ApiError extends Error {
 
@@ -405,15 +405,25 @@ export const api = {
 
   },
 
-  liveStream(channelId: string) {
+  liveProviders() {
+
+    return request<LiveSourceProvider[]>("/api/live/providers");
+
+  },
+
+  liveStream(channelId: string, provider?: string) {
+
+    const q = provider && provider !== "auto" ? `?provider=${encodeURIComponent(provider)}` : "";
 
     return request<{
 
       streamUrl: string;
       isHls: boolean;
       channel: LiveChannel;
+      /** Anonymized public source key (auto/s1/…). */
+      provider?: string;
 
-    }>(`/api/live/channels/${channelId}/stream`);
+    }>(`/api/live/channels/${channelId}/stream${q}`);
 
   },
 

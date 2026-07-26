@@ -88,14 +88,17 @@ function Scoreline({ match, className }: { match: SportsMatch; className?: strin
 
   if (!hasScore(match)) return null;
 
-  // ntv titles are typically "Home vs Away"; keep scores in that left-to-right order.
+  // Prefer away–home when both sides exist (US scoreboard convention).
+  const left = match.awayScore ?? match.homeScore;
+  const right = match.homeScore ?? match.awayScore;
+
   return (
 
     <span className={cn("tabular-nums font-semibold", className)}>
 
-      {match.homeScore}
+      {left}
       <span className="mx-1 font-normal text-foreground-faint">–</span>
-      {match.awayScore}
+      {right}
 
     </span>
 
@@ -201,6 +204,7 @@ export function SportsRow({ match, onSelect }: SportsRowProps) {
           <span className="truncate text-xs font-medium text-foreground-faint">
 
             {prettyCategory(match.category)}
+            {match.broadcast ? ` · ${match.broadcast}` : match.channel ? ` · ${match.channel.name}` : ""}
 
           </span>
 

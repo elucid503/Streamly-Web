@@ -270,6 +270,7 @@ func main() {
 	live.GET("/channels/popular", catalogHandler.LivePopular)
 	live.GET("/channels/search", middleware.SearchRateLimit, catalogHandler.LiveSearch)
 	live.GET("/channels/:id/stream", middleware.StreamRateLimit, streamHandler.LiveStream)
+	live.GET("/providers", streamHandler.LiveProviders)
 	live.GET("/schedule", catalogHandler.LiveSchedule)
 	live.GET("/sports", catalogHandler.LiveSports)
 

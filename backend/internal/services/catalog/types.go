@@ -22,7 +22,7 @@ type CategoryDTO struct {
 	Kind string `json:"kind"`
 }
 
-// LiveChannelDTO is a live TV channel entry.
+// LiveChannelDTO is a live TV channel entry (metadata only; no stream URL).
 type LiveChannelDTO struct {
 	ID   string `json:"id"`
 	Name string `json:"name"`
@@ -30,9 +30,14 @@ type LiveChannelDTO struct {
 	Code string `json:"code"`
 	Logo string `json:"logo"`
 
-	Country  string `json:"country"`
+	Country string `json:"country"`
+	CountryName string `json:"countryName,omitempty"`
 	Category string `json:"category"`
-	Enriched bool   `json:"enriched"`
+	Categories []string `json:"categories,omitempty"`
+	Network string `json:"network,omitempty"`
+	Owners []string `json:"owners,omitempty"`
+	Website string `json:"website,omitempty"`
+	Enriched bool `json:"enriched"`
 }
 
 // MatchedChannelDTO is the 24/7 channel a sports match's broadcast was matched to.
@@ -47,9 +52,12 @@ type SportsMatchDTO struct {
 	ID       string `json:"id"`
 	Title    string `json:"title"`
 	Category string `json:"category"`
+	League string `json:"league,omitempty"`
 
 	HomeTeam string `json:"homeTeam,omitempty"`
 	AwayTeam string `json:"awayTeam,omitempty"`
+	HomeLogo string `json:"homeLogo,omitempty"`
+	AwayLogo string `json:"awayLogo,omitempty"`
 
 	HomeScore    *int   `json:"homeScore,omitempty"`
 	AwayScore    *int   `json:"awayScore,omitempty"`
@@ -59,6 +67,11 @@ type SportsMatchDTO struct {
 
 	StartsAt int64 `json:"startsAt"`
 	Live     bool  `json:"live"`
+
+	// Broadcast is the primary live TV/stream outlet from the scoreboard (e.g. "SNY").
+	Broadcast string `json:"broadcast,omitempty"`
+	// Broadcasts lists all known outlets for this event.
+	Broadcasts []string `json:"broadcasts,omitempty"`
 
 	Channel *MatchedChannelDTO `json:"channel,omitempty"`
 }

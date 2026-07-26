@@ -1,10 +1,10 @@
 import { cn } from "@/lib/utils";
-import type { StreamQuality, SubtitleTrack } from "@/lib/types";
+import type { LiveSourceProvider, StreamQuality, SubtitleTrack } from "@/lib/types";
 
 import { Component, createRef } from "react";
 import { Check, Loader2, Settings, Settings2, Subtitles, X } from "lucide-react";
 
-type OptionsPanel = "quality" | "subtitles";
+type OptionsPanel = "quality" | "subtitles" | "source";
 
 interface PlayerOptionsMenuProps {
 
@@ -20,11 +20,17 @@ interface PlayerOptionsMenuProps {
   preferredHeight?: number;
   hdrHeights?: Set<number>;
 
+  /** Live TV: anonymized stream sources (Source 1…); only shown when provided. */
+  sourceProviders?: LiveSourceProvider[];
+  selectedSourceKey?: string;
+  sourceSwitching?: boolean;
+  onSourceChange?: (key: string) => void;
+
   onToggle: () => void;
   onClose: () => void;
   onOutsideClose?: (event: PointerEvent) => void;
 
-  onQualityChange: (height: number) => void;
+  onQualityChange?: (height: number) => void;
   onSubtitleChange: (trackId: string | null) => void;
   onOpenSettings?: () => void;
 
@@ -86,15 +92,24 @@ export class PlayerOptionsMenu extends Component<PlayerOptionsMenuProps, PlayerO
 
   private rootRef = createRef<HTMLDivElement>();
 
+  sourceEnabled = () => (this.props.sourceProviders?.length ?? 0) > 0 && !!this.props.onSourceChange;
+
   panelOrder = (): OptionsPanel[] => {
 
     const order: OptionsPanel[] = [];
 
+    if (this.sourceEnabled()) order.push("source");
+
     if (this.props.qualityEnabled) order.push("quality");
 
-    order.push("subtitles");
+    // Live TV: source switcher only. VOD: quality + subtitles.
+    if (!this.sourceEnabled() || this.props.subtitleTracks.length > 0) {
 
-    return order;
+      order.push("subtitles");
+
+    }
+
+    return order.length > 0 ? order : ["subtitles"];
 
   };
 
@@ -246,7 +261,13 @@ export class PlayerOptionsMenu extends Component<PlayerOptionsMenuProps, PlayerO
 
   render() {
 
-    const { open, qualities, selectedHeight, subtitleTracks, activeSubtitleId, qualityEnabled, preferredHeight, hdrHeights, onToggle, onClose, onQualityChange, onSubtitleChange, onOpenSettings, } = this.props;
+    const {
+      open, qualities, selectedHeight, subtitleTracks, activeSubtitleId, qualityEnabled,
+      preferredHeight, hdrHeights, sourceProviders = [], selectedSourceKey = "auto",
+      sourceSwitching = false, onSourceChange, onToggle, onClose, onQualityChange,
+      onSubtitleChange, onOpenSettings,
+    } = this.props;
+
     const { panel } = this.state;
 
     const sortedQualities = [...qualities].sort((a, b) => b.height - a.height);
@@ -254,6 +275,10 @@ export class PlayerOptionsMenu extends Component<PlayerOptionsMenuProps, PlayerO
     const panelOrder = this.panelOrder();
 
     const panelIndex = Math.max(0, panelOrder.indexOf(panel));
+
+    const sourceOn = this.sourceEnabled();
+
+    const showTabs = panelOrder.length > 1;
 
     return (
 
@@ -295,7 +320,7 @@ export class PlayerOptionsMenu extends Component<PlayerOptionsMenuProps, PlayerO
 
                 <p className="text-sm font-medium text-foreground">
 
-                  Playback
+                  {sourceOn && !qualityEnabled ? "Stream source" : "Playback"}
 
                 </p>
 
@@ -315,17 +340,23 @@ export class PlayerOptionsMenu extends Component<PlayerOptionsMenuProps, PlayerO
 
             </div>
 
-            <div className="mx-4 mb-3 rounded-lg border border-white/10 bg-white/5 p-1">
+            {showTabs && (
 
-              <div className="flex gap-1">
+              <div className="mx-4 mb-3 rounded-lg border border-white/10 bg-white/5 p-1">
 
-                {qualityEnabled && this.renderTab("quality", "Quality")}
+                <div className="flex gap-1">
 
-                {this.renderTab("subtitles", "Subtitles")}
+                  {sourceOn && this.renderTab("source", "Source")}
+
+                  {qualityEnabled && this.renderTab("quality", "Quality")}
+
+                  {panelOrder.includes("subtitles") && this.renderTab("subtitles", "Subtitles")}
+
+                </div>
 
               </div>
 
-            </div>
+            )}
 
             <div className="max-h-72 overflow-hidden px-3 pb-3">
 
@@ -339,6 +370,44 @@ export class PlayerOptionsMenu extends Component<PlayerOptionsMenuProps, PlayerO
                 }}
 
               >
+
+                {sourceOn && (
+
+                  <div className="max-h-72 w-full flex-shrink-0 overflow-y-auto pr-1">
+
+                    <div className="space-y-1">
+
+                      {sourceProviders.map((provider) => {
+
+                        const active = selectedSourceKey === provider.key;
+                        const loading = sourceSwitching && active;
+
+                        return this.renderOption(
+
+                          active,
+                          provider.label,
+                          provider.description,
+                          () => {
+
+                            if (provider.key === selectedSourceKey || sourceSwitching) return;
+
+                            onSourceChange?.(provider.key);
+
+                          },
+                          `source-${provider.key}`,
+                          sourceSwitching && !active,
+                          loading,
+
+                        );
+
+                      })}
+
+                    </div>
+
+                  </div>
+
+                )}
+
                 {qualityEnabled && (
 
                   <div className="max-h-72 w-full flex-shrink-0 overflow-y-auto pr-1">
@@ -366,7 +435,7 @@ export class PlayerOptionsMenu extends Component<PlayerOptionsMenuProps, PlayerO
                           qualityLabel(quality.height),
                           detail,
 
-                          () => onQualityChange(quality.height),
+                          () => onQualityChange?.(quality.height),
                           `quality-${quality.height}`
 
                         );

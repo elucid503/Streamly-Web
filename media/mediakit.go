@@ -7,11 +7,13 @@ import (
 	"mediakit/internal/client"
 	"mediakit/internal/discover"
 	"mediakit/internal/intro"
+	"mediakit/internal/live/catalog"
+	"mediakit/internal/live/guide"
+	livesports "mediakit/internal/live/sports"
+	"mediakit/internal/live/source"
 	"mediakit/internal/meta"
 	"mediakit/internal/quality"
-	"mediakit/internal/sports"
 	"mediakit/internal/tmdb"
-	"mediakit/internal/tv"
 	"mediakit/internal/vod"
 )
 
@@ -68,20 +70,44 @@ type IntroSegment = intro.Segment
 // IntroOption configures TheIntroDB lookups.
 type IntroOption = intro.Option
 
-// Channel is a single 24/7 live TV channel.
-type Channel = tv.Channel
+// Channel is a metadata-only live TV channel (no stream URL).
+type Channel = catalog.Channel
 
-// ChannelCatalog is the full set of 24/7 live TV channels.
-type ChannelCatalog = tv.ChannelCatalog
+// ChannelCatalog is the full live TV channel index.
+type ChannelCatalog = catalog.Catalog
+
+// Country is channel country metadata.
+type Country = catalog.Country
+
+// GuideEntry pairs a channel with current/next program data.
+type GuideEntry = guide.Entry
+
+// Program is a guide airing slot.
+type Program = guide.Program
 
 // Match is a single sports fixture.
-type Match = sports.Match
+type Match = livesports.Match
 
 // MatchTeam is one side of a sports match.
-type MatchTeam = sports.Team
+type MatchTeam = livesports.Team
 
-// MatchedChannel is the 24/7 channel a match's broadcast was matched to.
-type MatchedChannel = sports.MatchedChannel
+// MatchedChannel is an optional catalog channel soft-linked to a match.
+type MatchedChannel = livesports.MatchedChannel
+
+// Stream is a playable reference from the source-provider layer.
+type Stream = source.Stream
+
+// SourceProvider resolves catalog channel IDs into streams.
+type SourceProvider = source.Provider
+
+// PublicSourceProvider is an anonymized live source option for clients.
+type PublicSourceProvider = source.PublicProvider
+
+// ErrNoProviders is returned when no live stream providers are registered.
+var ErrNoProviders = source.ErrNoProviders
+
+// ErrStreamUnavailable is returned when providers fail to resolve a stream.
+var ErrStreamUnavailable = source.ErrUnavailable
 
 // TopCategory is a curated Showbox ranking list.
 type TopCategory = discover.TopCategory
@@ -151,7 +177,7 @@ func WithTMDBAPIKey(key string) Option {
 
 }
 
-// WithTVBaseURL overrides the live TV catalog origin.
+// WithTVBaseURL is retained for compatibility; live catalog no longer uses a provider origin.
 func WithTVBaseURL(baseURL string) Option {
 
 	return client.WithTVBaseURL(baseURL)

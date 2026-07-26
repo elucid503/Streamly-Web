@@ -1,4 +1,4 @@
-package tv
+package catalog
 
 import (
 	"sort"
@@ -6,7 +6,7 @@ import (
 )
 
 // FindByID returns the channel with the given id, if present.
-func (catalog *ChannelCatalog) FindByID(id string) (Channel, bool) {
+func (catalog *Catalog) FindByID(id string) (Channel, bool) {
 
 	for _, channel := range catalog.Channels {
 
@@ -23,7 +23,7 @@ func (catalog *ChannelCatalog) FindByID(id string) (Channel, bool) {
 }
 
 // FindByExactName returns the channel whose name matches query exactly, case-insensitively.
-func (catalog *ChannelCatalog) FindByExactName(name string) (Channel, bool) {
+func (catalog *Catalog) FindByExactName(name string) (Channel, bool) {
 
 	name = strings.ToLower(strings.TrimSpace(name))
 
@@ -48,7 +48,7 @@ func (catalog *ChannelCatalog) FindByExactName(name string) (Channel, bool) {
 }
 
 // Search returns channels whose name contains query, case-insensitively.
-func (catalog *ChannelCatalog) Search(query string, limit int) []Channel {
+func (catalog *Catalog) Search(query string, limit int) []Channel {
 
 	query = strings.ToLower(strings.TrimSpace(query))
 
@@ -62,7 +62,9 @@ func (catalog *ChannelCatalog) Search(query string, limit int) []Channel {
 
 	for _, channel := range catalog.Channels {
 
-		if strings.Contains(strings.ToLower(channel.Name), query) {
+		if strings.Contains(strings.ToLower(channel.Name), query) ||
+			strings.Contains(strings.ToLower(channel.Slug), query) ||
+			strings.Contains(strings.ToLower(channel.Network), query) {
 
 			matches = append(matches, channel)
 
@@ -92,8 +94,8 @@ func (catalog *ChannelCatalog) Search(query string, limit int) []Channel {
 
 }
 
-// Sorted returns channels ranked alphabetically, channels with a known icon first.
-func (catalog *ChannelCatalog) Sorted() []Channel {
+// Sorted returns channels ranked alphabetically, enriched channels first.
+func (catalog *Catalog) Sorted() []Channel {
 
 	channels := append([]Channel(nil), catalog.Channels...)
 
@@ -110,6 +112,21 @@ func (catalog *ChannelCatalog) Sorted() []Channel {
 	})
 
 	return channels
+
+}
+
+// Popular returns a ranked subset of well-known channels.
+func (catalog *Catalog) Popular(limit int) []Channel {
+
+	ranked := rankPopular(catalog.Channels)
+
+	if limit > 0 && len(ranked) > limit {
+
+		ranked = ranked[:limit]
+
+	}
+
+	return ranked
 
 }
 
