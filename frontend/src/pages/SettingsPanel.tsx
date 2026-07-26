@@ -137,7 +137,7 @@ export class SettingsPanel extends Component<SettingsPanelProps, SettingsPanelSt
           <Switch
 
             label="Proxy Live TV streams"
-            description="Route Live TV through the server if your ISP blocks the stream CDN. Off by default."
+            description="Route all Live TV through the server (helps if your ISP blocks stream CDNs). Some sources still proxy when the browser cannot send required headers. Off by default."
             checked={settings.proxyLiveStreams ?? false}
 
             onChange={(v) => this.update({ proxyLiveStreams: v })}

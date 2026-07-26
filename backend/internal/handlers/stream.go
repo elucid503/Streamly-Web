@@ -320,8 +320,14 @@ func (h *StreamHandler) NextEpisode(c *gin.Context) {
 
 // LiveStream resolves a channel to an HLS playlist URL via the source-provider
 // layer. Optional ?provider=s1|s2|… selects an anonymized source; empty/auto
-// walks the preferred order. Streams that require Referer/Origin (or when the
-// user enables proxyLiveStreams) are routed through /api/proxy.
+// walks the preferred order.
+//
+// Proxying:
+//   - When the user enables proxyLiveStreams, all live playlists/segments go
+//     through /api/proxy (ISP blocks, etc.).
+//   - Otherwise the stream plays directly, unless it requires request headers
+//     browsers refuse to set (Referer). Those still use the proxy so playback
+//     can work at all.
 func (h *StreamHandler) LiveStream(c *gin.Context) {
 
 	id := c.Param("id")
@@ -346,7 +352,7 @@ func (h *StreamHandler) LiveStream(c *gin.Context) {
 	}
 
 	streamURL := stream.URL
-	needsProxy := h.shouldProxyLiveStreams(c) || len(stream.Headers) > 0
+	needsProxy := h.shouldProxyLiveStreams(c) || requiresBrowserForbiddenHeaders(stream.Headers)
 
 	if needsProxy {
 
@@ -370,8 +376,35 @@ func (h *StreamHandler) LiveStream(c *gin.Context) {
 		"isHls": true,
 		"channel": channel,
 		"provider": stream.Provider,
+		"proxied": needsProxy,
 
 	})
+
+}
+
+// requiresBrowserForbiddenHeaders reports headers the browser Fetch/XHR layer
+// will not allow scripts to set (so a same-origin proxy hop is required).
+func requiresBrowserForbiddenHeaders(headers map[string]string) bool {
+
+	for key, value := range headers {
+
+		if value == "" {
+
+			continue
+
+		}
+
+		switch strings.ToLower(key) {
+
+		case "referer", "origin", "user-agent", "host", "cookie":
+
+			return true
+
+		}
+
+	}
+
+	return false
 
 }
 

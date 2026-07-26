@@ -268,15 +268,34 @@ func (s *ProxyService) Fetch(ctx context.Context, entry *ProxyEntry, incoming ht
 
 func (s *ProxyService) clientForTarget(targetURL string) *http.Client {
 
-	// Match mediakit resolution: when VIXSRC_PROXY_URL is set, all Vixsrc playback
-	// traffic (playlists, keys, segments on vix-content.net) uses the outbound proxy.
-	if s.proxiedClient != nil {
+	// Only Vixsrc hosts should use VIXSRC_PROXY_URL. Routing live CDNs
+	// (DaddyLive, Pluto, etc.) through that proxy causes widespread 502s.
+	if s.proxiedClient != nil && isVixsrcProxyHost(targetURL) {
 
 		return s.proxiedClient
 
 	}
 
 	return s.client
+
+}
+
+func isVixsrcProxyHost(rawURL string) bool {
+
+	parsed, err := url.Parse(rawURL)
+
+	if err != nil || parsed.Host == "" {
+
+		return false
+
+	}
+
+	host := strings.ToLower(parsed.Hostname())
+
+	return strings.Contains(host, "vixsrc") ||
+		strings.Contains(host, "vix-content") ||
+		strings.HasSuffix(host, "vixsrc.to") ||
+		strings.HasSuffix(host, "vixsrc.me")
 
 }
 

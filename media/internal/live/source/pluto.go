@@ -122,15 +122,9 @@ func (p *plutoProvider) Resolve(ctx context.Context, req Request) (Stream, error
 
 	}
 
-	headers := map[string]string{
-
-		"User-Agent": browserUA,
-		"Referer": "https://pluto.tv/",
-		"Origin": "https://pluto.tv",
-
-	}
-
-	if !verifyPlaylist(ctx, p.client, streamURL, headers) {
+	// Pluto stitcher allows anonymous browser playback (CORS). Avoid attaching
+	// Referer/UA so the app can play direct when proxyLiveStreams is off.
+	if !verifyPlaylist(ctx, p.client, streamURL, nil) {
 
 		return Stream{}, fmt.Errorf("pluto: playlist not playable for %q", ch.Name)
 
@@ -140,7 +134,6 @@ func (p *plutoProvider) Resolve(ctx context.Context, req Request) (Stream, error
 
 		URL: streamURL,
 		IsHLS: true,
-		Headers: headers,
 		Provider: p.Name(),
 
 	}, nil

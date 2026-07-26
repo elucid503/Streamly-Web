@@ -75,10 +75,27 @@ func (p *iptvOrgProvider) Resolve(ctx context.Context, req Request) (Stream, err
 
 	for _, s := range candidates {
 
-		headers := map[string]string{
+		// Prefer streams that work without custom headers so the browser can
+		// hit the CDN directly when proxyLiveStreams is off.
+		if verifyPlaylist(ctx, p.client, s.URL, nil) {
 
-			"User-Agent": firstNonEmpty(s.UserAgent, browserUA),
-			"Accept": "*/*",
+			return Stream{
+
+				URL: s.URL,
+				IsHLS: true,
+				Provider: p.Name(),
+
+			}, nil
+
+		}
+
+		// Some open streams only respond with a listed Referer/UA — keep those
+		// headers so the server proxy can play them when needed.
+		headers := map[string]string{}
+
+		if s.UserAgent != "" {
+
+			headers["User-Agent"] = s.UserAgent
 
 		}
 
@@ -89,7 +106,7 @@ func (p *iptvOrgProvider) Resolve(ctx context.Context, req Request) (Stream, err
 
 		}
 
-		if !verifyPlaylist(ctx, p.client, s.URL, headers) {
+		if len(headers) == 0 || !verifyPlaylist(ctx, p.client, s.URL, headers) {
 
 			last = fmt.Errorf("dead stream")
 			continue
