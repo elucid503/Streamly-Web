@@ -240,13 +240,13 @@ export class AdminPanel extends Component<AdminPanelProps, AdminPanelState> {
 
                 <div className="flex gap-1">
 
-                  <button onClick={() => this.copy(code.code)} className="rounded-md p-1.5 text-foreground-muted hover:bg-surface-overlay hover:text-foreground" >
+                  <button onClick={() => this.copy(code.code)} className="flex size-8 items-center justify-center rounded-md text-foreground-muted transition-colors hover:bg-surface-overlay hover:text-foreground" >
 
                     <Copy size={13} />
 
                   </button>
 
-                  <button onClick={() => this.remove(code.code)} className="rounded-md p-1.5 text-foreground-muted hover:bg-surface-overlay hover:text-red-400" >
+                  <button onClick={() => this.remove(code.code)} className="flex size-8 items-center justify-center rounded-md text-foreground-muted transition-colors hover:bg-surface-overlay hover:text-red-400" >
 
                     <Trash2 size={13} />
 
@@ -270,7 +270,7 @@ export class AdminPanel extends Component<AdminPanelProps, AdminPanelState> {
 
         <div className="mt-6 border-t border-border-subtle pt-5">
 
-          <p className="mb-3 text-sm font-medium">Service Interruption</p>
+          <p className="mb-3 text-sm font-semibold">Service Interruption</p>
 
           <Switch
 

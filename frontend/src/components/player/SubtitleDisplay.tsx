@@ -535,7 +535,7 @@ export class SubtitleDisplay extends Component<SubtitleDisplayProps, SubtitleDis
 
     const renderCue = (displayCue: AlignedSubtitleCue, displayActiveWord: number, className: string, key: string) => (
 
-      <p className={cn("max-w-4xl rounded-md bg-black/35 px-4 py-2.5 text-center text-[18px] leading-snug font-medium shadow-[0_8px_30px_rgba(0,0,0,0.35)] sm:text-[20px]", className)}
+      <p className={cn("max-w-4xl rounded-md border border-border-subtle/50 bg-surface/50 px-4 py-2.5 text-center text-[18px] leading-snug font-medium shadow-lg shadow-black/35 sm:text-[20px]", className)}
 
         key={key}
         style={{

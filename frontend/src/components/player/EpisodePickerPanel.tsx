@@ -249,8 +249,8 @@ export class EpisodePickerPanel extends Component<EpisodePickerPanelProps, Episo
 
           }} className={cn(
 
-              "group flex h-full w-full flex-col overflow-hidden rounded-xl border text-left transition-colors",
-              active ? "border-foreground bg-white/10 ring-1 ring-foreground/30" : "border-white/10 bg-white/5 hover:border-white/20 hover:bg-white/8"
+              "group flex h-full w-full flex-col overflow-hidden rounded-lg border text-left transition-colors",
+              active ? "ring-2 ring-[#969696] bg-white/10" : "border-transparent bg-white/5 ring-1 ring-white/10 hover:ring-white/20 hover:bg-white/8"
 
           )}
 
@@ -401,7 +401,7 @@ export class EpisodePickerPanel extends Component<EpisodePickerPanelProps, Episo
       <>
         <div className="w-full animate-fade-in" onClick={(e) => e.stopPropagation()}>
 
-          <div className="-mx-4 border-t border-border-subtle bg-surface/80 shadow-[0_-16px_48px_rgba(0,0,0,0.45)] backdrop-blur-md sm:-mx-6">
+          <div className="-mx-4 border-t border-border-subtle bg-surface/85 shadow-[0_-16px_48px_rgba(0,0,0,0.45)] backdrop-blur-xl sm:-mx-6">
 
             <div className="flex items-center justify-between gap-4 px-4 py-3 sm:px-6">
 
@@ -423,7 +423,7 @@ export class EpisodePickerPanel extends Component<EpisodePickerPanelProps, Episo
 
                   onClose();
 
-                }} className="rounded-md p-1 text-foreground-muted transition-colors hover:bg-white/8 hover:text-foreground" aria-label="Close episode picker" >
+                }} className="flex size-8 shrink-0 items-center justify-center rounded-md text-foreground-muted transition-colors hover:bg-white/10 hover:text-foreground" aria-label="Close episode picker" >
 
                 <X size={16} />
 
@@ -476,7 +476,7 @@ export class EpisodePickerPanel extends Component<EpisodePickerPanelProps, Episo
 
                       this.scrollCarousel(-1);
 
-                    }} className="absolute top-1/2 left-2 z-10 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border border-white/25 bg-white/15 text-foreground shadow-[0_4px_24px_rgba(0,0,0,0.45)] backdrop-blur-md transition-colors hover:border-white/40 hover:bg-white/25 sm:left-3" aria-label="Scroll episodes left" >
+                    }} className="absolute top-1/2 left-2 z-10 flex size-9 -translate-y-1/2 items-center justify-center rounded-md border border-border-subtle bg-surface/80 text-foreground shadow-lg shadow-black/30 backdrop-blur-xl transition-colors hover:bg-surface-overlay sm:left-3" aria-label="Scroll episodes left" >
 
                     <ChevronLeft size={22} strokeWidth={2.5} />
 
@@ -497,7 +497,7 @@ export class EpisodePickerPanel extends Component<EpisodePickerPanelProps, Episo
 
                       this.scrollCarousel(1);
 
-                    }} className="absolute top-1/2 right-2 z-10 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border border-white/25 bg-white/15 text-foreground shadow-[0_4px_24px_rgba(0,0,0,0.45)] backdrop-blur-md transition-colors hover:border-white/40 hover:bg-white/25 sm:right-3" aria-label="Scroll episodes right" >
+                    }} className="absolute top-1/2 right-2 z-10 flex size-9 -translate-y-1/2 items-center justify-center rounded-md border border-border-subtle bg-surface/80 text-foreground shadow-lg shadow-black/30 backdrop-blur-xl transition-colors hover:bg-surface-overlay sm:right-3" aria-label="Scroll episodes right" >
 
                     <ChevronRight size={22} strokeWidth={2.5} />
 
@@ -519,7 +519,7 @@ export class EpisodePickerPanel extends Component<EpisodePickerPanelProps, Episo
 
                     <div key={`ep-picker-skeleton-${index}`} data-episode-card className="flex w-[min(78vw,16.5rem)] flex-shrink-0 snap-start sm:w-64" >
 
-                      <div className="flex h-full w-full flex-col overflow-hidden rounded-xl border border-white/10 bg-white/5">
+                      <div className="flex h-full w-full flex-col overflow-hidden rounded-lg border border-white/10 bg-white/5">
 
                         <div className="aspect-[2/1] shrink-0 animate-pulse bg-white/8" />
 

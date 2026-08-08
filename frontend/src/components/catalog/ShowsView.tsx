@@ -16,13 +16,14 @@ interface ShowsViewProps {
 
 }
 
+/** Combined Movies & Shows browse (Streamly-Redux-style VOD home). */
 export class ShowsView extends Component<ShowsViewProps> {
 
   render() {
 
     return (
 
-      <FeedView kind="show" {...this.props} />
+      <FeedView {...this.props} />
 
     );
 

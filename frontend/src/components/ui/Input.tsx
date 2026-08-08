@@ -14,7 +14,7 @@ export class Input extends Component<InputProps> {
 
       <input className={cn(
 
-          "field-focus flex h-10 w-full rounded-md border border-border bg-surface-raised px-3 py-2 text-base text-foreground placeholder:text-foreground-faint focus:border-border lg:text-sm",
+          "field-focus flex h-9 w-full min-w-0 rounded-md border border-border bg-surface-overlay/40 px-3 py-1 text-base text-foreground shadow-sm placeholder:text-foreground-faint transition-colors focus:border-border focus:bg-surface-overlay/80 lg:text-sm",
           className
 
         )}

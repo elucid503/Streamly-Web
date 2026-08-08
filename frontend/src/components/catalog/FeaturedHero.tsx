@@ -157,13 +157,13 @@ export class FeaturedHero extends Component<FeaturedHeroProps, FeaturedHeroState
 
       <div className="mb-8 px-4 sm:px-8">
 
-        <div className="relative overflow-hidden rounded-xl">
+        <div className="relative overflow-hidden rounded-xl border border-border-subtle">
 
           <AnimatePresence initial={false} custom={direction} mode="popLayout">
 
             <motion.div
 
-              key={item.tmdbId || item.id}
+              key={`${item.kind}-${item.tmdbId || item.id}`}
               custom={direction}
               variants={slideVariants}
               initial="enter"
@@ -234,17 +234,17 @@ export class FeaturedHero extends Component<FeaturedHeroProps, FeaturedHeroState
 
                 )}
 
-                <div className="mt-1 flex flex-wrap items-center gap-2">
+                <div className="mt-1 flex flex-wrap items-center gap-1.5">
 
                   <button
 
                     type="button"
                     onClick={() => onPlay(item)}
-                    className="flex h-9 items-center gap-2 rounded-full bg-white px-5 text-sm font-semibold text-black transition-opacity hover:opacity-90"
+                    className="flex h-9 items-center gap-2 rounded-md bg-white px-5 text-sm font-semibold text-black transition-opacity hover:opacity-90"
 
                   >
 
-                    <Play size={14} fill="currentColor" />
+                    <Play className="size-3.5 fill-current" />
                     Play
 
                   </button>
@@ -255,7 +255,7 @@ export class FeaturedHero extends Component<FeaturedHeroProps, FeaturedHeroState
                     onClick={() => onFavoriteToggle(item)}
                     className={cn(
 
-                      "flex h-9 w-9 items-center justify-center rounded-full border border-white/20 bg-white/10 text-white backdrop-blur-md transition-colors hover:bg-white/15",
+                      "flex size-9 items-center justify-center rounded-md border border-white/20 bg-white/10 text-white backdrop-blur-md transition-colors hover:bg-white/15",
                       favorite && "text-accent"
 
                     )}
@@ -263,7 +263,7 @@ export class FeaturedHero extends Component<FeaturedHeroProps, FeaturedHeroState
 
                   >
 
-                    <Star size={14} fill={favorite ? "currentColor" : "none"} />
+                    <Star className="size-3.5" fill={favorite ? "currentColor" : "none"} />
 
                   </button>
 
@@ -283,12 +283,12 @@ export class FeaturedHero extends Component<FeaturedHeroProps, FeaturedHeroState
 
                 type="button"
                 onClick={() => this.go(-1)}
-                className="flex h-8 w-8 items-center justify-center rounded-full border border-white/15 bg-black/30 text-white/80 backdrop-blur-md transition-colors hover:bg-black/50 hover:text-white"
+                className="flex size-8 items-center justify-center rounded-md border border-white/15 bg-black/30 text-white/80 backdrop-blur-md transition-colors hover:bg-black/50 hover:text-white"
                 aria-label="Previous featured"
 
               >
 
-                <ChevronLeft size={16} />
+                <ChevronLeft className="size-4" />
 
               </button>
 
@@ -296,12 +296,12 @@ export class FeaturedHero extends Component<FeaturedHeroProps, FeaturedHeroState
 
                 type="button"
                 onClick={() => this.go(1)}
-                className="flex h-8 w-8 items-center justify-center rounded-full border border-white/15 bg-black/30 text-white/80 backdrop-blur-md transition-colors hover:bg-black/50 hover:text-white"
+                className="flex size-8 items-center justify-center rounded-md border border-white/15 bg-black/30 text-white/80 backdrop-blur-md transition-colors hover:bg-black/50 hover:text-white"
                 aria-label="Next featured"
 
               >
 
-                <ChevronRight size={16} />
+                <ChevronRight className="size-4" />
 
               </button>
 

@@ -1,8 +1,10 @@
 import { cn } from "@/lib/utils";
+import { store } from "@/lib/store";
 import type { MainView } from "@/lib/types";
 
 import { Component } from "react";
 import { motion } from "framer-motion";
+import { Clapperboard, Radio, Trophy, Users } from "lucide-react";
 
 interface ViewSwitcherProps {
 
@@ -12,63 +14,109 @@ interface ViewSwitcherProps {
 
 }
 
-const views: { id: MainView; label: string }[] = [
+const views: { id: MainView; label: string; icon: typeof Clapperboard }[] = [
 
-  { id: "shows", label: "TV Shows" },
-  { id: "movies", label: "Movies" },
-  { id: "live", label: "Live TV" },
-  { id: "sports", label: "Sports" },
+  { id: "vod", label: "Movies & Shows", icon: Clapperboard },
+  { id: "live", label: "Live TV", icon: Radio },
+  { id: "sports", label: "Sports", icon: Trophy },
+  { id: "friends", label: "Friends", icon: Users },
 
 ];
 
-export class ViewSwitcher extends Component<ViewSwitcherProps> {
+interface ViewSwitcherState {
+
+  friendRequestCount: number;
+
+}
+
+export class ViewSwitcher extends Component<ViewSwitcherProps, ViewSwitcherState> {
+
+  private unsub = () => {};
+
+  state: ViewSwitcherState = { friendRequestCount: store.incomingRequestCount };
+
+  componentDidMount() {
+
+    this.unsub = store.subscribe(() => this.setState({ friendRequestCount: store.incomingRequestCount }));
+
+  }
+
+  componentWillUnmount() {
+
+    this.unsub();
+
+  }
 
   render() {
 
     const { active, onChange } = this.props;
+    const { friendRequestCount } = this.state;
 
     return (
 
-      <div className="inline-flex rounded-full border border-border bg-surface-raised p-1">
+      <div className="pointer-events-none fixed inset-x-0 bottom-0 z-40 flex justify-center px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
 
-        {views.map((view) => {
+        <nav className="pointer-events-auto flex items-center gap-0.5 rounded-full border border-border bg-surface-raised/90 p-1 shadow-xl backdrop-blur-md sm:gap-1">
 
-          const isActive = active === view.id;
+          {views.map((view) => {
 
-          return (
+            const isActive = active === view.id;
+            const Icon = view.icon;
 
-            <button key={view.id} type="button" onClick={() => onChange(view.id)}
+            return (
 
-              className={cn(
+              <button
+                key={view.id}
+                type="button"
+                onClick={() => onChange(view.id)}
+                className={cn(
+                  "relative flex items-center justify-center gap-1.5 rounded-full px-5 py-2 text-xs font-medium sm:gap-2 sm:px-3.5 sm:text-sm",
+                  isActive ? "text-surface" : "text-foreground-muted hover:text-foreground"
+                )}
+                title={view.label}
+                aria-label={view.label}
+              >
 
-                "relative rounded-full px-4 py-1.5 text-xs font-medium transition-colors sm:px-6 sm:text-sm",
-                isActive ? "text-surface" : "text-foreground-muted hover:text-foreground"
+                {isActive && (
 
-              )}
+                  <motion.span
+                    layoutId="bottom-nav-pill"
+                    className="absolute inset-0 rounded-full bg-foreground shadow-sm"
+                    transition={{ type: "spring", stiffness: 400, damping: 32 }}
+                  />
 
-            >
+                )}
 
-              {isActive && (
+                <span className="relative z-10 flex items-center gap-1.5 sm:gap-2">
 
-                <motion.span layoutId="view-switcher-pill" className="absolute inset-0 rounded-full bg-foreground"
+                  <Icon className="size-5 sm:size-4" />
 
-                  transition={{ type: "spring", stiffness: 400, damping: 32 }}
+                  <span className="hidden whitespace-nowrap sm:inline">{view.label}</span>
 
-                />
+                  {view.id === "friends" && friendRequestCount > 0 && (
 
-              )}
+                    <span className={cn(
 
-              <span className="relative z-10 inline-flex items-center gap-1.5 whitespace-nowrap">
+                      "flex h-4 min-w-[1rem] items-center justify-center rounded-full px-1 text-[10px] font-semibold",
+                      isActive ? "bg-surface text-foreground" : "bg-foreground text-surface"
 
-                {view.label}
+                    )}>
 
-              </span>
+                      {friendRequestCount}
 
-            </button>
+                    </span>
 
-          );
+                  )}
 
-        })}
+                </span>
+
+              </button>
+
+            );
+
+          })}
+
+        </nav>
 
       </div>
 

@@ -33,15 +33,15 @@ export class ContentRow extends Component<ContentRowProps> {
 
     return (
 
-      <section id={sectionId} className="mb-8 scroll-mt-36">
+      <section id={sectionId} className="mb-8 flex flex-col gap-3 scroll-mt-36">
 
-        <div className="mb-3 flex items-center justify-between px-4 sm:px-8">
+        <div className="flex items-center justify-between gap-3 px-4 sm:px-8">
 
           <div className="min-w-0">
 
             {title ? (
 
-              <h2 className="text-sm font-medium text-foreground">
+              <h2 className="text-base font-semibold tracking-tight text-foreground">
 
                 {title}
 
@@ -51,7 +51,7 @@ export class ContentRow extends Component<ContentRowProps> {
 
             {subtitle && (
 
-              <p className="mt-0.5 text-xs text-foreground-muted">
+              <p className="mt-0.5 text-sm text-foreground-muted">
 
                 {subtitle}
 
@@ -61,17 +61,17 @@ export class ContentRow extends Component<ContentRowProps> {
 
           </div>
 
-          <div className="hidden gap-1 sm:flex">
+          <div className="hidden shrink-0 items-center gap-1 sm:flex">
 
-            <button onClick={() => this.scroll(-1)} className="rounded-md p-1.5 text-foreground-faint transition-colors hover:bg-surface-overlay hover:text-foreground" >
+            <button onClick={() => this.scroll(-1)} className="flex size-8 items-center justify-center rounded-md border border-border-subtle bg-surface-raised text-foreground-muted transition-colors hover:border-border hover:bg-surface-overlay hover:text-foreground" >
 
-              <ChevronLeft size={16} />
+              <ChevronLeft className="size-4" />
 
             </button>
 
-            <button onClick={() => this.scroll(1)} className="rounded-md p-1.5 text-foreground-faint transition-colors hover:bg-surface-overlay hover:text-foreground" >
+            <button onClick={() => this.scroll(1)} className="flex size-8 items-center justify-center rounded-md border border-border-subtle bg-surface-raised text-foreground-muted transition-colors hover:border-border hover:bg-surface-overlay hover:text-foreground" >
 
-              <ChevronRight size={16} />
+              <ChevronRight className="size-4" />
 
             </button>
 
@@ -85,7 +85,7 @@ export class ContentRow extends Component<ContentRowProps> {
 
             {Array.from({ length: 8 }).map((_, i) => (
 
-              <div key={i} className="skeleton h-[210px] w-[140px] flex-shrink-0" />
+              <div key={i} className="skeleton aspect-[2/3] w-[8.5rem] flex-shrink-0 rounded-lg sm:w-36" />
 
             ))}
 
@@ -93,7 +93,7 @@ export class ContentRow extends Component<ContentRowProps> {
 
         ) : (
 
-          <div className={cn("flex gap-3 overflow-x-auto px-4 pb-1 scrollbar-hide sm:gap-4 sm:px-8")} ref={(el) => { this.scroller = el; }} >
+          <div className={cn("flex gap-3 overflow-x-auto px-4 pb-1 scrollbar-hide sm:px-8")} ref={(el) => { this.scroller = el; }} >
 
             {children}
 

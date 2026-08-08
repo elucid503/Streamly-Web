@@ -114,8 +114,8 @@ export class SelectMenu extends Component<SelectMenuProps, SelectMenuState> {
         <button
           type="button"
           className={cn(
-            "field-focus flex h-9 min-w-[132px] items-center justify-between gap-2 rounded-full border border-border-subtle bg-surface-raised px-3 text-left text-xs font-medium text-foreground hover:border-border hover:bg-surface-overlay",
-            open && "border-border bg-surface-overlay"
+            "field-focus flex h-8 min-w-[7rem] items-center justify-between gap-2 rounded-md border border-border bg-surface-overlay px-3 text-left text-xs font-medium text-foreground shadow-sm hover:bg-border/60",
+            open && "border-border bg-border/60"
           )}
           aria-haspopup="listbox"
           aria-expanded={open}
@@ -134,8 +134,8 @@ export class SelectMenu extends Component<SelectMenuProps, SelectMenuState> {
 
             <motion.div className={cn(
 
-                "absolute left-0 z-50 min-w-full overflow-hidden rounded-[1.25rem] border border-border-subtle bg-surface/95 p-1 shadow-2xl ring-1 ring-white/[0.04] backdrop-blur-lg",
-                openUpward ? "bottom-[calc(100%+8px)]" : "top-[calc(100%+8px)]"
+                "absolute left-0 z-50 min-w-full overflow-hidden rounded-md border border-border bg-surface-raised p-1 shadow-lg",
+                openUpward ? "bottom-[calc(100%+0.35rem)]" : "top-[calc(100%+0.35rem)]"
 
               )}
 
@@ -163,9 +163,9 @@ export class SelectMenu extends Component<SelectMenuProps, SelectMenuState> {
                       role="option"
                       aria-selected={isSelected}
                       className={cn(
-                        "flex h-9 w-full items-center justify-between gap-2 rounded-xl px-3 text-left text-xs font-medium transition-colors",
+                        "flex w-full items-center justify-between gap-2 rounded-sm px-2 py-1.5 text-left text-sm transition-colors",
                         isSelected
-                          ? "bg-surface-raised text-foreground shadow-sm"
+                          ? "bg-surface-overlay text-foreground"
                           : "text-foreground-muted hover:bg-surface-overlay/80 hover:text-foreground"
                       )}
                       onClick={() => {
@@ -180,7 +180,7 @@ export class SelectMenu extends Component<SelectMenuProps, SelectMenuState> {
 
                       {isSelected && (
 
-                        <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-foreground/10">
+                        <span className="flex size-5 shrink-0 items-center justify-center rounded-md bg-foreground/10">
 
                           <Check size={11} className="text-foreground" strokeWidth={2.5} />
 

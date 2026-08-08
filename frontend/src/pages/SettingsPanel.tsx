@@ -61,13 +61,13 @@ export class SettingsPanel extends Component<SettingsPanelProps, SettingsPanelSt
 
           <div className="py-2">
 
-            <label className="mb-2 block text-xs text-foreground-muted">Preferred Quality</label>
+            <label className="mb-2 block text-sm font-semibold text-foreground-muted">Preferred Quality</label>
 
             <div className="flex gap-2">
 
               {([360, 720, 1080, 2160] as const).map((h) => (
 
-                <button key={h} className={`rounded-md border px-3 py-1.5 text-xs transition-colors ${ settings.preferredHeight === h ? "border-foreground bg-foreground text-surface" : "border-border text-foreground-muted hover:text-foreground" }`}
+                <button key={h} className={`flex h-8 items-center rounded-md border px-3 text-xs transition-colors ${ settings.preferredHeight === h ? "border-foreground bg-foreground text-surface" : "border-border text-foreground-muted hover:text-foreground" }`}
 
                   onClick={() => this.update({ preferredHeight: h })}
                   disabled={this.state.saving}
@@ -86,24 +86,6 @@ export class SettingsPanel extends Component<SettingsPanelProps, SettingsPanelSt
 
           <Switch
 
-            label="Auto-play next episode"
-            checked={settings.autoPlayNext}
-
-            onChange={(v) => this.update({ autoPlayNext: v })}
-
-          />
-
-          <Switch
-
-            label="Show skip intro"
-            checked={settings.skipIntro}
-
-            onChange={(v) => this.update({ skipIntro: v })}
-
-          />
-
-          <Switch
-
             label="Ambience lighting"
             checked={settings.ambienceEnabled}
 
@@ -113,31 +95,17 @@ export class SettingsPanel extends Component<SettingsPanelProps, SettingsPanelSt
 
           <Switch
 
-            label="Disable pause overlay"
-            checked={settings.disablePauseOverlay}
+            label="Pause overlay"
+            checked={!settings.disablePauseOverlay}
 
-            onChange={(v) => this.update({ disablePauseOverlay: v })}
-
-          />
-
-          <Switch
-
-            label="Subtitles on by default"
-            checked={settings.subtitlesEnabled ?? false}
-
-            onChange={(v) => {
-
-              localStorage.setItem("streamly:subtitlesEnabled", v ? "1" : "0"); // for instant feedback in player
-              void this.update({ subtitlesEnabled: v });
-
-            }}
+            onChange={(v) => this.update({ disablePauseOverlay: !v })}
 
           />
 
           <Switch
 
             label="Proxy Live TV streams"
-            description="Route all Live TV through the server (helps if your ISP blocks stream CDNs). Some sources still proxy when the browser cannot send required headers. Off by default."
+            description="Route Live TV through the server if streams are blocked."
             checked={settings.proxyLiveStreams ?? false}
 
             onChange={(v) => this.update({ proxyLiveStreams: v })}

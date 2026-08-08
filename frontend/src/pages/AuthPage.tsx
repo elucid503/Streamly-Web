@@ -118,7 +118,7 @@ export class AuthPage extends Component<AuthPageProps, AuthPageState> {
 
             <div>
 
-              <label className="mb-1.5 block text-xs text-foreground-muted">Email</label>
+              <label className="mb-1.5 block text-sm font-semibold text-foreground-muted">Email</label>
 
               <Input type="email"
 
@@ -134,7 +134,7 @@ export class AuthPage extends Component<AuthPageProps, AuthPageState> {
 
             <div>
 
-              <label className="mb-1.5 block text-xs text-foreground-muted">Password</label>
+              <label className="mb-1.5 block text-sm font-semibold text-foreground-muted">Password</label>
 
               <Input type="password"
 
@@ -153,7 +153,7 @@ export class AuthPage extends Component<AuthPageProps, AuthPageState> {
 
               <div>
 
-                <label className="mb-1.5 block text-xs text-foreground-muted">Access Code</label>
+                <label className="mb-1.5 block text-sm font-semibold text-foreground-muted">Access Code</label>
 
                 <Input value={accessCode}
 

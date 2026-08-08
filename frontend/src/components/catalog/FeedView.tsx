@@ -5,13 +5,11 @@ import { FeaturedHero } from "@/components/catalog/FeaturedHero";
 import { TitleCard } from "@/components/catalog/TitleCard";
 
 import { continueWatching, latestTitleProgress, progressLabel, resumePath } from "@/lib/history";
-import type { FavoriteItem, FeedItem, HomeFeed, WatchHistoryItem } from "@/lib/types";
+import type { FavoriteItem, FeedItem, FeedSection, HomeFeed, WatchHistoryItem } from "@/lib/types";
 
 import { Component } from "react";
 
 interface FeedViewProps {
-
-  kind: "movie" | "show";
 
   onSelect: (id: number, kind: "movie" | "show") => void;
   onResumeWatching: (path: string) => void;
@@ -25,10 +23,27 @@ interface FeedViewProps {
 
 interface FeedViewState {
 
-  feed: HomeFeed | null;
+  movieFeed: HomeFeed | null;
+  showFeed: HomeFeed | null;
   showPosters: Record<number, string>;
   loading: boolean;
   resolvingKey: string | null;
+
+}
+
+function interleaveFeatured(movies: FeedItem[], shows: FeedItem[]): FeedItem[] {
+
+  const out: FeedItem[] = [];
+  const max = Math.max(movies.length, shows.length);
+
+  for (let i = 0; i < max; i++) {
+
+    if (movies[i]) out.push(movies[i]!);
+    if (shows[i]) out.push(shows[i]!);
+
+  }
+
+  return out;
 
 }
 
@@ -36,7 +51,8 @@ export class FeedView extends Component<FeedViewProps, FeedViewState> {
 
   state: FeedViewState = {
 
-    feed: null,
+    movieFeed: null,
+    showFeed: null,
     showPosters: {},
     loading: true,
     resolvingKey: null,
@@ -46,18 +62,13 @@ export class FeedView extends Component<FeedViewProps, FeedViewState> {
   componentDidMount() {
 
     void this.load();
-
-    if (this.props.kind === "show") {
-
-      void this.loadShowPosters(this.props.history);
-
-    }
+    void this.loadShowPosters(this.props.history);
 
   }
 
   componentDidUpdate(prevProps: FeedViewProps) {
 
-    if (prevProps.history !== this.props.history && this.props.kind === "show") {
+    if (prevProps.history !== this.props.history) {
 
       void this.loadShowPosters(this.props.history);
 
@@ -109,13 +120,30 @@ export class FeedView extends Component<FeedViewProps, FeedViewState> {
 
     try {
 
-      const feed = await api.homeFeed(this.props.kind);
+      const [movieFeed, showFeed] = await Promise.all([
 
-      this.setState({ feed: feed ?? { sections: [], refreshedAt: "" }, loading: false });
+        api.homeFeed("movie"),
+        api.homeFeed("show"),
+
+      ]);
+
+      this.setState({
+
+        movieFeed: movieFeed ?? { sections: [], refreshedAt: "" },
+        showFeed: showFeed ?? { sections: [], refreshedAt: "" },
+        loading: false,
+
+      });
 
     } catch {
 
-      this.setState({ loading: false, feed: { sections: [], refreshedAt: "" } });
+      this.setState({
+
+        loading: false,
+        movieFeed: { sections: [], refreshedAt: "" },
+        showFeed: { sections: [], refreshedAt: "" },
+
+      });
 
     }
 
@@ -123,17 +151,75 @@ export class FeedView extends Component<FeedViewProps, FeedViewState> {
 
   itemKey = (item: FeedItem) => {
 
-    if (item.tmdbId) return `tmdb:${item.tmdbId}`;
+    if (item.tmdbId) return `${item.kind}:tmdb:${item.tmdbId}`;
 
-    return `id:${item.id}`;
+    return `${item.kind}:id:${item.id}`;
 
   };
 
   favoriteIds = () => {
 
-    const { favorites, kind } = this.props;
+    const { favorites } = this.props;
 
-    return new Set(favorites.filter((item) => item.kind === kind).map((item) => item.mediaId));
+    return new Set(
+
+      favorites
+        .filter((item) => item.kind === "movie" || item.kind === "show")
+        .map((item) => `${item.kind}:${item.mediaId}`)
+
+    );
+
+  };
+
+  isFavorite = (kind: "movie" | "show", mediaId: number) => {
+
+    return this.favoriteIds().has(`${kind}:${mediaId}`);
+
+  };
+
+  patchFeeds = (item: FeedItem, id: number) => {
+
+    this.setState((state) => {
+
+      const patch = (entries: FeedItem[]) => entries.map((entry) => {
+
+        if (entry.kind === item.kind && entry.tmdbId === item.tmdbId) {
+
+          return { ...entry, id };
+
+        }
+
+        return entry;
+
+      });
+
+      const patchFeed = (feed: HomeFeed | null): HomeFeed | null => {
+
+        if (!feed) return feed;
+
+        return {
+
+          ...feed,
+          featured: feed.featured ? patch(feed.featured) : feed.featured,
+          sections: feed.sections.map((section) => ({
+
+            ...section,
+            items: patch(section.items),
+
+          })),
+
+        };
+
+      };
+
+      return {
+
+        movieFeed: patchFeed(state.movieFeed),
+        showFeed: patchFeed(state.showFeed),
+
+      };
+
+    });
 
   };
 
@@ -156,41 +242,7 @@ export class FeedView extends Component<FeedViewProps, FeedViewState> {
 
     });
 
-    // Warm local feed state so later clicks skip resolve.
-    this.setState((state) => {
-
-      if (!state.feed) return null;
-
-      const patch = (entries: FeedItem[]) => entries.map((entry) => {
-
-        if (entry.tmdbId === item.tmdbId) {
-
-          return { ...entry, id: resolved.id };
-
-        }
-
-        return entry;
-
-      });
-
-      return {
-
-        feed: {
-
-          ...state.feed,
-          featured: state.feed.featured ? patch(state.feed.featured) : state.feed.featured,
-          sections: state.feed.sections.map((section) => ({
-
-            ...section,
-            items: patch(section.items),
-
-          })),
-
-        },
-
-      };
-
-    });
+    this.patchFeeds(item, resolved.id);
 
     return resolved.id;
 
@@ -206,7 +258,7 @@ export class FeedView extends Component<FeedViewProps, FeedViewState> {
 
       const id = await this.ensureShowboxId(item);
 
-      this.props.onSelect(id, this.props.kind);
+      this.props.onSelect(id, item.kind);
 
     } catch {
 
@@ -237,11 +289,10 @@ export class FeedView extends Component<FeedViewProps, FeedViewState> {
 
   renderCard = (hit: FeedItem) => {
 
-    const { kind, history, onResumeWatching, onRemoveFromHistory } = this.props;
-    const favoriteIds = this.favoriteIds();
+    const { history, onResumeWatching, onRemoveFromHistory } = this.props;
     const showboxId = hit.id > 0 ? hit.id : 0;
 
-    const progress = showboxId ? latestTitleProgress(history, kind, showboxId) : undefined;
+    const progress = showboxId ? latestTitleProgress(history, hit.kind, showboxId) : undefined;
     const resumable = progress ? resumePath(progress) : null;
 
     return (
@@ -250,7 +301,7 @@ export class FeedView extends Component<FeedViewProps, FeedViewState> {
 
         key={this.itemKey(hit)}
         id={showboxId || hit.tmdbId || 0}
-        kind={kind}
+        kind={hit.kind}
 
         title={hit.title}
         poster={hit.poster}
@@ -258,7 +309,7 @@ export class FeedView extends Component<FeedViewProps, FeedViewState> {
         rating={hit.rating}
         genres={hit.genres}
 
-        favorite={showboxId > 0 && favoriteIds.has(showboxId)}
+        favorite={showboxId > 0 && this.isFavorite(hit.kind, showboxId)}
         onFavoriteToggle={() => void this.toggleFavorite(hit)}
 
         progressMs={progress?.positionMs}
@@ -276,22 +327,65 @@ export class FeedView extends Component<FeedViewProps, FeedViewState> {
 
   };
 
+  renderSections = (feed: HomeFeed | null, prefix: string, featuredKeys: Set<string>, loading: boolean) => {
+
+    return (feed?.sections ?? []).map((section: FeedSection) => {
+
+      if (!loading && section.items.length === 0) return null;
+
+      const items = section.kind === "personalized"
+        ? section.items.filter((item) => !featuredKeys.has(this.itemKey(item)))
+        : section.items;
+
+      if (!loading && items.length === 0) return null;
+
+      return (
+
+        <ContentRow
+
+          key={`${prefix}-${section.id}`}
+          title={section.title}
+          subtitle={section.subtitle}
+          sectionId={`${prefix}-${section.id}`}
+          loading={loading && items.length === 0}
+
+        >
+
+          {items.map((hit) => this.renderCard(hit))}
+
+        </ContentRow>
+
+      );
+
+    });
+
+  };
+
   render() {
 
-    const { kind, history, favorites, onResumeWatching, onFavoriteToggle, onRemoveFromHistory } = this.props;
-    const { feed, showPosters, loading } = this.state;
+    const { history, favorites, onResumeWatching, onFavoriteToggle, onRemoveFromHistory } = this.props;
+    const { movieFeed, showFeed, showPosters, loading } = this.state;
 
-    const resumeItems = continueWatching(history, kind);
-    const kindFavorites = favorites.filter((item) => item.kind === kind);
-    const favoriteIds = this.favoriteIds();
-    const featured = feed?.featured ?? [];
+    const resumeItems = continueWatching(history, "vod");
+    const kindFavorites = favorites.filter((item) => item.kind === "movie" || item.kind === "show");
+
+    const featured = interleaveFeatured(movieFeed?.featured ?? [], showFeed?.featured ?? []);
     const featuredKeys = new Set(featured.map((item) => this.itemKey(item)));
+    const featuredFavoriteIds = new Set(
+
+      featured
+        .filter((item) => item.id > 0 && this.isFavorite(item.kind, item.id))
+        .map((item) => item.id)
+
+    );
+
+    const ready = movieFeed !== null || showFeed !== null;
 
     return (
 
-      <div className="animate-fade-in py-6">
+      <div className="animate-fade-in py-8">
 
-        {loading && !feed && (
+        {loading && !ready && (
 
           <>
 
@@ -314,7 +408,7 @@ export class FeedView extends Component<FeedViewProps, FeedViewState> {
           <FeaturedHero
 
             items={featured}
-            favoriteIds={favoriteIds}
+            favoriteIds={featuredFavoriteIds}
             onPlay={(item) => void this.openItem(item)}
             onFavoriteToggle={(item) => void this.toggleFavorite(item)}
 
@@ -324,43 +418,49 @@ export class FeedView extends Component<FeedViewProps, FeedViewState> {
 
         {resumeItems.length > 0 && (
 
-          <ContentRow title="Continue Watching" sectionId={`${kind}s-continue`}>
+          <ContentRow title="Continue Watching" sectionId="vod-continue">
 
-            {resumeItems.map((item) => (
+            {resumeItems.map((item) => {
 
-              <TitleCard
+              const kind = item.kind as "movie" | "show";
 
-                key={item.id}
-                id={item.mediaId}
-                kind={kind}
+              return (
 
-                title={item.title}
-                poster={kind === "show" ? (showPosters[item.mediaId] || item.poster) : item.poster}
+                <TitleCard
 
-                progressMs={item.positionMs}
-                durationMs={item.durationMs}
-                progressLabel={progressLabel(item)}
+                  key={item.id}
+                  id={item.mediaId}
+                  kind={kind}
 
-                favorite={favoriteIds.has(item.mediaId)}
-                onFavoriteToggle={() => onFavoriteToggle({
+                  title={item.title}
+                  poster={kind === "show" ? (showPosters[item.mediaId] || item.poster) : item.poster}
 
-                  id: item.id,
-                  kind,
-                  mediaId: item.mediaId,
-                  title: item.title,
-                  poster: item.poster,
-                  createdAt: item.updatedAt,
+                  progressMs={item.positionMs}
+                  durationMs={item.durationMs}
+                  progressLabel={progressLabel(item)}
 
-                })}
+                  favorite={this.isFavorite(kind, item.mediaId)}
+                  onFavoriteToggle={() => onFavoriteToggle({
 
-                onResume={() => onResumeWatching(resumePath(item)!)}
-                onRemoveFromHistory={() => onRemoveFromHistory(item.id)}
+                    id: item.id,
+                    kind,
+                    mediaId: item.mediaId,
+                    title: item.title,
+                    poster: item.poster,
+                    createdAt: item.updatedAt,
 
-                onClick={() => onResumeWatching(resumePath(item)!)}
+                  })}
 
-              />
+                  onResume={() => onResumeWatching(resumePath(item)!)}
+                  onRemoveFromHistory={() => onRemoveFromHistory(item.id)}
 
-            ))}
+                  onClick={() => onResumeWatching(resumePath(item)!)}
+
+                />
+
+              );
+
+            })}
 
           </ContentRow>
 
@@ -368,10 +468,11 @@ export class FeedView extends Component<FeedViewProps, FeedViewState> {
 
         {kindFavorites.length > 0 && (
 
-          <ContentRow title="Favorites" sectionId={`${kind}s-favorites`}>
+          <ContentRow title="Favorites" sectionId="vod-favorites">
 
             {kindFavorites.map((item) => {
 
+              const kind = item.kind as "movie" | "show";
               const progress = latestTitleProgress(history, kind, item.mediaId);
               const resumable = progress ? resumePath(progress) : null;
 
@@ -410,35 +511,9 @@ export class FeedView extends Component<FeedViewProps, FeedViewState> {
 
         )}
 
-        {(feed?.sections ?? []).map((section) => {
+        {this.renderSections(showFeed, "shows", featuredKeys, loading)}
 
-          if (!loading && section.items.length === 0) return null;
-
-          const items = section.kind === "personalized"
-            ? section.items.filter((item) => !featuredKeys.has(this.itemKey(item)))
-            : section.items;
-
-          if (!loading && items.length === 0) return null;
-
-          return (
-
-            <ContentRow
-
-              key={section.id}
-              title={section.title}
-              subtitle={section.subtitle}
-              sectionId={`${kind}s-${section.id}`}
-              loading={loading && items.length === 0}
-
-            >
-
-              {items.map((hit) => this.renderCard(hit))}
-
-            </ContentRow>
-
-          );
-
-        })}
+        {this.renderSections(movieFeed, "movies", featuredKeys, loading)}
 
       </div>
 

@@ -136,7 +136,7 @@ function GuideCard({ entry, onSelect }: GuideCardProps) {
     <button
 
       type="button"
-      className="flex w-[220px] flex-shrink-0 flex-col overflow-hidden rounded-md border border-border-subtle bg-surface-raised text-left transition-colors hover:border-border hover:bg-surface-overlay"
+      className="flex w-[240px] flex-shrink-0 flex-col overflow-hidden rounded-lg border border-border-subtle bg-surface-raised text-left transition-colors hover:border-border hover:bg-surface-overlay"
       onClick={() => onSelect(channel)}
 
     >
@@ -145,14 +145,14 @@ function GuideCard({ entry, onSelect }: GuideCardProps) {
 
         <LiveLogo
 
-          className="h-7 w-7 flex-shrink-0 bg-surface-overlay"
+          className="size-7 flex-shrink-0 bg-surface-overlay"
           channel={channel}
           imgClassName="object-contain p-1"
           rounded="rounded-full"
 
         />
 
-        <p className="truncate text-xs font-medium text-foreground">{channel.name}</p>
+        <p className="truncate text-sm font-medium text-foreground">{channel.name}</p>
 
       </div>
 
@@ -162,7 +162,7 @@ function GuideCard({ entry, onSelect }: GuideCardProps) {
 
           <>
 
-            <p className="truncate text-xs font-medium text-foreground">{programLabel(current)}</p>
+            <p className="truncate text-sm font-medium text-foreground">{programLabel(current)}</p>
 
             <div className="flex items-center gap-1.5">
 
@@ -203,7 +203,7 @@ function GuideCard({ entry, onSelect }: GuideCardProps) {
 
             <p className="text-[10px] text-foreground-faint uppercase tracking-wide">Up next</p>
 
-            <p className="truncate text-xs font-medium text-foreground">{next.title}</p>
+            <p className="truncate text-sm font-medium text-foreground">{next.title}</p>
 
             <p className="text-[10px] text-foreground-faint">{formatTime(next.startsAt)}</p>
 

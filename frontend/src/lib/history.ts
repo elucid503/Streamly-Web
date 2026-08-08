@@ -1,14 +1,28 @@
 import type { WatchHistoryItem } from "@/lib/types";
 import { formatDuration, progressPercent } from "@/lib/utils";
 
-export function continueWatching( history: WatchHistoryItem[], kind: "movie" | "show" ): WatchHistoryItem[] {
+export function continueWatching(history: WatchHistoryItem[], kind: "movie" | "show" | "vod"): WatchHistoryItem[] {
 
-  const seen = new Set<number>();
+  const seen = new Set<string>();
 
-  return history.filter((item) => item.kind === kind && !item.completed).sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt)).filter((item) => {
+  return history
+    .filter((item) => {
 
-      if (seen.has(item.mediaId)) return false;
-      seen.add(item.mediaId);
+      if (item.completed) return false;
+
+      if (kind === "vod") return item.kind === "movie" || item.kind === "show";
+
+      return item.kind === kind;
+
+    })
+    .sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt))
+    .filter((item) => {
+
+      const key = `${item.kind}:${item.mediaId}`;
+
+      if (seen.has(key)) return false;
+
+      seen.add(key);
 
       return true;
 
@@ -16,9 +30,17 @@ export function continueWatching( history: WatchHistoryItem[], kind: "movie" | "
 
 }
 
-export function lastWatched(history: WatchHistoryItem[], kind: "movie" | "show" | "live"): WatchHistoryItem | undefined {
+export function lastWatched(history: WatchHistoryItem[], kind: "movie" | "show" | "live" | "vod"): WatchHistoryItem | undefined {
 
-  return history.filter((item) => item.kind === kind).sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt))[0];
+  return history
+    .filter((item) => {
+
+      if (kind === "vod") return item.kind === "movie" || item.kind === "show";
+
+      return item.kind === kind;
+
+    })
+    .sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt))[0];
 
 }
 

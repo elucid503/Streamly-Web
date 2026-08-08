@@ -272,7 +272,7 @@ export class LiveStreamPane extends Component<LiveStreamPaneProps, LiveStreamPan
 
           {showLabel && (
 
-            <div className="pointer-events-none max-w-[10rem] truncate rounded-md bg-black/65 px-2 py-1 text-[11px] font-medium text-white backdrop-blur-sm sm:max-w-[14rem]">
+            <div className="pointer-events-none max-w-[10rem] truncate rounded-md border border-border-subtle bg-surface/80 px-2 py-1 text-[11px] font-medium text-foreground backdrop-blur-md sm:max-w-[14rem]">
 
               {stream.name}
 
@@ -291,10 +291,10 @@ export class LiveStreamPane extends Component<LiveStreamPaneProps, LiveStreamPan
             }}
             className={cn(
 
-              "rounded-md p-1.5 backdrop-blur-sm transition-colors",
+              "flex size-8 shrink-0 items-center justify-center rounded-md backdrop-blur-md transition-colors",
               audioActive
                 ? "bg-accent text-black"
-                : "bg-black/65 text-white/80 hover:bg-black/80 hover:text-white"
+                : "border border-border-subtle bg-surface/80 text-foreground/90 hover:bg-surface-overlay hover:text-foreground"
 
             )}
             aria-label={audioActive ? `Audio from ${stream.name}` : `Route audio to ${stream.name}`}
@@ -316,7 +316,7 @@ export class LiveStreamPane extends Component<LiveStreamPaneProps, LiveStreamPan
                 onRemove(stream.channelId);
 
               }}
-              className="rounded-md bg-black/65 p-1.5 text-white/80 backdrop-blur-sm transition-colors hover:bg-black/80 hover:text-white"
+              className="flex size-8 shrink-0 items-center justify-center rounded-md border border-border-subtle bg-surface/80 text-foreground/90 backdrop-blur-md transition-colors hover:bg-surface-overlay hover:text-foreground"
               aria-label={`Remove ${stream.name}`}
 
             >

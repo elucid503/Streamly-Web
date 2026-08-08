@@ -15,6 +15,7 @@ import { SubtitleDisplay } from "@/components/player/SubtitleDisplay";
 import { ControlButton, VolumeControl } from "@/components/player/VolumeControl";
 
 import { store } from "@/lib/store";
+import { navigate } from "@/lib/navigation";
 import { hasIntroWindow, isInIntroWindow } from "@/lib/intro";
 import { isProxiedStream, isWebPlayableUrl } from "@/lib/streamClient";
 import { cn, formatDuration } from "@/lib/utils";
@@ -239,6 +240,7 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
 
   private controlsTimer: ReturnType<typeof setTimeout> | null = null;
   private waitingTimer: ReturnType<typeof setTimeout> | null = null;
+  private liveFailoverTimer: ReturnType<typeof setTimeout> | null = null;
   private feedbackTimer: ReturnType<typeof setTimeout> | null = null;
   private audioProbeTimer: ReturnType<typeof setTimeout> | null = null;
   private sourceReadyTimer: ReturnType<typeof setTimeout> | null = null;
@@ -258,6 +260,7 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
   private static readonly MAX_HLS_RECOVERIES = 1;
   private static readonly MAX_LIVE_HLS_RECOVERIES = 8;
   private static readonly SOURCE_READY_TIMEOUT_MS = 8_000;
+  private static readonly LIVE_BUFFER_FAILOVER_MS = 10_000;
   private static readonly HOLD_PAUSE_DELAY_MS = 220;
   private static readonly UP_NEXT_VISIBLE_LEAD_MS = 150_000;
   private static readonly UP_NEXT_COUNTDOWN_LEAD_MS = 60_000;
@@ -619,14 +622,37 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
 
   onWaiting = () => {
 
-    if (this.waitingTimer || this.state.loading) return;
+    if (!this.waitingTimer && !this.state.loading) {
 
-    this.waitingTimer = setTimeout(() => {
+      this.waitingTimer = setTimeout(() => {
 
-      this.waitingTimer = null;
-      this.setState({ loading: true });
+        this.waitingTimer = null;
+        this.setState({ loading: true });
 
-    }, 600);
+      }, 600);
+
+    }
+
+    if (this.props.live && this.props.onPlaybackError && !this.liveFailoverTimer && !this.playbackErrorReported) {
+
+      this.liveFailoverTimer = setTimeout(() => {
+
+        this.liveFailoverTimer = null;
+        this.triggerLiveFailover();
+
+      }, VideoPlayer.LIVE_BUFFER_FAILOVER_MS);
+
+    }
+
+  };
+
+  triggerLiveFailover = () => {
+
+    if (!this.props.live || this.playbackErrorReported) return;
+
+    this.playbackErrorReported = true;
+    this.clearBuffering();
+    this.props.onPlaybackError?.(0);
 
   };
 
@@ -636,6 +662,13 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
 
       clearTimeout(this.waitingTimer);
       this.waitingTimer = null;
+
+    }
+
+    if (this.liveFailoverTimer) {
+
+      clearTimeout(this.liveFailoverTimer);
+      this.liveFailoverTimer = null;
 
     }
 
@@ -749,12 +782,14 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
 
     if (this.controlsTimer) clearTimeout(this.controlsTimer);
     if (this.waitingTimer) clearTimeout(this.waitingTimer);
+    if (this.liveFailoverTimer) clearTimeout(this.liveFailoverTimer);
     if (this.feedbackTimer) clearTimeout(this.feedbackTimer);
     if (this.audioProbeTimer) clearTimeout(this.audioProbeTimer);
     if (this.sourceReadyTimer) clearTimeout(this.sourceReadyTimer);
     if (this.holdPauseTimer) clearTimeout(this.holdPauseTimer);
 
     this.waitingTimer = null;
+    this.liveFailoverTimer = null;
     this.feedbackTimer = null;
     this.audioProbeTimer = null;
     this.sourceReadyTimer = null;
@@ -1918,7 +1953,7 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
 
                 <div className="absolute top-2 left-1/2 z-40 flex -translate-x-1/2 items-center gap-1.5">
 
-                  <div className="pointer-events-none max-w-[10rem] truncate rounded-md bg-black/65 px-2 py-1 text-[11px] font-medium text-white backdrop-blur-sm sm:max-w-[14rem]">
+                  <div className="pointer-events-none max-w-[10rem] truncate rounded-md border border-border-subtle bg-surface/80 px-2 py-1 text-[11px] font-medium text-foreground backdrop-blur-md sm:max-w-[14rem]">
 
                     {title}
 
@@ -1936,10 +1971,10 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
                     }}
                     className={cn(
 
-                      "rounded-md p-1.5 backdrop-blur-sm transition-colors",
+                      "flex size-8 shrink-0 items-center justify-center rounded-md backdrop-blur-md transition-colors",
                       primaryAudio
                         ? "bg-accent text-black"
-                        : "bg-black/65 text-white/80 hover:bg-black/80 hover:text-white"
+                        : "border border-border-subtle bg-surface/80 text-foreground/90 hover:bg-surface-overlay hover:text-foreground"
 
                     )}
                     aria-label={primaryAudio ? "Audio from this pane" : "Route audio to this pane"}
@@ -1961,7 +1996,7 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
                         onMultiviewRemove(primaryChannelId);
 
                       }}
-                      className="rounded-md bg-black/65 p-1.5 text-white/80 backdrop-blur-sm transition-colors hover:bg-black/80 hover:text-white"
+                      className="flex size-8 shrink-0 items-center justify-center rounded-md border border-border-subtle bg-surface/80 text-foreground/90 backdrop-blur-md transition-colors hover:bg-surface-overlay hover:text-foreground"
                       aria-label={`Remove ${title}`}
 
                     >
@@ -2053,7 +2088,7 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
 
         {(loading || resolving) && !multiviewActive && (
 
-          <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-3 bg-surface/60 backdrop-blur-md">
+          <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-3 bg-surface/70 backdrop-blur-xl">
 
             <div className="h-9 w-9 animate-spin rounded-full border-2 border-foreground/20 border-t-foreground" />
 
@@ -2075,30 +2110,23 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
 
             <button type="button" onClick={onReturn} className="absolute inset-0" aria-label="Return to full player" />
 
-            <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-black/55 opacity-0 transition-opacity duration-200 group-hover/miniplayer:opacity-100 group-focus-within/miniplayer:opacity-100">
+            <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/55 opacity-0 transition-opacity duration-200 group-hover/miniplayer:opacity-100 group-focus-within/miniplayer:opacity-100">
 
-              <div className="absolute inset-x-0 top-0 flex items-center justify-between gap-2 p-2.5">
+              <div className="pointer-events-auto flex items-center gap-2">
 
-                <div className="min-w-0 rounded-md bg-black/55 px-2 py-1 backdrop-blur-md">
+                <button type="button" onClick={(event) => { event.stopPropagation(); this.togglePlay(); }} className="flex size-10 items-center justify-center rounded-full bg-white/95 text-black shadow-lg transition-transform hover:scale-105" aria-label={playing ? "Pause" : "Play"}>
 
-                  <p className="truncate text-xs font-medium text-white">{title}</p>
-                  {(episodeTitle || subtitle) && <p className="truncate text-[10px] text-white/65">{episodeTitle || subtitle}</p>}
+                  {playing ? <Pause size={18} fill="currentColor" /> : <Play size={18} fill="currentColor" className="translate-x-px" />}
 
-                </div>
+                </button>
 
-                <button type="button" onClick={(event) => { event.stopPropagation(); onDismiss?.(); }} className="pointer-events-auto rounded-full bg-black/60 p-1.5 text-white backdrop-blur-md transition-colors hover:bg-black/80" aria-label="Dismiss miniplayer">
+                <button type="button" onClick={(event) => { event.stopPropagation(); onDismiss?.(); }} className="flex size-10 items-center justify-center rounded-full border border-white/20 bg-surface/80 text-foreground shadow-lg backdrop-blur-md transition-colors hover:bg-surface-overlay" aria-label="Dismiss miniplayer">
 
-                  <X size={15} />
+                  <X size={16} />
 
                 </button>
 
               </div>
-
-              <button type="button" onClick={(event) => { event.stopPropagation(); this.togglePlay(); }} className="pointer-events-auto absolute bottom-2.5 left-2.5 rounded-full bg-white/95 p-2 text-black shadow-lg transition-transform hover:scale-105" aria-label={playing ? "Pause" : "Play"}>
-
-                {playing ? <Pause size={16} fill="currentColor" /> : <Play size={16} fill="currentColor" />}
-
-              </button>
 
             </div>
 
@@ -2109,7 +2137,7 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
         {!compact && <div className={cn(
 
             // Pass clicks through empty top band so multiview pane chrome stays usable.
-            "pointer-events-none absolute top-4 right-4 left-4 z-30 flex items-start justify-between gap-4 transition-opacity duration-300",
+            "pointer-events-none absolute top-4 right-4 left-4 z-30 grid grid-cols-[1fr_auto_1fr] items-start gap-4 transition-opacity duration-300",
             effectiveShowControls ? "opacity-100" : "opacity-0"
 
           )}
@@ -2124,9 +2152,9 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
 
                 onBack();
 
-              }} className="pointer-events-auto flex shrink-0 items-center gap-2 rounded-md border border-border-subtle bg-surface/80 px-3 py-1.5 text-xs backdrop-blur-md transition-colors hover:bg-surface-overlay" >
+              }} className="pointer-events-auto flex shrink-0 items-center gap-2 justify-self-start px-1 py-1 text-sm text-foreground transition-colors hover:text-accent" >
 
-              <ArrowLeft size={14} />
+              <ArrowLeft size={16} />
 
               Back
 
@@ -2138,9 +2166,7 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
 
           )}
 
-          <div className="pointer-events-none max-w-[55%] min-w-0 rounded-md border border-border-subtle bg-surface/80 px-3 py-1.5 text-right backdrop-blur-md">
-
-            {/* For tv shows, a bit of a different layout. Not ideally done, but works */}
+          <div className="pointer-events-none min-w-0 max-w-[min(100%,28rem)] justify-self-center px-2 text-center">
 
             <p className="truncate text-sm font-medium">
 
@@ -2166,6 +2192,21 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
 
           </div>
 
+          <button
+            type="button"
+            onClick={(e) => {
+
+              e.stopPropagation();
+              navigate("/");
+
+            }}
+            className="pointer-events-auto justify-self-end px-1 py-1 text-sm font-semibold tracking-tight text-foreground transition-colors hover:text-accent"
+          >
+
+            Streamly <span className="font-light text-foreground-muted">Web</span>
+
+          </button>
+
         </div>}
 
         {!live && showSkipIntro && (
@@ -2176,7 +2217,7 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
 
               this.skipIntro();
 
-            }} className="pointer-events-auto absolute right-6 bottom-20 z-40 flex animate-fade-in items-center gap-2 rounded-md border border-border-subtle bg-surface/80 px-4 py-2 text-sm font-medium backdrop-blur-md transition-colors hover:bg-surface-overlay" >
+            }} className="pointer-events-auto absolute right-6 bottom-20 z-40 flex animate-fade-in items-center gap-2 rounded-md border border-border-subtle bg-surface/80 px-4 py-2.5 text-sm font-medium shadow-lg shadow-black/30 backdrop-blur-xl transition-colors hover:bg-surface-overlay" >
 
             <SkipForward size={14} />
 
@@ -2194,7 +2235,7 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
 
               this.props.onNextEpisode?.();
 
-            }} className="pointer-events-auto absolute right-6 bottom-28 z-40 flex animate-fade-in items-center gap-2 rounded-md border border-border-subtle bg-surface/80 px-4 py-2 text-sm font-medium backdrop-blur-md transition-colors hover:bg-surface-overlay" >
+            }} className="pointer-events-auto absolute right-6 bottom-28 z-40 flex animate-fade-in items-center gap-2 rounded-md border border-border-subtle bg-surface/80 px-4 py-2.5 text-sm font-medium shadow-lg shadow-black/30 backdrop-blur-xl transition-colors hover:bg-surface-overlay" >
 
             <SkipForward size={14} />
 
@@ -2206,7 +2247,7 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
 
         {!live && showUpNext && nextEpisode && (
 
-          <div className="pointer-events-auto absolute right-6 bottom-28 z-40 w-72 animate-fade-in rounded-lg border border-border-subtle bg-surface/80 p-4 backdrop-blur-md">
+          <div className="pointer-events-auto absolute right-6 bottom-28 z-40 w-72 animate-fade-in rounded-lg border border-border-subtle bg-surface/80 p-4 shadow-lg shadow-black/30 backdrop-blur-xl">
 
             <p className="text-[11px] tracking-wide text-foreground-faint uppercase">
 
@@ -2342,11 +2383,11 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
             )}
           >
 
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-1.5">
 
               <ControlButton onClick={this.togglePlay}>
 
-                {playing ? <Pause size={18} /> : <Play size={18} />}
+                {playing ? <Pause size={20} /> : <Play size={20} />}
 
               </ControlButton>
 
@@ -2354,7 +2395,7 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
 
                 <ControlButton onClick={() => this.seekBy(-10_000)} aria-label="Seek back 10 seconds">
 
-                  <Rewind size={18} />
+                  <Rewind size={20} />
 
                 </ControlButton>
 
@@ -2364,7 +2405,7 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
 
                 <ControlButton onClick={() => this.seekBy(10_000)} aria-label="Seek forward 10 seconds">
 
-                  <FastForward size={18} />
+                  <FastForward size={20} />
 
                 </ControlButton>
 
@@ -2437,11 +2478,11 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
                 <ControlButton
 
                   onClick={this.toggleEpisodes}
-                  className={showEpisodes ? "bg-white/10" : undefined}
+                  className={showEpisodes ? "bg-white/15" : undefined}
                   aria-label="Browse episodes"
 
                 >
-                  <Clapperboard size={18} />
+                  <Clapperboard size={20} />
 
                 </ControlButton>
 
@@ -2511,7 +2552,7 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
 
               <ControlButton onClick={this.toggleFullscreen}>
 
-                {fullscreen ? <Minimize size={18} /> : <Maximize size={18} />}
+                {fullscreen ? <Minimize size={20} /> : <Maximize size={20} />}
 
               </ControlButton>
 

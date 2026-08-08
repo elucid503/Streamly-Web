@@ -87,7 +87,7 @@ export class PauseOverlay extends Component<PauseOverlayProps, PauseOverlayState
 
               onResume();
 
-            }} className="absolute inset-0 z-[40] flex animate-fade-in cursor-pointer items-center justify-center overflow-hidden bg-black/40 px-4 backdrop-blur-2xl sm:px-8" aria-label="Resume playback" >
+            }} className="absolute inset-0 z-[40] flex animate-fade-in cursor-pointer items-center justify-center overflow-hidden bg-surface/50 px-4 backdrop-blur-2xl sm:px-8" aria-label="Resume playback" >
 
             <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/70 via-black/35 to-black/20" />
 
@@ -147,7 +147,7 @@ export class PauseOverlay extends Component<PauseOverlayProps, PauseOverlayState
 
                   </h2>
 
-                  {subtitle && (
+                  {isLive && subtitle && (
 
                     <p className="text-sm font-medium tracking-wide text-foreground-muted uppercase">
 

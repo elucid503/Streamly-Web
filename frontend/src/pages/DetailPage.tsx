@@ -444,7 +444,7 @@ export class DetailPage extends Component<DetailPageProps, DetailPageState> {
 
           <div className="absolute inset-0 bg-gradient-to-t from-surface via-surface/50 to-surface/10" />
 
-          <button onClick={() => navigate("/")} className="absolute left-4 top-[calc(env(safe-area-inset-top,0px)+1rem)] z-10 flex items-center gap-2 rounded-md border border-border-subtle bg-surface/80 px-3 py-1.5 text-xs backdrop-blur-md transition-colors hover:bg-surface-overlay" >
+          <button onClick={() => navigate("/")} className="absolute left-4 top-[calc(env(safe-area-inset-top,0px)+1rem)] z-10 flex h-8 items-center gap-2 rounded-md border border-border-subtle bg-surface/80 px-3 text-xs backdrop-blur-md transition-colors hover:bg-surface-overlay" >
 
             <ArrowLeft size={14} />
             Back
@@ -553,7 +553,7 @@ export class DetailPage extends Component<DetailPageProps, DetailPageState> {
 
                         className={cn(
 
-                          "flex-shrink-0 rounded-md border px-3 py-1.5 text-xs transition-colors",
+                          "flex h-8 flex-shrink-0 items-center rounded-md border px-3 text-xs transition-colors",
                           isActive ? "border-foreground bg-foreground text-surface" : "border-border text-foreground-muted hover:border-border hover:text-foreground"
 
                         )}
@@ -594,7 +594,7 @@ export class DetailPage extends Component<DetailPageProps, DetailPageState> {
 
                       >
 
-                        <div className="relative aspect-video w-28 flex-shrink-0 overflow-hidden rounded sm:w-36">
+                        <div className="relative aspect-video w-28 flex-shrink-0 overflow-hidden rounded-md sm:w-36">
 
                           <CachedImage className="size-full"
 
@@ -602,7 +602,7 @@ export class DetailPage extends Component<DetailPageProps, DetailPageState> {
                             alt={ep.title}
 
                             imgClassName="object-cover"
-                            rounded="rounded"
+                            rounded="rounded-md"
 
                             fallback={<Film size={18} className="text-foreground-faint" />}
 

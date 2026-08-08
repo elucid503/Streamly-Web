@@ -130,7 +130,7 @@ function ChannelInitialFallback({ name }: { name: string }) {
 
   return (
 
-    <span className="flex h-full w-full items-center justify-center text-sm font-semibold text-white"
+    <span className="flex size-full items-center justify-center text-sm font-semibold text-white"
 
       style={{ backgroundColor: channelColor(name) }}
 

@@ -27,7 +27,7 @@ export class PosterImage extends Component<PosterImageProps> {
         alt={alt}
 
         rounded="rounded-none"
-        fallback={<Film size={24} strokeWidth={1.5} className="text-foreground-faint" />}
+        fallback={<Film strokeWidth={1.5} className="size-6 text-foreground-faint" />}
 
       />
 

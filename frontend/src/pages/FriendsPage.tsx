@@ -409,7 +409,7 @@ function FriendProfilePopup({ open, onClose, profile, loading }: FriendProfilePo
 
           <div className="absolute inset-0 bg-surface/60 backdrop-blur-md" onClick={onClose} />
 
-          <motion.div className="relative z-10 flex max-h-[min(90vh,720px)] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-border-subtle bg-surface/90 shadow-2xl backdrop-blur-md"
+          <motion.div className="relative z-10 flex max-h-[min(90vh,720px)] w-full max-w-2xl flex-col overflow-hidden rounded-xl border border-border-subtle bg-surface/90 shadow-2xl backdrop-blur-md"
 
             initial={{ opacity: 0, scale: 0.96, y: 8 }}
             exit={{ opacity: 0, scale: 0.96, y: 8 }}
@@ -419,7 +419,7 @@ function FriendProfilePopup({ open, onClose, profile, loading }: FriendProfilePo
 
           >
 
-            <button type="button" onClick={onClose} className="absolute right-4 top-4 z-20 rounded-full bg-surface/80 p-1.5 text-foreground-muted backdrop-blur-sm transition-colors hover:bg-surface-overlay hover:text-foreground">
+            <button type="button" onClick={onClose} className="absolute right-4 top-4 z-20 flex size-8 items-center justify-center rounded-md bg-surface/80 text-foreground-muted backdrop-blur-sm transition-colors hover:bg-surface-overlay hover:text-foreground">
 
               <X size={16} />
 
@@ -453,7 +453,7 @@ function FriendProfilePopup({ open, onClose, profile, loading }: FriendProfilePo
 
                           <div>
 
-                            <p className="mb-3 text-xs font-medium uppercase tracking-wide text-foreground-muted">
+                            <p className="mb-3 text-sm font-semibold text-foreground-muted">
 
                               Favourite Shows
 
@@ -477,7 +477,7 @@ function FriendProfilePopup({ open, onClose, profile, loading }: FriendProfilePo
 
                           <div>
 
-                            <p className="mb-3 text-xs font-medium uppercase tracking-wide text-foreground-muted">
+                            <p className="mb-3 text-sm font-semibold text-foreground-muted">
 
                               Favourite Movies
 
@@ -587,11 +587,11 @@ function HistoryRow({ item, accentColor, showProgress, progressExtra }: HistoryR
 
       ) : item.poster ? (
 
-        <img src={item.poster} alt="" className="h-20 w-[52px] flex-shrink-0 rounded-lg object-cover" />
+        <img src={item.poster} alt="" className="h-20 w-[52px] flex-shrink-0 rounded-md object-cover" />
 
       ) : (
 
-        <div className="h-20 w-[52px] flex-shrink-0 rounded-lg bg-surface-overlay" />
+        <div className="h-20 w-[52px] flex-shrink-0 rounded-md bg-surface-overlay" />
 
       )}
 
@@ -762,7 +762,7 @@ class ExpandableFriendCard extends Component<ExpandableFriendCardProps, Expandab
 
       <>
 
-        <div className="overflow-hidden rounded-2xl border border-border bg-surface-raised">
+        <div className="overflow-hidden rounded-xl border border-border bg-surface-raised">
 
           {/* Header */}
 
@@ -781,13 +781,13 @@ class ExpandableFriendCard extends Component<ExpandableFriendCardProps, Expandab
 
             </button>
 
-            <button type="button" onClick={this.openMenu} className="flex-shrink-0 rounded-full p-1.5 text-foreground-faint transition-colors hover:bg-surface-overlay hover:text-foreground">
+            <button type="button" onClick={this.openMenu} className="flex size-8 flex-shrink-0 items-center justify-center rounded-md text-foreground-faint transition-colors hover:bg-surface-overlay hover:text-foreground">
 
               <MoreHorizontal size={15} />
 
             </button>
 
-            <button type="button" onClick={this.toggle} className="flex-shrink-0 rounded-full p-1.5 text-foreground-faint transition-colors hover:bg-surface-overlay hover:text-foreground">
+            <button type="button" onClick={this.toggle} className="flex size-8 flex-shrink-0 items-center justify-center rounded-md text-foreground-faint transition-colors hover:bg-surface-overlay hover:text-foreground">
 
               <ChevronDown size={15} className={cn("transition-transform duration-200", expanded && "rotate-180")} />
 
@@ -801,7 +801,7 @@ class ExpandableFriendCard extends Component<ExpandableFriendCardProps, Expandab
 
             <div className="flex items-center gap-3 border-t border-border/40 px-4 py-3">
 
-              <div className="h-20 w-[52px] flex-shrink-0 animate-pulse rounded-lg bg-surface-overlay" />
+              <div className="h-20 w-[52px] flex-shrink-0 animate-pulse rounded-md bg-surface-overlay" />
 
               <div className="flex-1 space-y-2">
 
@@ -883,7 +883,7 @@ class ExpandableFriendCard extends Component<ExpandableFriendCardProps, Expandab
 
             <div className="fixed inset-0 z-[99]" onClick={this.closeMenu} />
 
-            <motion.div className="fixed z-[100] min-w-[172px] overflow-hidden rounded-[1.25rem] border border-white/10 bg-surface/70 p-1 shadow-2xl shadow-black/40 ring-1 ring-white/[0.04] backdrop-blur-xl backdrop-saturate-150"
+            <motion.div className="fixed z-[100] min-w-[172px] overflow-hidden rounded-xl border border-white/10 bg-surface/70 p-1 shadow-2xl shadow-black/40 ring-1 ring-white/[0.04] backdrop-blur-xl backdrop-saturate-150"
 
               style={{ top: menuPos.top, left: menuPos.left }}
 
@@ -893,7 +893,7 @@ class ExpandableFriendCard extends Component<ExpandableFriendCardProps, Expandab
 
             >
 
-              <button className="flex h-9 w-full items-center gap-2 rounded-xl px-3 text-left text-xs font-medium text-foreground-muted transition-colors hover:bg-surface-overlay/80 hover:text-foreground disabled:opacity-40"
+              <button className="flex h-8 w-full items-center gap-2 rounded-md px-3 text-left text-xs font-medium text-foreground-muted transition-colors hover:bg-surface-overlay/80 hover:text-foreground disabled:opacity-40"
 
                 type="button"
                 disabled={removeLoading}
@@ -915,7 +915,7 @@ class ExpandableFriendCard extends Component<ExpandableFriendCardProps, Expandab
 
               </button>
 
-              <button className="flex h-9 w-full items-center gap-2 rounded-xl px-3 text-left text-xs font-medium text-red-400 transition-colors hover:bg-surface-overlay/80 hover:text-red-300 disabled:opacity-40"
+              <button className="flex h-8 w-full items-center gap-2 rounded-md px-3 text-left text-xs font-medium text-red-400 transition-colors hover:bg-surface-overlay/80 hover:text-red-300 disabled:opacity-40"
 
                 type="button"
                 disabled={removeLoading}
@@ -980,7 +980,7 @@ function ProfileBanner({ banner, accentColor, displayName, bio, isOwn, onEdit, e
     <div className={cn(
 
       "overflow-hidden border border-border bg-surface-raised",
-      embedded ? "rounded-b-none border-x-0 border-t-0" : "rounded-2xl"
+      embedded ? "rounded-b-none border-x-0 border-t-0" : "rounded-xl"
 
     )}>
 
@@ -1127,11 +1127,11 @@ class MediaPicker extends Component<MediaPickerProps, MediaPickerState> {
 
               {selected.map((item) => (
 
-                <div key={item.mediaId} className="flex items-center gap-1.5 rounded-full border border-border bg-surface-raised py-1 pl-3 pr-1.5 text-xs">
+                <div key={item.mediaId} className="flex h-8 items-center gap-1.5 rounded-md border border-border bg-surface-raised pl-3 pr-1.5 text-xs">
 
                   <span className="max-w-[120px] truncate">{item.title}</span>
 
-                  <button type="button" onClick={() => onRemove(item.mediaId)} className="rounded-full p-0.5 text-foreground-faint hover:text-foreground">
+                  <button type="button" onClick={() => onRemove(item.mediaId)} className="flex size-6 items-center justify-center rounded-md text-foreground-faint transition-colors hover:text-foreground">
 
                     <X size={11} />
 
@@ -1173,7 +1173,7 @@ class MediaPicker extends Component<MediaPickerProps, MediaPickerState> {
 
                 return (
 
-                  <button className="flex w-full items-center gap-3 rounded-lg p-2 text-left transition-colors hover:bg-surface-overlay disabled:opacity-40"
+                  <button className="flex w-full items-center gap-3 rounded-md p-2 text-left transition-colors hover:bg-surface-overlay disabled:opacity-40"
 
                     key={hit.id}
                     type="button"
@@ -1355,14 +1355,14 @@ class ProfileEditor extends Component<ProfileEditorProps, ProfileEditorState> {
 
             <div className="space-y-1.5">
 
-              <label className="text-xs font-medium text-foreground-muted uppercase tracking-wide">Display Name</label>
+              <label className="text-sm font-semibold text-foreground-muted">Display Name</label>
               <Input value={form.displayName} onChange={(e) => this.setForm({ displayName: e.target.value })} placeholder="Your name" maxLength={32} />
 
             </div>
 
             <div className="space-y-1.5 relative">
 
-              <label className="text-xs font-medium text-foreground-muted uppercase tracking-wide">Bio</label>
+              <label className="text-sm font-semibold text-foreground-muted">Bio</label>
 
               <textarea className="w-full resize-none rounded-md border border-border bg-surface-raised px-3 py-2 text-sm text-foreground placeholder:text-foreground-faint focus:border-border focus:outline-none focus:ring-1 focus:ring-accent"
 
@@ -1382,13 +1382,13 @@ class ProfileEditor extends Component<ProfileEditorProps, ProfileEditorState> {
 
             <div className="space-y-2">
 
-              <label className="text-xs font-medium text-foreground-muted uppercase tracking-wide">Accent Color</label>
+              <label className="text-sm font-semibold text-foreground-muted">Accent Color</label>
 
               <div className="flex flex-wrap gap-2">
 
                 {ACCENT_COLORS.map((color) => (
 
-                  <button className="h-7 w-7 rounded-full transition-transform hover:scale-110"
+                  <button className="size-8 rounded-full transition-transform hover:scale-110"
 
                     key={color}
                     type="button"
@@ -1409,13 +1409,13 @@ class ProfileEditor extends Component<ProfileEditorProps, ProfileEditorState> {
 
             <div className="space-y-2">
 
-              <label className="text-xs font-medium text-foreground-muted uppercase tracking-wide">Banner</label>
+              <label className="text-sm font-semibold text-foreground-muted">Banner</label>
 
               <div className="grid grid-cols-5 gap-2">
 
                 {Object.entries(BANNERS).map(([id, grad]) => (
 
-                  <button className={cn( "h-10 rounded-lg transition-all hover:scale-105", form.banner === id && "ring-2 ring-white ring-offset-2 ring-offset-surface" )}
+                  <button className={cn( "h-8 rounded-md transition-all hover:scale-105", form.banner === id && "ring-2 ring-white ring-offset-2 ring-offset-surface" )}
 
                     key={id}
                     type="button"
@@ -1436,17 +1436,17 @@ class ProfileEditor extends Component<ProfileEditorProps, ProfileEditorState> {
 
             <div className="space-y-2">
 
-              <label className="text-xs font-medium text-foreground-muted uppercase tracking-wide">Favorite Shows</label>
+              <label className="text-sm font-semibold text-foreground-muted">Favorite Shows</label>
 
               <div className="flex flex-wrap gap-2">
 
                 {form.favoriteShows.map((item) => (
 
-                  <div key={item.mediaId} className="flex items-center gap-1.5 rounded-full border border-border bg-surface-raised py-1 pl-3 pr-1.5 text-xs">
+                  <div key={item.mediaId} className="flex h-8 items-center gap-1.5 rounded-md border border-border bg-surface-raised pl-3 pr-1.5 text-xs">
 
                     <span className="max-w-[110px] truncate">{item.title}</span>
 
-                    <button type="button" onClick={() => this.setForm({ favoriteShows: form.favoriteShows.filter((m) => m.mediaId !== item.mediaId) })} className="rounded-full p-0.5 text-foreground-faint hover:text-foreground">
+                    <button type="button" onClick={() => this.setForm({ favoriteShows: form.favoriteShows.filter((m) => m.mediaId !== item.mediaId) })} className="flex size-6 items-center justify-center rounded-md text-foreground-faint transition-colors hover:text-foreground">
 
                       <X size={11} />
 
@@ -1458,7 +1458,7 @@ class ProfileEditor extends Component<ProfileEditorProps, ProfileEditorState> {
 
                 {form.favoriteShows.length < 3 && (
 
-                  <button type="button" onClick={() => this.setState({ mediaPickerFor: "shows" })} className="flex items-center gap-1 rounded-full border border-dashed border-border py-1 pl-2 pr-3 text-xs text-foreground-muted hover:text-foreground">
+                  <button type="button" onClick={() => this.setState({ mediaPickerFor: "shows" })} className="flex h-8 items-center gap-1 rounded-md border border-dashed border-border pl-2 pr-3 text-xs text-foreground-muted transition-colors hover:text-foreground">
 
                     <Plus size={11} />
 
@@ -1474,17 +1474,17 @@ class ProfileEditor extends Component<ProfileEditorProps, ProfileEditorState> {
 
             <div className="space-y-2">
 
-              <label className="text-xs font-medium text-foreground-muted uppercase tracking-wide">Favorite Movies</label>
+              <label className="text-sm font-semibold text-foreground-muted">Favorite Movies</label>
 
               <div className="flex flex-wrap gap-2">
 
                 {form.favoriteMovies.map((item) => (
 
-                  <div key={item.mediaId} className="flex items-center gap-1.5 rounded-full border border-border bg-surface-raised py-1 pl-3 pr-1.5 text-xs">
+                  <div key={item.mediaId} className="flex h-8 items-center gap-1.5 rounded-md border border-border bg-surface-raised pl-3 pr-1.5 text-xs">
 
                     <span className="max-w-[110px] truncate">{item.title}</span>
 
-                    <button type="button" onClick={() => this.setForm({ favoriteMovies: form.favoriteMovies.filter((m) => m.mediaId !== item.mediaId) })} className="rounded-full p-0.5 text-foreground-faint hover:text-foreground">
+                    <button type="button" onClick={() => this.setForm({ favoriteMovies: form.favoriteMovies.filter((m) => m.mediaId !== item.mediaId) })} className="flex size-6 items-center justify-center rounded-md text-foreground-faint transition-colors hover:text-foreground">
 
                       <X size={11} />
 
@@ -1496,7 +1496,7 @@ class ProfileEditor extends Component<ProfileEditorProps, ProfileEditorState> {
 
                 {form.favoriteMovies.length < 3 && (
 
-                  <button type="button" onClick={() => this.setState({ mediaPickerFor: "movies" })} className="flex items-center gap-1 rounded-full border border-dashed border-border py-1 pl-2 pr-3 text-xs text-foreground-muted hover:text-foreground">
+                  <button type="button" onClick={() => this.setState({ mediaPickerFor: "movies" })} className="flex h-8 items-center gap-1 rounded-md border border-dashed border-border pl-2 pr-3 text-xs text-foreground-muted transition-colors hover:text-foreground">
 
                     <Plus size={11} />
 
@@ -1724,7 +1724,7 @@ class PublicProfileView extends Component<PublicProfileViewProps, PublicProfileV
 
                   <div>
 
-                    <p className="mb-2 flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-foreground-muted">
+                    <p className="mb-2 flex items-center gap-1.5 text-sm font-semibold text-foreground-muted">
 
                       <Tv size={12} />
 
@@ -1750,7 +1750,7 @@ class PublicProfileView extends Component<PublicProfileViewProps, PublicProfileV
 
                   <div>
 
-                    <p className="mb-2 flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-foreground-muted">
+                    <p className="mb-2 flex items-center gap-1.5 text-sm font-semibold text-foreground-muted">
 
                       <Film size={12} />
 
@@ -1780,7 +1780,7 @@ class PublicProfileView extends Component<PublicProfileViewProps, PublicProfileV
 
               <div>
 
-                <p className="mb-2 flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-foreground-muted">
+                <p className="mb-2 flex items-center gap-1.5 text-sm font-semibold text-foreground-muted">
 
                   <Clock size={12} />
 
@@ -1792,7 +1792,7 @@ class PublicProfileView extends Component<PublicProfileViewProps, PublicProfileV
 
                   {profile.recentHistory.slice(0, 5).map((item) => (
 
-                    <div key={item.id} className="flex items-center gap-2.5 rounded-lg border border-border bg-surface-raised px-3 py-2">
+                    <div key={item.id} className="flex items-center gap-2.5 rounded-md border border-border bg-surface-raised px-3 py-2">
 
                       {item.kind === "live" && item.poster ? (
 
@@ -1866,7 +1866,7 @@ function FavoriteMediaChip({ item }: { item: ProfileMedia }) {
 
   return (
 
-    <div className="flex items-center gap-1.5 rounded-full border border-border bg-surface-raised py-1 pl-1.5 pr-3 text-xs">
+    <div className="flex h-8 items-center gap-1.5 rounded-md border border-border bg-surface-raised pl-1.5 pr-3 text-xs">
 
       {item.poster && (
 
@@ -2399,11 +2399,11 @@ export class FriendsPage extends Component<FriendsPageProps, FriendsPageState> {
 
     return (
 
-      <div className="flex gap-1 rounded-2xl border border-border bg-surface-raised p-1">
+      <div className="flex gap-1 rounded-xl border border-border bg-surface-raised p-1">
 
         {tabs.map(({ id, label, badge }) => (
 
-          <button className={cn( "relative flex flex-1 items-center justify-center gap-1.5 rounded-3xl px-3 py-1.5 text-sm font-medium transition-colors", tab === id ? "bg-foreground text-surface" : "text-foreground-muted hover:text-foreground")}
+          <button className={cn( "relative flex h-8 flex-1 items-center justify-center gap-1.5 rounded-md px-3 text-sm font-medium transition-colors", tab === id ? "bg-foreground text-surface" : "text-foreground-muted hover:text-foreground")}
 
             key={id}
             type="button"
@@ -2498,9 +2498,9 @@ export class FriendsPage extends Component<FriendsPageProps, FriendsPageState> {
 
         <div className="relative">
 
-          <Search size={18} className="absolute top-1/2 left-4 -translate-y-1/2 text-foreground-faint" />
+          <Search size={16} className="absolute top-1/2 left-3 -translate-y-1/2 text-foreground-faint" />
 
-          <Input className="w-full pl-10 h-12 rounded-3xl text-sm md:text-lg"
+          <Input className="w-full pl-9"
 
             placeholder="Search by email…"
             value={discoverQuery}
@@ -2594,7 +2594,7 @@ export class FriendsPage extends Component<FriendsPageProps, FriendsPageState> {
 
           <div className="space-y-2">
 
-            <p className="text-xs font-medium uppercase tracking-wide text-foreground-muted">Incoming</p>
+            <p className="text-sm font-semibold text-foreground-muted">Incoming</p>
 
             {incoming.map((r) => (
 
@@ -2621,7 +2621,7 @@ export class FriendsPage extends Component<FriendsPageProps, FriendsPageState> {
 
           <div className="space-y-2">
 
-            <p className="text-xs font-medium uppercase tracking-wide text-foreground-muted">Sent</p>
+            <p className="text-sm font-semibold text-foreground-muted">Sent</p>
 
             {outgoing.map((r) => (
 
@@ -2682,7 +2682,7 @@ export class FriendsPage extends Component<FriendsPageProps, FriendsPageState> {
 
         {profileLoading ? (
 
-          <div className="h-52 animate-pulse rounded-2xl bg-surface-raised" />
+          <div className="h-52 animate-pulse rounded-xl bg-surface-raised" />
 
         ) : profile ? (
 
@@ -2787,7 +2787,7 @@ function EmptyState({ icon, title, description, action }: EmptyStateProps) {
 
       <div>
 
-        <p className="text-sm font-medium text-foreground">{title}</p>
+        <p className="text-sm font-semibold text-foreground">{title}</p>
         <p className="mt-1 mb-2 text-sm text-foreground-muted">{description}</p>
 
       </div>

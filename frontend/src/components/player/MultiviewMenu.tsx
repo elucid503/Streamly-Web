@@ -120,9 +120,9 @@ export class MultiviewMenu extends Component<MultiviewMenuProps, MultiviewMenuSt
 
       }} className={cn(
 
-        "flex w-full items-center gap-3 rounded-lg px-3.5 py-3 text-left transition-colors",
+        "flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm transition-colors",
         disabled && "cursor-not-allowed opacity-40",
-        !disabled && (active || loading) && "bg-white/10 text-foreground ring-1 ring-white/10",
+        !disabled && (active || loading) && "bg-white/10 text-foreground",
         !disabled && !active && !loading && "text-foreground-muted hover:bg-white/6 hover:text-foreground"
 
       )} >
@@ -193,19 +193,19 @@ export class MultiviewMenu extends Component<MultiviewMenuProps, MultiviewMenuSt
 
           }} className={cn(
 
-            "rounded-md p-1.5 text-foreground transition-colors hover:bg-white/10",
-            open && "bg-white/10"
+            "flex size-9 shrink-0 items-center justify-center rounded-md text-foreground transition-colors hover:bg-white/15",
+            open && "bg-white/15"
 
           )} aria-label="Multiview" >
 
-          <LayoutGrid size={18} />
+          <LayoutGrid size={20} />
 
         </button>
 
         <div className={cn(
 
-            "absolute right-0 bottom-full z-40 mb-3 w-80 origin-bottom-right overflow-hidden rounded-xl border border-white/10 bg-surface/75 shadow-2xl shadow-black/40 backdrop-blur-xl backdrop-saturate-150 transition-[opacity,transform,filter] duration-200 ease-out",
-            open ? "pointer-events-auto translate-y-0 scale-100 opacity-100 blur-0" : "pointer-events-none translate-y-2 scale-95 opacity-0 blur-sm"
+            "absolute right-0 bottom-full z-40 mb-3 w-72 origin-bottom-right overflow-hidden rounded-lg border border-border-subtle bg-surface/80 shadow-2xl shadow-black/40 backdrop-blur-xl transition-[opacity,transform] duration-200 ease-out",
+            open ? "pointer-events-auto translate-y-0 scale-100 opacity-100" : "pointer-events-none translate-y-2 scale-95 opacity-0"
 
           )}
 
@@ -213,7 +213,7 @@ export class MultiviewMenu extends Component<MultiviewMenuProps, MultiviewMenuSt
 
           >
 
-            <div className="flex items-center justify-between px-4 py-3.5">
+            <div className="flex items-center justify-between px-3 py-2.5">
 
               <div className="flex items-center gap-2">
 
@@ -233,7 +233,7 @@ export class MultiviewMenu extends Component<MultiviewMenuProps, MultiviewMenuSt
 
                   onClose();
 
-                }} className="rounded-md p-1.5 text-foreground-muted transition-colors hover:bg-white/8 hover:text-foreground" aria-label="Close multiview" >
+                }} className="flex size-8 shrink-0 items-center justify-center rounded-md text-foreground-muted transition-colors hover:bg-white/10 hover:text-foreground" aria-label="Close multiview" >
 
                 <X size={14} />
 
@@ -241,19 +241,19 @@ export class MultiviewMenu extends Component<MultiviewMenuProps, MultiviewMenuSt
 
             </div>
 
-            <div className="px-4 pb-3">
+            <div className="px-3 pb-2">
 
               <div className="relative">
 
                 <Search size={14} className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-foreground-faint" />
 
-                <input value={query} onChange={(e) => this.handleQuery(e.target.value)} placeholder="Search channels…" className="w-full rounded-lg border border-white/10 bg-white/5 py-2.5 pr-3 pl-9 text-sm text-foreground placeholder:text-foreground-faint focus:border-white/20 focus:outline-none" />
+                <input value={query} onChange={(e) => this.handleQuery(e.target.value)} placeholder="Search channels…" className="w-full rounded-md border border-border-subtle bg-white/5 py-2 pr-3 pl-9 text-sm text-foreground placeholder:text-foreground-faint focus:border-white/20 focus:outline-none" />
 
               </div>
 
             </div>
 
-            <div className="max-h-72 overflow-y-auto px-3 pb-3">
+            <div className="max-h-72 overflow-y-auto px-2 pb-2">
 
               {loading && channels.length === 0 && (
 

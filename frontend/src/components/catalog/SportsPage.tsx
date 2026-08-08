@@ -196,7 +196,7 @@ class FeaturedTeamSelect extends Component<FeaturedTeamSelectProps, FeaturedTeam
         <button
           type="button"
           className={cn(
-            "field-focus flex h-9 min-w-[132px] max-w-[11rem] items-center justify-between gap-2 rounded-l-[5px] rounded-r-[18px] border border-border-subtle bg-surface-raised px-3 text-left text-xs font-medium text-foreground hover:border-border hover:bg-surface-overlay",
+            "field-focus flex h-9 min-w-[132px] max-w-[11rem] items-center justify-between gap-2 rounded-md border border-border-subtle bg-surface-raised px-3 text-left text-xs font-medium text-foreground hover:border-border hover:bg-surface-overlay",
             open && "border-border bg-surface-overlay"
           )}
           aria-haspopup="listbox"
@@ -207,7 +207,7 @@ class FeaturedTeamSelect extends Component<FeaturedTeamSelectProps, FeaturedTeam
         >
 
           <span className="truncate">{triggerLabel}</span>
-          <ChevronDown size={14} className={cn("shrink-0 text-foreground-muted transition-transform", open && "rotate-180")} />
+          <ChevronDown className={cn("size-3.5 shrink-0 text-foreground-muted transition-transform", open && "rotate-180")} />
 
         </button>
 
@@ -216,7 +216,7 @@ class FeaturedTeamSelect extends Component<FeaturedTeamSelectProps, FeaturedTeam
           {open && (
 
             <motion.div
-              className="absolute right-0 top-[calc(100%+8px)] z-50 min-w-[16rem] overflow-hidden rounded-[1.25rem] border border-border-subtle bg-surface/95 p-1.5 shadow-2xl ring-1 ring-white/[0.04] backdrop-blur-lg"
+              className="absolute right-0 top-[calc(100%+8px)] z-50 min-w-[16rem] overflow-hidden rounded-lg border border-border-subtle bg-surface/95 p-1.5 shadow-2xl ring-1 ring-white/[0.04] backdrop-blur-lg"
               initial={{ opacity: 0, scale: 0.96, y: -6 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.96, y: -6 }}
@@ -232,7 +232,7 @@ class FeaturedTeamSelect extends Component<FeaturedTeamSelectProps, FeaturedTeam
                   role="option"
                   aria-selected={!activeValue}
                   className={cn(
-                    "flex min-h-10 w-full items-center justify-between gap-2.5 rounded-xl px-3 py-2 text-left text-sm font-medium transition-colors",
+                    "flex min-h-10 w-full items-center justify-between gap-2.5 rounded-md px-3 py-2 text-left text-sm font-medium transition-colors",
                     !activeValue
                       ? "bg-surface-raised text-foreground shadow-sm"
                       : "text-foreground-muted hover:bg-surface-overlay/80 hover:text-foreground"
@@ -249,9 +249,9 @@ class FeaturedTeamSelect extends Component<FeaturedTeamSelectProps, FeaturedTeam
 
                   {!activeValue && (
 
-                    <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-foreground/10">
+                    <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-foreground/10">
 
-                      <Check size={11} className="text-foreground" strokeWidth={2.5} />
+                      <Check className="size-2.5 text-foreground" strokeWidth={2.5} />
 
                     </span>
 
@@ -271,7 +271,7 @@ class FeaturedTeamSelect extends Component<FeaturedTeamSelectProps, FeaturedTeam
                       role="option"
                       aria-selected={isSelected}
                       className={cn(
-                        "flex min-h-10 w-full items-center justify-between gap-2.5 rounded-xl px-3 py-2 text-left text-sm font-medium transition-colors",
+                        "flex min-h-10 w-full items-center justify-between gap-2.5 rounded-md px-3 py-2 text-left text-sm font-medium transition-colors",
                         isSelected
                           ? "bg-surface-raised text-foreground shadow-sm"
                           : "text-foreground-muted hover:bg-surface-overlay/80 hover:text-foreground"
@@ -288,9 +288,9 @@ class FeaturedTeamSelect extends Component<FeaturedTeamSelectProps, FeaturedTeam
 
                       {isSelected && (
 
-                        <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-foreground/10">
+                        <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-foreground/10">
 
-                          <Check size={11} className="text-foreground" strokeWidth={2.5} />
+                          <Check className="size-2.5 text-foreground" strokeWidth={2.5} />
 
                         </span>
 
@@ -425,11 +425,11 @@ export class SportsPage extends Component<SportsPageProps, SportsPageState> {
 
     return (
 
-      <section className="mb-8 px-4 sm:px-8">
+      <section className="mb-8 flex flex-col gap-3 px-4 sm:px-8">
 
-        <div className="mb-3 flex items-center justify-between">
+        <div className="flex items-center justify-between gap-3">
 
-          <h2 className="text-sm font-medium tracking-wide text-foreground-muted uppercase">{title}</h2>
+          <h2 className="text-sm font-semibold tracking-tight text-foreground">{title}</h2>
 
           {canToggle && (
 
@@ -445,7 +445,7 @@ export class SportsPage extends Component<SportsPageProps, SportsPageState> {
 
         {visible.length > 0 && (
 
-          <div className="flex flex-col gap-2.5">
+          <div className="flex flex-col gap-3">
 
             {visible.map((match) => (
 
@@ -564,7 +564,7 @@ export class SportsPage extends Component<SportsPageProps, SportsPageState> {
 
           <div className="skeleton mb-8 h-56 w-full rounded-xl" />
 
-          <div className="flex flex-col gap-2.5">
+          <div className="flex flex-col gap-3">
 
             {Array.from({ length: 4 }).map((_, i) => (
 
@@ -596,14 +596,14 @@ export class SportsPage extends Component<SportsPageProps, SportsPageState> {
 
     return (
 
-      <div className="animate-fade-in py-6">
+      <div className="animate-fade-in py-8">
 
         {featured && (
 
           <div className="mb-8 px-4 sm:px-8">
 
             {/* Overflow only on media layers so the team menu can open outside the card. */}
-            <div className="relative rounded-xl">
+            <div className="relative rounded-xl border border-border-subtle">
 
               <div className="pointer-events-none absolute inset-0 overflow-hidden rounded-xl">
 
@@ -628,9 +628,9 @@ export class SportsPage extends Component<SportsPageProps, SportsPageState> {
 
                     {(featured.live || featured.status === "in") && (
 
-                      <span className="flex flex-shrink-0 items-center gap-1 rounded-full bg-red-500/90 px-2 py-0.5 text-[11px] font-semibold text-white">
+                      <span className="flex flex-shrink-0 items-center gap-1 rounded-md bg-red-500/90 px-2 py-0.5 text-[11px] font-semibold text-white">
 
-                        <span className="h-1.5 w-1.5 rounded-full bg-white" /> LIVE
+                        <span className="size-1.5 rounded-full bg-white" /> LIVE
 
                       </span>
 
@@ -681,11 +681,7 @@ export class SportsPage extends Component<SportsPageProps, SportsPageState> {
                     <button
                       type="button"
                       onClick={() => this.props.onSelectChannel(matchedChannelToLiveChannel(featured.channel!, featured.category))}
-                      className={cn(
-                        "flex h-9 items-center gap-2 bg-white px-5 text-sm font-semibold text-black transition-opacity hover:opacity-90",
-                        // Avoid rounded-*-full when pairing: 9999px outer radii collapse the facing corners via the CSS border-radius overlap reduction rule.
-                        teamOptions.length > 0 ? "rounded-l-[18px] rounded-r-[5px]" : "rounded-full"
-                      )}
+                      className="flex h-9 items-center gap-2 rounded-md bg-white px-5 text-sm font-semibold text-black transition-opacity hover:opacity-90"
                     >
 
                       Watch on {featured.channel.name}
@@ -694,10 +690,7 @@ export class SportsPage extends Component<SportsPageProps, SportsPageState> {
 
                   ) : (
 
-                    <span className={cn(
-                      "flex h-9 items-center bg-white/15 px-5 text-sm font-semibold text-white/70",
-                      teamOptions.length > 0 ? "rounded-l-[18px] rounded-r-[5px]" : "rounded-full"
-                    )}>
+                    <span className="flex h-9 items-center rounded-md bg-white/15 px-5 text-sm font-semibold text-white/70">
 
                       Scores only
 

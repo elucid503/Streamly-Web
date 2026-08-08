@@ -84,6 +84,9 @@ interface WatchPageState {
   selectedSourceKey: string;
   sourceSwitching: boolean;
 
+  /** Session subtitle preference; starts on and follows track heuristic. */
+  subtitlesOn: boolean;
+
 }
 
 const EMPTY_STATE: Omit<WatchPageState, "loading" | "error" | "ready"> = {
@@ -132,6 +135,8 @@ const EMPTY_STATE: Omit<WatchPageState, "loading" | "error" | "ready"> = {
   selectedSourceKey: "auto",
   sourceSwitching: false,
 
+  subtitlesOn: true,
+
 };
 
 function episodeProgress(items: WatchHistoryItem[], showId: number, season: number, episode: number): number {
@@ -162,6 +167,8 @@ export class WatchPage extends Component<WatchPageProps, WatchPageState> {
   private loadGen = 0;
 
   private failedQualityHeights = new Set<number>();
+
+  private failedLiveSources = new Set<string>();
 
   private userSelectedQuality = false;
 
@@ -543,6 +550,17 @@ export class WatchPage extends Component<WatchPageProps, WatchPageState> {
 
   loadEpisode = async (showId: number, season: number, episode: number, gen: number) => {
 
+    // Drop prior show menu state immediately so async loads cannot reuse old seasons/cache.
+    this.setState({
+
+      seasons: [],
+      episodeCache: {},
+      menuEpisodes: [],
+      menuEpisodesLoading: true,
+      menuSeason: season,
+
+    });
+
     const menuPromise = this.loadMenuData(showId, season);
 
     const [streamData, historyItems] = await Promise.all([
@@ -682,13 +700,13 @@ export class WatchPage extends Component<WatchPageProps, WatchPageState> {
 
   loadMenuEpisodes = async (season: number) => {
 
-    const { mediaId, kind, ready, episodeCache } = this.state;
+    const { mediaId, kind, ready, episodeCache, seasons } = this.state;
 
     if (!ready || kind !== "show") return;
 
     const cached = episodeCache[season];
 
-    if (cached) {
+    if (cached && seasons.length > 0) {
 
       this.setState({ menuSeason: season, menuEpisodes: cached, menuEpisodesLoading: false });
 
@@ -711,7 +729,7 @@ export class WatchPage extends Component<WatchPageProps, WatchPageState> {
 
     this.setState((prev) => ({
 
-      seasons: prev.seasons.length > 0 ? prev.seasons : data.seasons,
+      seasons: data.seasons,
 
       menuEpisodes: data.episodes,
       menuEpisodesLoading: false,
@@ -728,7 +746,7 @@ export class WatchPage extends Component<WatchPageProps, WatchPageState> {
 
       const [seasons, episodes] = await Promise.all([
 
-        this.state.seasons.length > 0 ? Promise.resolve(this.state.seasons) : api.showSeasons(showId).catch(() => []),
+        api.showSeasons(showId).catch(() => []),
         api.seasonEpisodes(showId, season),
 
       ]);
@@ -751,11 +769,15 @@ export class WatchPage extends Component<WatchPageProps, WatchPageState> {
 
     this.setState((prev) => {
 
-      if (prev.episodeCache[season]) return null;
+      if (prev.episodeCache[season]) {
+
+        return { seasons: data.seasons } as Pick<WatchPageState, "seasons">;
+
+      }
 
       return {
 
-        seasons: prev.seasons.length > 0 ? prev.seasons : data.seasons,
+        seasons: data.seasons,
         menuEpisodes: prev.menuSeason === season ? data.episodes : prev.menuEpisodes,
         menuEpisodesLoading: prev.menuSeason === season ? false : prev.menuEpisodesLoading,
         episodeCache: { ...prev.episodeCache, [season]: data.episodes },
@@ -777,6 +799,8 @@ export class WatchPage extends Component<WatchPageProps, WatchPageState> {
   };
 
   loadLive = async (channelId: string, gen: number, providerKey = "auto") => {
+
+    this.failedLiveSources.clear();
 
     const [stream, providers] = await Promise.all([
       api.liveStream(channelId, providerKey === "auto" ? undefined : providerKey),
@@ -834,15 +858,21 @@ export class WatchPage extends Component<WatchPageProps, WatchPageState> {
 
   };
 
-  handleSourceChange = async (key: string) => {
+  handleSourceChange = async (key: string, opts?: { failover?: boolean }) => {
 
     const { channelId, kind, selectedSourceKey } = this.state;
 
     if (kind !== "live" || !channelId || key === selectedSourceKey) return;
 
+    if (!opts?.failover) {
+
+      this.failedLiveSources.clear();
+
+    }
+
     const gen = ++this.loadGen;
 
-    this.setState({ sourceSwitching: true, selectedSourceKey: key, streamUrl: "", ready: false });
+    this.setState({ sourceSwitching: true, selectedSourceKey: key, streamUrl: "", ready: false, error: "" });
 
     try {
 
@@ -878,6 +908,15 @@ export class WatchPage extends Component<WatchPageProps, WatchPageState> {
 
       }
 
+      if (opts?.failover) {
+
+        this.failedLiveSources.add(key);
+        this.setState({ sourceSwitching: false });
+        this.handleLiveFailover();
+        return;
+
+      }
+
       this.setState({
 
         sourceSwitching: false,
@@ -887,6 +926,39 @@ export class WatchPage extends Component<WatchPageProps, WatchPageState> {
       });
 
     }
+
+  };
+
+  /** Advance to the next anonymized live source after soft recovery / stall. */
+  handleLiveFailover = () => {
+
+    const { kind, channelId, sourceProviders, selectedSourceKey, sourceSwitching } = this.state;
+
+    if (kind !== "live" || !channelId || sourceSwitching) return;
+
+    const keys = sourceProviders.map((provider) => provider.key).filter((key) => key !== "auto");
+
+    if (keys.length === 0) {
+
+      this.handleFatalError();
+      return;
+
+    }
+
+    const current = selectedSourceKey === "auto" ? (keys[0] ?? "auto") : selectedSourceKey;
+
+    this.failedLiveSources.add(current);
+
+    const next = keys.find((key) => !this.failedLiveSources.has(key));
+
+    if (!next) {
+
+      this.handleFatalError();
+      return;
+
+    }
+
+    void this.handleSourceChange(next, { failover: true });
 
   };
 
@@ -1192,21 +1264,9 @@ export class WatchPage extends Component<WatchPageProps, WatchPageState> {
 
   };
 
-  handleSubtitlesEnabledChange = async (enabled: boolean) => {
+  handleSubtitlesEnabledChange = (enabled: boolean) => {
 
-    try {
-
-      const updated = await api.updateSettings({ subtitlesEnabled: enabled });
-
-      store.setSettings(updated);
-
-      localStorage.setItem("streamly:subtitlesEnabled", enabled ? "1" : "0");
-
-    } catch {
-
-      // Preference still applies for this session via player state.
-
-    }
+    this.setState({ subtitlesOn: enabled });
 
   };
 
@@ -1331,7 +1391,7 @@ export class WatchPage extends Component<WatchPageProps, WatchPageState> {
         <div className="relative flex h-screen flex-col items-center justify-center gap-5 bg-black px-6">
 
           <button onClick={this.handleBack}
-            className="absolute left-4 top-[calc(env(safe-area-inset-top,0px)+1rem)] flex items-center gap-2 rounded-md border border-border-subtle bg-surface/80 px-3 py-1.5 text-xs text-foreground backdrop-blur-md transition-colors hover:bg-surface-overlay"
+            className="absolute left-4 top-[calc(env(safe-area-inset-top,0px)+1rem)] flex h-8 items-center gap-2 rounded-md border border-border-subtle bg-surface/80 px-3 text-xs text-foreground backdrop-blur-md transition-colors hover:bg-surface-overlay"
           >
 
             <ArrowLeft size={14} />
@@ -1397,11 +1457,11 @@ export class WatchPage extends Component<WatchPageProps, WatchPageState> {
 
           intro={this.state.kind === "live" ? null : intro}
           nextEpisode={this.state.kind === "live" ? null : nextEpisode}
-          autoPlayNext={this.state.kind !== "live" && (settings?.autoPlayNext ?? true)}
-          skipIntroEnabled={this.state.kind !== "live" && (settings?.skipIntro ?? true)}
+          autoPlayNext={this.state.kind !== "live"}
+          skipIntroEnabled={this.state.kind !== "live"}
 
           ambienceEnabled={settings?.ambienceEnabled ?? true}
-          subtitlesEnabled={settings?.subtitlesEnabled ?? false}
+          subtitlesEnabled={this.state.kind !== "live" && this.state.subtitlesOn}
 
           onBack={this.handleBack}
           onNextEpisode={this.handleNextEpisode}
@@ -1418,7 +1478,7 @@ export class WatchPage extends Component<WatchPageProps, WatchPageState> {
           onDurationReady={this.state.kind === "live" ? undefined : this.loadIntro}
           onQualityChange={this.state.kind === "live" ? undefined : this.handleQualityChange}
           onOpenSettings={() => this.setState({ settingsOpen: true })}
-          onPlaybackError={this.state.kind === "live" ? undefined : this.handlePlaybackError}
+          onPlaybackError={this.state.kind === "live" ? () => this.handleLiveFailover() : this.handlePlaybackError}
           onFatalError={this.handleFatalError}
           compact={this.props.minimized}
           onReturn={this.props.onReturn}
@@ -1447,7 +1507,7 @@ export class WatchPage extends Component<WatchPageProps, WatchPageState> {
           sourceProviders={kind === "live" ? sourceProviders : undefined}
           selectedSourceKey={kind === "live" ? selectedSourceKey : undefined}
           sourceSwitching={kind === "live" ? sourceSwitching : undefined}
-          onSourceChange={kind === "live" ? this.handleSourceChange : undefined}
+          onSourceChange={kind === "live" ? (key) => void this.handleSourceChange(key) : undefined}
 
           streamResolving={streamResolving || sourceSwitching}
 

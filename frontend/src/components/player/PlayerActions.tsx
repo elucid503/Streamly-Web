@@ -90,7 +90,7 @@ export function PlayerActionFeedbackOverlay({ feedback }: PlayerActionFeedbackOv
 
       <div className={cn(
 
-          "flex items-center gap-1.5 rounded-md border border-border-subtle bg-surface/80 px-3 py-1.5 text-sm font-medium text-foreground/95 backdrop-blur-md",
+          "flex items-center gap-2 rounded-md border border-border-subtle bg-surface/80 px-3.5 py-2 text-sm font-medium text-foreground/95 shadow-lg shadow-black/30 backdrop-blur-xl",
 
           enterReady && phase === "enter" && "player-feedback-enter",
           phase === "exit" && "player-feedback-exit"

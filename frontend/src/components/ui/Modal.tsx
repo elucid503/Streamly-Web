@@ -41,7 +41,7 @@ export class Modal extends Component<ModalProps> {
 
             <motion.div className={cn(
 
-                "relative z-10 w-full max-w-md rounded-lg border border-border-subtle bg-surface/80 p-6 shadow-2xl backdrop-blur-md",
+                "relative z-10 w-full max-w-md rounded-xl border border-border bg-surface-raised p-6 shadow-2xl",
                 className
 
               )}
@@ -57,13 +57,13 @@ export class Modal extends Component<ModalProps> {
 
               <div className="mb-5 flex items-center justify-between">
 
-                <h2 className="text-base font-medium">
+                <h2 className="text-base font-semibold">
 
                   {title}
 
                 </h2>
 
-                <button onClick={onClose} className="rounded-md p-1 text-foreground-muted transition-colors hover:bg-surface-overlay hover:text-foreground" >
+                <button onClick={onClose} className="rounded-md p-1.5 text-foreground-muted transition-colors hover:bg-surface-overlay hover:text-foreground" >
 
                   <X size={16} />
 

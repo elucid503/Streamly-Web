@@ -1,15 +1,13 @@
 import { api } from "@/api/client";
 
 import { LiveView } from "@/components/catalog/LiveView";
-import { MoviesView } from "@/components/catalog/MoviesView";
 import { ShowsView } from "@/components/catalog/ShowsView";
 import { SportsPage } from "@/components/catalog/SportsPage";
 import { ContentRow } from "@/components/catalog/ContentRow";
 import { TitleCard } from "@/components/catalog/TitleCard";
-import { Header } from "@/components/layout/Header";
-import { HomeBackdrop } from "@/components/layout/HomeBackdrop";
-import { HomeBottomBar } from "@/components/layout/HomeBottomBar";
+import { SearchChrome } from "@/components/layout/SearchChrome";
 import { ViewCarousel } from "@/components/layout/ViewCarousel";
+import { ViewSwitcher } from "@/components/layout/ViewSwitcher";
 import type { ContextActionId } from "@/components/layout/ViewContextBar";
 import { AdminPanel } from "@/pages/AdminPanel";
 import { FriendsPage } from "@/pages/FriendsPage";
@@ -24,6 +22,18 @@ import { store } from "@/lib/store";
 import type { FavoriteItem, LiveChannel, MainView, SearchHit, ServiceInterruption, WatchHistoryItem } from "@/lib/types";
 
 import { Component } from "react";
+
+function initialView(): MainView {
+
+  const raw = localStorage.getItem("streamly:lastView");
+
+  if (raw === "shows" || raw === "movies" || raw === "vod" || !raw) return "vod";
+
+  if (raw === "live" || raw === "sports" || raw === "friends") return raw;
+
+  return "vod";
+
+}
 
 interface HomePageProps {
 
@@ -56,9 +66,6 @@ interface HomePageState {
 
   contextLoading: ContextActionId | null;
 
-  liveCategory: string;
-  liveCategoryOptions: { value: string; label: string }[];
-
   sportsCategory: string;
   sportsCategoryOptions: { value: string; label: string }[];
 
@@ -74,7 +81,7 @@ export class HomePage extends Component<HomePageProps, HomePageState> {
 
   state: HomePageState = {
 
-    view: (localStorage.getItem("streamly:lastView") as MainView) ?? "shows",
+    view: initialView(),
 
     searchQuery: "",
 
@@ -96,9 +103,6 @@ export class HomePage extends Component<HomePageProps, HomePageState> {
     interruptionOpen: false,
 
     contextLoading: null,
-
-    liveCategory: "all",
-    liveCategoryOptions: [],
 
     sportsCategory: "all",
     sportsCategoryOptions: [],
@@ -460,7 +464,7 @@ export class HomePage extends Component<HomePageProps, HomePageState> {
 
     const { view } = this.state;
 
-    const kind = view === "shows" ? "show" : view === "movies" ? "movie" : "live";
+    const kind = view === "vod" ? "vod" : "live";
     const item = lastWatched(this.state.history, kind);
 
     if (!item) return;
@@ -479,30 +483,40 @@ export class HomePage extends Component<HomePageProps, HomePageState> {
 
     try {
 
-      if (view === "movies") {
+      if (view === "vod") {
 
-        const trending = await api.movieTrending(24);
-        const pick = this.pickRandom(trending ?? []);
+        const [movies, shows] = await Promise.all([
 
-        if (pick) this.props.navigate(`/watch/movie/${pick.id}`);
+          api.movieTrending(24).catch(() => []),
+          api.showTrending(24).catch(() => []),
 
-        return;
+        ]);
 
-      }
+        const pool = [
 
-      if (view === "shows") {
+          ...(movies ?? []).map((item) => ({ kind: "movie" as const, item })),
+          ...(shows ?? []).map((item) => ({ kind: "show" as const, item })),
 
-        const trending = await api.showTrending(24);
-        const pick = this.pickRandom(trending ?? []);
+        ];
+
+        const pick = this.pickRandom(pool);
 
         if (!pick) return;
 
-        const seasons = await api.showSeasons(pick.id).catch(() => []);
+        if (pick.kind === "movie") {
+
+          this.props.navigate(`/watch/movie/${pick.item.id}`);
+
+          return;
+
+        }
+
+        const seasons = await api.showSeasons(pick.item.id).catch(() => []);
         const season = seasons[0]?.number ?? 1;
-        const episodes = await api.seasonEpisodes(pick.id, season).catch(() => []);
+        const episodes = await api.seasonEpisodes(pick.item.id, season).catch(() => []);
         const episode = this.pickRandom(episodes) ?? { season, episode: 1 };
 
-        this.props.navigate(`/watch/show/${pick.id}/${episode.season}/${episode.episode}`);
+        this.props.navigate(`/watch/show/${pick.item.id}/${episode.season}/${episode.episode}`);
 
         return;
 
@@ -544,13 +558,12 @@ export class HomePage extends Component<HomePageProps, HomePageState> {
 
       }
 
-      const kind = view === "shows" ? "show" : "movie";
-      const pool = favorites.filter((item) => item.kind === kind);
+      const pool = favorites.filter((item) => item.kind === "movie" || item.kind === "show");
       const pick = this.pickRandom(pool);
 
       if (!pick) return;
 
-      if (kind === "movie") {
+      if (pick.kind === "movie") {
 
         this.props.navigate(`/watch/movie/${pick.mediaId}`);
 
@@ -742,21 +755,51 @@ export class HomePage extends Component<HomePageProps, HomePageState> {
 
   render() {
 
-    const { view, searchQuery, searchKind, searchYear, searchRating, searchProgress, history, favorites, settingsOpen, adminOpen, interruption, interruptionOpen, contextLoading, liveCategory, liveCategoryOptions, sportsCategory, sportsCategoryOptions } = this.state;
+    const { view, searchQuery, searchKind, searchYear, searchRating, searchProgress, history, favorites, settingsOpen, adminOpen, interruption, interruptionOpen, contextLoading, sportsCategory, sportsCategoryOptions } = this.state;
 
     const showSearch = searchQuery.trim().length > 0 && view !== "live" && view !== "sports" && view !== "friends";
 
-    const header = (
+    const onViewChange = (v: MainView) => {
 
-      <Header
+      localStorage.setItem("streamly:lastView", v);
+      this.setState({ view: v, contextLoading: null });
+
+    };
+
+    const chrome = (
+
+      <SearchChrome
+
+        searchQuery={searchQuery}
+        onSearch={this.handleSearch}
 
         view={view}
-        onViewChange={(v) => {
+        showSearch={showSearch}
 
-          localStorage.setItem("streamly:lastView", v);
-          this.setState({ view: v, contextLoading: null });
+        searchKind={searchKind}
+        searchYear={searchYear}
+        searchRating={searchRating}
+        searchProgress={searchProgress}
+
+        onSearchKindChange={(value) => this.setState({ searchKind: value })}
+        onSearchYearChange={(value) => this.setState({ searchYear: value })}
+        onSearchRatingChange={(value) => this.setState({ searchRating: value })}
+        onSearchProgressChange={(value) => this.setState({ searchProgress: value })}
+
+        history={history}
+        favorites={favorites}
+
+        contextLoading={contextLoading}
+        onContextAction={this.handleContextAction}
+
+        category={view === "sports" ? sportsCategory : undefined}
+        categoryOptions={view === "sports" ? sportsCategoryOptions : undefined}
+        onCategoryChange={(v) => {
+
+          if (view === "sports") this.setState({ sportsCategory: v });
 
         }}
+
         onOpenSettings={() => this.setState({ settingsOpen: true })}
         onOpenAdmin={() => this.setState({ adminOpen: true })}
         onLogout={this.handleLogout}
@@ -793,157 +836,84 @@ export class HomePage extends Component<HomePageProps, HomePageState> {
 
     );
 
-    if (view === "friends") {
-
-      return (
-
-        <div className="relative min-h-screen">
-
-          {header}
-
-          <div className="relative z-10 pt-[calc(4rem+env(safe-area-inset-top))]">
-
-            <FriendsPage />
-
-          </div>
-
-          {modals}
-
-        </div>
-
-      );
-
-    }
-
     return (
 
       <div className="relative min-h-screen">
 
-        <HomeBackdrop view={view} history={history} favorites={favorites} />
+        <div className="relative z-10 overflow-x-clip pb-dock">
 
-        {header}
+          {chrome}
 
-        <div className="relative z-10 overflow-x-clip pt-[calc(4rem+env(safe-area-inset-top))] pb-24 lg:pb-32">
+          {view === "friends" ? (
 
-        {showSearch ? (
+            <FriendsPage />
 
-          this.renderSearchResults()
+          ) : showSearch ? (
 
-        ) : (
+            this.renderSearchResults()
 
-          <ViewCarousel
+          ) : (
 
-            active={view}
+            <ViewCarousel
+              active={view}
 
-            panels={{
+              panels={{
 
-              shows: (
+                vod: (
 
-                <ShowsView
+                  <ShowsView
 
-                  onSelect={this.handleSelect}
-                  onFavoriteToggle={this.handleFavoriteToggle}
-                  onResumeWatching={this.handleResumeWatching}
-                  onRemoveFromHistory={this.handleRemoveFromHistory}
+                    onSelect={this.handleSelect}
+                    onFavoriteToggle={this.handleFavoriteToggle}
+                    onResumeWatching={this.handleResumeWatching}
+                    onRemoveFromHistory={this.handleRemoveFromHistory}
 
-                  history={history}
-                  favorites={favorites}
+                    history={history}
+                    favorites={favorites}
 
-                />
+                  />
 
-              ),
+                ),
 
-              movies: (
+                live: (
 
-                <MoviesView
+                  <LiveView
 
-                  onSelect={this.handleSelect}
-                  onResumeWatching={this.handleResumeWatching}
-                  onFavoriteToggle={this.handleFavoriteToggle}
-                  onRemoveFromHistory={this.handleRemoveFromHistory}
+                    onSelect={this.handleLiveSelect}
+                    onFavoriteToggle={this.handleFavoriteToggle}
 
-                  history={history}
-                  favorites={favorites}
+                    searchQuery={searchQuery}
+                    favorites={favorites}
 
-                />
+                  />
 
-              ),
+                ),
 
-              live: (
+                sports: (
 
-                <LiveView
+                  <SportsPage
 
-                  onSelect={this.handleLiveSelect}
-                  onFavoriteToggle={this.handleFavoriteToggle}
+                    onSelectChannel={this.handleLiveSelect}
 
-                  searchQuery={searchQuery}
-                  favorites={favorites}
+                    searchQuery={searchQuery}
+                    category={sportsCategory}
+                    onCategoriesChange={(opts) => this.setState({ sportsCategoryOptions: opts })}
 
-                  category={liveCategory}
-                  onCategoriesChange={(opts) => this.setState({ liveCategoryOptions: opts })}
+                  />
 
-                />
+                ),
 
-              ),
+                friends: null,
 
-              sports: (
+              }}
 
-                <SportsPage
+            />
 
-                  onSelectChannel={this.handleLiveSelect}
-
-                  searchQuery={searchQuery}
-                  category={sportsCategory}
-                  onCategoriesChange={(opts) => this.setState({ sportsCategoryOptions: opts })}
-
-                />
-
-              ),
-
-              friends: null,
-
-            }}
-
-          />
-
-        )}
-
-        <HomeBottomBar
-
-          searchQuery={searchQuery}
-          onSearch={this.handleSearch}
-
-          view={view}
-          showSearch={showSearch}
-
-          searchKind={searchKind}
-          searchYear={searchYear}
-          searchRating={searchRating}
-          searchProgress={searchProgress}
-
-          onSearchKindChange={(value) => this.setState({ searchKind: value })}
-          onSearchYearChange={(value) => this.setState({ searchYear: value })}
-          onSearchRatingChange={(value) => this.setState({ searchRating: value })}
-          onSearchProgressChange={(value) => this.setState({ searchProgress: value })}
-
-          history={history}
-          favorites={favorites}
-
-          contextLoading={contextLoading}
-          onContextAction={this.handleContextAction}
-
-          category={view === "live" ? liveCategory : view === "sports" ? sportsCategory : undefined}
-          categoryOptions={view === "live" ? liveCategoryOptions : view === "sports" ? sportsCategoryOptions : undefined}
-          onCategoryChange={(v) => {
-
-            if (view === "live") this.setState({ liveCategory: v });
-            if (view === "sports") this.setState({ sportsCategory: v });
-
-          }}
-
-        />
+          )}
 
         </div>
+
+        <ViewSwitcher active={view} onChange={onViewChange} />
 
         {modals}
 

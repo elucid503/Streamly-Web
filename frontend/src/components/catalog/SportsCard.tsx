@@ -122,7 +122,7 @@ export function SportsRow({ match, onSelect }: SportsRowProps) {
 
       className={cn(
 
-        "flex w-full items-center gap-4 rounded-lg border border-border-subtle bg-surface-raised px-4 py-3 text-left transition-colors",
+        "flex w-full items-center gap-4 rounded-xl border border-border-subtle bg-surface-raised px-4 py-3.5 text-left transition-colors",
         channel ? "hover:border-border hover:bg-surface-overlay" : "cursor-default opacity-70"
 
       )}
@@ -193,9 +193,9 @@ export function SportsRow({ match, onSelect }: SportsRowProps) {
 
           {(match.live || match.status === "in") && (
 
-            <span className="flex flex-shrink-0 items-center gap-1 rounded-full bg-red-500/15 px-2 py-0.5 text-[11px] font-semibold text-red-500">
+            <span className="flex flex-shrink-0 items-center gap-1 rounded-md bg-red-500/15 px-2 py-0.5 text-[11px] font-semibold text-red-500">
 
-              <span className="h-1.5 w-1.5 rounded-full bg-red-500" /> LIVE
+              <span className="size-1.5 rounded-full bg-red-500" /> LIVE
 
             </span>
 
@@ -232,7 +232,7 @@ export function SportsRow({ match, onSelect }: SportsRowProps) {
 
         )}
 
-        {channel && <ChevronRight size={18} className="text-foreground-faint" />}
+        {channel && <ChevronRight className="size-4 text-foreground-faint" />}
 
       </div>
 

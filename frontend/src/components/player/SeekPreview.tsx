@@ -373,7 +373,7 @@ export class SeekPreview extends Component<SeekPreviewProps> {
           aria-hidden
         >
 
-          <div className="overflow-hidden rounded-md border border-white/15 bg-black shadow-xl shadow-black/50">
+          <div className="overflow-hidden rounded-md border border-border-subtle bg-surface/90 shadow-xl shadow-black/50 backdrop-blur-md">
 
             <video
               ref={this.videoRef}

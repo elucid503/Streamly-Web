@@ -1,4 +1,5 @@
 import { PosterImage } from "@/components/catalog/PosterImage";
+import { PlayOverlay } from "@/components/ui/PlayOverlay";
 
 import { cn, progressPercent } from "@/lib/utils";
 
@@ -98,7 +99,7 @@ export class TitleCard extends Component<TitleCardProps, TitleCardState> {
         <motion.div className={cn(
 
             "group relative flex-shrink-0 text-left",
-            compact ? "w-[120px] sm:w-[140px]" : "w-[140px] sm:w-[160px]"
+            compact ? "w-[8.5rem] sm:w-32" : "w-[8.5rem] sm:w-36"
 
           )}
 
@@ -106,7 +107,7 @@ export class TitleCard extends Component<TitleCardProps, TitleCardState> {
 
           <button className="block w-full text-left" type="button" onClick={onClick}>
 
-            <div className="relative overflow-hidden rounded-md border border-border-subtle bg-surface-raised transition-[filter,border-color] duration-300 group-hover:border-border group-hover:brightness-[1.15]">
+            <div className="relative overflow-hidden rounded-lg border border-border-subtle bg-surface-raised transition-[filter,border-color] duration-300 group-hover:border-border group-hover:brightness-110">
 
               <PosterImage
 
@@ -116,9 +117,11 @@ export class TitleCard extends Component<TitleCardProps, TitleCardState> {
 
               />
 
+              <PlayOverlay />
+
               {rating && (
 
-                <span className="absolute left-2 top-2 rounded-full border border-border-subtle bg-surface/80 px-1.5 py-0.5 text-[10px] font-medium text-foreground backdrop-blur-md">
+                <span className="absolute right-1.5 top-1.5 z-20 rounded-md border border-border-subtle bg-surface/80 px-1.5 py-0.5 text-[10px] font-medium text-foreground backdrop-blur-md">
 
                   ★ {rating}
 
@@ -128,7 +131,7 @@ export class TitleCard extends Component<TitleCardProps, TitleCardState> {
 
               {progress > 2 && (
 
-                <div className="absolute inset-x-2 bottom-2 h-1 overflow-hidden rounded-full bg-black/45 backdrop-blur-sm">
+                <div className="absolute inset-x-2 bottom-2 z-20 h-1 overflow-hidden rounded-full bg-black/45 backdrop-blur-sm">
 
                   <motion.div className="h-full rounded-full bg-foreground"
 
@@ -144,7 +147,7 @@ export class TitleCard extends Component<TitleCardProps, TitleCardState> {
 
             </div>
 
-            <p className="mt-2 line-clamp-2 text-xs font-medium text-foreground transition-colors group-hover:text-accent">
+            <p className="mt-2 line-clamp-2 text-sm font-medium text-foreground transition-colors group-hover:text-accent">
 
               {title}
 
@@ -166,57 +169,28 @@ export class TitleCard extends Component<TitleCardProps, TitleCardState> {
 
           </button>
 
-          {(onFavoriteToggle || onResume) && (
+          {(onFavoriteToggle || onResume || onRemoveFromHistory) && (
 
-            <div className="absolute right-2 top-2 z-10 flex gap-1">
+            <div className="absolute right-1.5 top-1.5 z-10 flex gap-1">
 
-              {onResume && (
+              <button
 
-                <button
+                className={cn(
 
-                  className="flex h-8 w-8 items-center justify-center rounded-full border border-border-subtle bg-surface/80 text-foreground shadow-sm backdrop-blur-md transition-colors hover:bg-surface-overlay"
+                  "flex size-8 items-center justify-center rounded-md border border-border-subtle bg-surface/80 text-foreground shadow-sm backdrop-blur-md transition-colors hover:bg-surface-overlay",
+                  menuPos && "bg-surface-overlay"
 
-                  type="button"
-                  aria-label="Quick resume"
+                )}
 
-                  onClick={(e) => {
+                type="button"
+                aria-label="More options"
+                onClick={this.openMenu}
 
-                    e.stopPropagation();
+              >
 
-                    onResume();
+                <MoreHorizontal className="size-4" />
 
-                  }}
-
-                >
-
-                  <Play size={13} />
-
-                </button>
-
-              )}
-
-              {onFavoriteToggle && (
-
-                <button
-
-                  className={cn(
-
-                    "flex h-8 w-8 items-center justify-center rounded-full border border-border-subtle bg-surface/80 text-foreground shadow-sm backdrop-blur-md transition-colors hover:bg-surface-overlay",
-                    menuPos && "bg-surface-overlay"
-
-                  )}
-
-                  type="button"
-                  aria-label="More options"
-                  onClick={this.openMenu}
-
-                >
-
-                  <MoreHorizontal size={15} />
-
-                </button>
-
-              )}
+              </button>
 
             </div>
 
@@ -232,7 +206,7 @@ export class TitleCard extends Component<TitleCardProps, TitleCardState> {
 
             <motion.div
 
-              className="fixed z-[100] min-w-[172px] overflow-hidden rounded-[1.25rem] border border-white/10 bg-surface/70 p-1 shadow-2xl shadow-black/40 ring-1 ring-white/[0.04] backdrop-blur-xl backdrop-saturate-150"
+              className="fixed z-[100] min-w-[172px] overflow-hidden rounded-lg border border-border-subtle bg-surface/95 p-1 shadow-2xl shadow-black/40 ring-1 ring-white/[0.04] backdrop-blur-xl backdrop-saturate-150"
 
               style={{ top: menuPos.top, left: menuPos.left }}
 
@@ -244,7 +218,7 @@ export class TitleCard extends Component<TitleCardProps, TitleCardState> {
 
               {onResume && (
 
-                <button className="flex h-9 w-full items-center gap-2 rounded-xl px-3 text-left text-xs font-medium text-foreground-muted transition-colors hover:bg-surface-overlay/80 hover:text-foreground" type="button"
+                <button className="flex h-9 w-full items-center gap-2 rounded-md px-3 text-left text-xs font-medium text-foreground-muted transition-colors hover:bg-surface-overlay/80 hover:text-foreground" type="button"
 
                   onClick={(e) => {
 
@@ -257,7 +231,7 @@ export class TitleCard extends Component<TitleCardProps, TitleCardState> {
 
                 >
 
-                  <Play size={13} />
+                  <Play className="size-3.5" />
                   <span>Resume Watching</span>
 
                 </button>
@@ -266,7 +240,7 @@ export class TitleCard extends Component<TitleCardProps, TitleCardState> {
 
               {onRemoveFromHistory && (
 
-                <button type="button" className="flex h-9 w-full items-center gap-2 rounded-xl px-3 text-left text-xs font-medium text-foreground-muted transition-colors hover:bg-surface-overlay/80 hover:text-foreground"
+                <button type="button" className="flex h-9 w-full items-center gap-2 rounded-md px-3 text-left text-xs font-medium text-foreground-muted transition-colors hover:bg-surface-overlay/80 hover:text-foreground"
 
                   onClick={(e) => {
 
@@ -279,7 +253,7 @@ export class TitleCard extends Component<TitleCardProps, TitleCardState> {
 
                 >
 
-                  <Trash2 size={13} />
+                  <Trash2 className="size-3.5" />
                   <span>Remove from History</span>
 
                 </button>
@@ -288,7 +262,7 @@ export class TitleCard extends Component<TitleCardProps, TitleCardState> {
 
               {onFavoriteToggle && (
 
-                <button type="button" className="flex h-9 w-full items-center gap-2 rounded-xl px-3 text-left text-xs font-medium text-foreground-muted transition-colors hover:bg-surface-overlay/80 hover:text-foreground"
+                <button type="button" className="flex h-9 w-full items-center gap-2 rounded-md px-3 text-left text-xs font-medium text-foreground-muted transition-colors hover:bg-surface-overlay/80 hover:text-foreground"
 
                   onClick={(e) => {
 
@@ -301,16 +275,16 @@ export class TitleCard extends Component<TitleCardProps, TitleCardState> {
 
                 >
 
-                  <Star size={13} fill={favorite ? "currentColor" : "none"} className={cn(favorite && "text-accent")} />
+                  <Star className={cn("size-3.5", favorite && "text-accent")} fill={favorite ? "currentColor" : "none"} />
                   <span>{favorite ? "Remove from Favorites" : "Add to Favorites"}</span>
 
                 </button>
 
               )}
 
-              <button type="button" className="flex h-9 w-full items-center gap-2 rounded-xl px-3 text-left text-xs font-medium text-foreground-muted transition-colors hover:bg-surface-overlay/80 hover:text-foreground" onClick={this.copyLink}>
+              <button type="button" className="flex h-9 w-full items-center gap-2 rounded-md px-3 text-left text-xs font-medium text-foreground-muted transition-colors hover:bg-surface-overlay/80 hover:text-foreground" onClick={this.copyLink}>
 
-                <Link size={13} />
+                <Link className="size-3.5" />
                 <span>Copy Link</span>
 
               </button>

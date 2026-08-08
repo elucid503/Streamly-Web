@@ -7,6 +7,7 @@
   html {
 
     @apply overflow-x-clip;
+    font-size: 106.25%;
     overscroll-behavior: none;
     touch-action: manipulation;
 
@@ -48,6 +49,13 @@
 }
 
 @layer utilities {
+
+  /* BottomNav pill (~2.75rem) + outer pb-3 + margin above the dock. */
+  .pb-dock {
+
+    padding-bottom: calc(5.5rem + env(safe-area-inset-bottom, 0px));
+
+  }
 
   .field-focus {
 

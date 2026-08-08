@@ -168,7 +168,7 @@ export class PlayerOptionsMenu extends Component<PlayerOptionsMenuProps, PlayerO
 
       <button onClick={() => this.setState({ panel })} className={cn(
 
-          "relative flex flex-1 items-center justify-center rounded-md px-3 py-2 text-xs font-medium transition-colors sm:text-sm",
+          "relative flex flex-1 items-center justify-center rounded-md px-3 py-2 text-sm font-medium transition-colors",
           active ? "text-surface" : "text-foreground-muted hover:text-foreground"
 
         )} >
@@ -207,9 +207,9 @@ export class PlayerOptionsMenu extends Component<PlayerOptionsMenuProps, PlayerO
 
       }} className={cn(
 
-        "flex w-full items-center gap-3 rounded-lg px-3.5 py-3 text-left transition-colors",
+        "flex w-full items-center gap-2.5 rounded-md px-2.5 py-2.5 text-left text-sm transition-colors",
         disabled && "cursor-not-allowed opacity-40",
-        !disabled && (active || loading) && "bg-white/10 text-foreground ring-1 ring-white/10",
+        !disabled && (active || loading) && "bg-white/10 text-foreground",
         !disabled && !active && !loading && "text-foreground-muted hover:bg-white/6 hover:text-foreground"
 
       )} >
@@ -292,19 +292,19 @@ export class PlayerOptionsMenu extends Component<PlayerOptionsMenuProps, PlayerO
 
           }} className={cn(
 
-            "rounded-md p-1.5 text-foreground transition-colors hover:bg-white/10",
-            open && "bg-white/10"
+            "flex size-9 shrink-0 items-center justify-center rounded-md text-foreground transition-colors hover:bg-white/15",
+            open && "bg-white/15"
 
           )} aria-label="Playback options" >
 
-          <Settings2 size={18} />
+          <Settings2 size={20} />
 
         </button>
 
         <div className={cn(
 
-            "absolute right-0 bottom-full z-40 mb-3 w-80 origin-bottom-right overflow-hidden rounded-xl border border-white/10 bg-surface/75 shadow-2xl shadow-black/40 backdrop-blur-xl backdrop-saturate-150 transition-[opacity,transform,filter] duration-200 ease-out",
-            open ? "pointer-events-auto translate-y-0 scale-100 opacity-100 blur-0" : "pointer-events-none translate-y-2 scale-95 opacity-0 blur-sm"
+            "absolute right-0 bottom-full z-40 mb-3 w-80 origin-bottom-right overflow-hidden rounded-xl border border-border-subtle bg-surface/80 shadow-2xl shadow-black/40 backdrop-blur-xl transition-[opacity,transform] duration-200 ease-out",
+            open ? "pointer-events-auto translate-y-0 scale-100 opacity-100" : "pointer-events-none translate-y-2 scale-95 opacity-0"
 
           )}
 
@@ -312,7 +312,7 @@ export class PlayerOptionsMenu extends Component<PlayerOptionsMenuProps, PlayerO
 
           >
 
-            <div className="flex items-center justify-between px-4 py-3.5">
+            <div className="flex items-center justify-between px-4 py-3">
 
               <div className="flex items-center gap-2">
 
@@ -332,7 +332,7 @@ export class PlayerOptionsMenu extends Component<PlayerOptionsMenuProps, PlayerO
 
                   onClose();
 
-                }} className="rounded-md p-1.5 text-foreground-muted transition-colors hover:bg-white/8 hover:text-foreground" aria-label="Close options" >
+                }} className="flex size-8 shrink-0 items-center justify-center rounded-md text-foreground-muted transition-colors hover:bg-white/10 hover:text-foreground" aria-label="Close options" >
 
                 <X size={14} />
 
@@ -342,7 +342,7 @@ export class PlayerOptionsMenu extends Component<PlayerOptionsMenuProps, PlayerO
 
             {showTabs && (
 
-              <div className="mx-4 mb-3 rounded-lg border border-white/10 bg-white/5 p-1">
+              <div className="mx-4 mb-3 rounded-xl border border-border-subtle bg-white/5 p-1">
 
                 <div className="flex gap-1">
 
@@ -375,7 +375,7 @@ export class PlayerOptionsMenu extends Component<PlayerOptionsMenuProps, PlayerO
 
                   <div className="max-h-72 w-full flex-shrink-0 overflow-y-auto pr-1">
 
-                    <div className="space-y-1">
+                    <div className="space-y-1.5">
 
                       {sourceProviders.map((provider) => {
 
@@ -412,7 +412,7 @@ export class PlayerOptionsMenu extends Component<PlayerOptionsMenuProps, PlayerO
 
                   <div className="max-h-72 w-full flex-shrink-0 overflow-y-auto pr-1">
 
-                    <div className="space-y-1">
+                    <div className="space-y-1.5">
 
                       {sortedQualities.map((quality) => {
 
@@ -446,7 +446,7 @@ export class PlayerOptionsMenu extends Component<PlayerOptionsMenuProps, PlayerO
 
                     {onOpenSettings && (
 
-                      <button className="mt-2 mb-4 flex w-full items-center gap-2 rounded-lg border border-white/8 px-3.5 py-2.5 text-left text-xs text-foreground-muted transition-colors hover:bg-white/6 hover:text-foreground" onClick={(e) => {
+                      <button className="mt-2 mb-2 flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm text-foreground-muted transition-colors hover:bg-white/6 hover:text-foreground" onClick={(e) => {
 
                           e.stopPropagation();
 
@@ -468,7 +468,7 @@ export class PlayerOptionsMenu extends Component<PlayerOptionsMenuProps, PlayerO
 
                 <div className="max-h-72 w-full flex-shrink-0 overflow-y-auto pr-1">
 
-                  <div className="space-y-1">
+                  <div className="space-y-1.5">
 
                     {this.renderOption(
 
@@ -502,7 +502,7 @@ export class PlayerOptionsMenu extends Component<PlayerOptionsMenuProps, PlayerO
 
                     {subtitleTracks.length === 0 && (
 
-                      <div className="rounded-lg px-4 py-6 text-center">
+                      <div className="rounded-md px-3 py-5 text-center">
 
                         <Subtitles size={20} className="mx-auto mb-2 text-foreground-faint" />
 

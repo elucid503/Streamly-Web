@@ -1,17 +1,15 @@
 import { cn } from "@/lib/utils";
-import { lastWatched } from "@/lib/history";
 import type { FavoriteItem, MainView, WatchHistoryItem } from "@/lib/types";
 
 import { Component, type ReactNode } from "react";
 import { Dices, Heart, Play, Radio, Sparkles } from "lucide-react";
+import { lastWatched } from "@/lib/history";
 
 export type ContextActionId = "continue" | "dice" | "shuffle-favorites";
 
 interface ViewContextBarProps {
 
   view: MainView;
-  side?: "left" | "right";
-  compact?: boolean;
 
   history: WatchHistoryItem[];
   favorites: FavoriteItem[];
@@ -36,17 +34,17 @@ export class ViewContextBar extends Component<ViewContextBarProps> {
 
     const { view, history, favorites } = this.props;
 
-    if (view === "shows") {
+    if (view === "vod") {
 
       const actions: ContextAction[] = [];
 
-      if (lastWatched(history, "show")) {
+      if (lastWatched(history, "vod")) {
 
         actions.push({
 
           id: "continue",
           label: "Continue Last",
-          icon: <Play size={13} className="opacity-80" />,
+          icon: <Play size={14} className="opacity-80" />,
 
         });
 
@@ -56,17 +54,17 @@ export class ViewContextBar extends Component<ViewContextBarProps> {
 
         id: "dice",
         label: "Pick For Me",
-        icon: <Dices size={13} className="opacity-80" />,
+        icon: <Dices size={14} className="opacity-80" />,
 
       });
 
-      if (favorites.some((item) => item.kind === "show")) {
+      if (favorites.some((item) => item.kind === "movie" || item.kind === "show")) {
 
         actions.push({
 
           id: "shuffle-favorites",
           label: "Lucky Favorite",
-          icon: <Heart size={13} className="opacity-80" />,
+          icon: <Heart size={14} className="opacity-80" />,
 
         });
 
@@ -76,47 +74,7 @@ export class ViewContextBar extends Component<ViewContextBarProps> {
 
     }
 
-    if (view === "movies") {
-
-      const actions: ContextAction[] = [];
-
-      if (lastWatched(history, "movie")) {
-
-        actions.push({
-
-          id: "continue",
-          label: "Continue Last",
-          icon: <Play size={13} className="opacity-80" />,
-
-        });
-
-      }
-
-      actions.push({
-
-        id: "dice",
-        label: "Pick For Me",
-        icon: <Dices size={13} className="opacity-80" />,
-
-      });
-
-      if (favorites.some((item) => item.kind === "movie")) {
-
-        actions.push({
-
-          id: "shuffle-favorites",
-          label: "Lucky Favorite",
-          icon: <Heart size={13} className="opacity-80" />,
-
-        });
-
-      }
-
-      return actions;
-
-    }
-
-    if (view === "sports") return [];
+    if (view === "sports" || view === "friends") return [];
 
     const actions: ContextAction[] = [];
 
@@ -126,7 +84,7 @@ export class ViewContextBar extends Component<ViewContextBarProps> {
 
         id: "continue",
         label: "Last Channel",
-        icon: <Radio size={13} className="opacity-80" />,
+        icon: <Radio size={14} className="opacity-80" />,
 
       });
 
@@ -136,7 +94,7 @@ export class ViewContextBar extends Component<ViewContextBarProps> {
 
       id: "dice",
       label: "Pick For Me",
-      icon: <Dices size={13} className="opacity-80" />,
+      icon: <Dices size={14} className="opacity-80" />,
 
     });
 
@@ -146,7 +104,7 @@ export class ViewContextBar extends Component<ViewContextBarProps> {
 
         id: "shuffle-favorites",
         label: "Lucky Favorite",
-        icon: <Sparkles size={13} className="opacity-80" />,
+        icon: <Sparkles size={14} className="opacity-80" />,
 
       });
 
@@ -156,38 +114,17 @@ export class ViewContextBar extends Component<ViewContextBarProps> {
 
   };
 
-  visibleActions = (): ContextAction[] => {
-
-    const actions = this.actionsForView();
-
-    if (this.props.compact) return actions;
-
-    const splitAt = Math.ceil(actions.length / 2);
-
-    if (this.props.side === "left") return actions.slice(0, splitAt);
-
-    return actions.slice(splitAt);
-
-  };
-
   render() {
 
-    const { loadingAction, onAction, side, compact } = this.props;
+    const { loadingAction, onAction } = this.props;
 
-    const actions = this.visibleActions();
+    const actions = this.actionsForView();
 
     if (actions.length === 0) return null;
 
     return (
 
-      <div className={cn(
-
-        "flex min-w-0 items-center gap-1.5",
-        compact ? "w-full gap-1" : "flex-wrap",
-        !compact && side === "left" && "justify-center lg:justify-end",
-        !compact && side === "right" && "justify-center lg:justify-start"
-
-      )}>
+      <div className="flex min-w-0 flex-wrap items-center gap-1.5">
 
         {actions.map((action) => {
 
@@ -202,9 +139,8 @@ export class ViewContextBar extends Component<ViewContextBarProps> {
 
               className={cn(
 
-                "flex h-8 items-center gap-1 rounded-full border border-border-subtle bg-surface-raised text-[11px] font-medium shadow-sm transition-all lg:h-9 lg:gap-1.5 lg:px-3 lg:text-xs",
-                compact ? "min-w-0 flex-1 justify-center px-2" : "shrink-0 px-2.5",
-                "text-foreground-muted hover:border-border hover:text-foreground active:scale-95",
+                "flex h-8 items-center gap-1.5 rounded-md border border-border bg-surface-overlay px-3 text-xs font-medium shadow-sm transition-all",
+                "text-foreground-muted hover:bg-border/60 hover:text-foreground active:scale-[0.98]",
                 loading && "pointer-events-none opacity-70",
                 loadingAction !== null && !loading && "opacity-50"
 
@@ -218,7 +154,7 @@ export class ViewContextBar extends Component<ViewContextBarProps> {
 
               </span>
 
-              <span className={cn(compact ? "truncate" : "whitespace-nowrap")}>
+              <span className="whitespace-nowrap">
 
                 {loading ? (action.id === "dice" ? "Rolling..." : "Picking...") : action.label}
 

@@ -325,7 +325,7 @@ export interface ServiceInterruption {
 
 }
 
-export type MainView = "shows" | "movies" | "live" | "sports" | "friends";
+export type MainView = "vod" | "live" | "sports" | "friends";
 
 export interface ProfileMedia {
 

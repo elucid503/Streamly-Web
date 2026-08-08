@@ -7,6 +7,7 @@ import { isIOS } from "@/lib/platform";
 
 import { PWAInstallDesktop } from "@/components/layout/PWAInstallDesktop";
 import { PWAInstallGate } from "@/components/layout/PWAInstallGate";
+import { Button } from "@/components/ui/Button";
 
 import { Component, createRef, lazy, Suspense, type ReactNode } from "react";
 import { motion, MotionConfig, type PanInfo } from "framer-motion";
@@ -126,9 +127,11 @@ export class App extends Component<object, AppState> {
 
       fallback={
 
-        <div className="flex min-h-screen items-center justify-center">
+        <div className="flex min-h-screen flex-col items-center justify-center gap-3 bg-surface">
 
           <div className="h-8 w-8 animate-spin rounded-full border-2 border-foreground/20 border-t-foreground" />
+
+          <p className="text-sm text-foreground-muted">Loading…</p>
 
         </div>
 
@@ -194,15 +197,15 @@ export class App extends Component<object, AppState> {
 
         return (
 
-          <div className="flex min-h-screen flex-col items-center justify-center gap-4">
+          <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-surface">
 
             <p className="text-sm text-foreground-muted">Page not found</p>
 
-            <button onClick={() => navigate("/")} className="text-sm underline-offset-2 hover:underline" >
+            <Button variant="outline" size="sm" onClick={() => navigate("/")}>
 
               Go home
 
-            </button>
+            </Button>
 
           </div>
 
@@ -260,8 +263,8 @@ export class App extends Component<object, AppState> {
           animate={{ x: 0, y: 0 }}
           transition={{ type: "spring", stiffness: 360, damping: 34 }}
           className={minimized
-            ? `${playerReady ? "pointer-events-auto visible" : "pointer-events-none invisible"} absolute ${verticalCorner} ${horizontalCorner} aspect-video w-[min(22rem,calc(100vw-1.5rem))] overflow-hidden rounded-xl border border-border-subtle bg-black shadow-2xl`
-            : "absolute inset-0 bg-black"}
+            ? `${playerReady ? "pointer-events-auto visible" : "pointer-events-none invisible"} absolute ${verticalCorner} ${horizontalCorner} aspect-video w-[min(22rem,calc(100vw-1.5rem))] overflow-hidden rounded-xl border border-border-subtle bg-surface shadow-2xl`
+            : "absolute inset-0 bg-surface"}
         >
 
           {this.renderShell(
@@ -294,9 +297,11 @@ export class App extends Component<object, AppState> {
 
       return (
 
-        <div className="flex min-h-screen items-center justify-center">
+        <div className="flex min-h-screen flex-col items-center justify-center gap-3 bg-surface">
 
           <div className="h-8 w-8 animate-spin rounded-full border-2 border-foreground/20 border-t-foreground" />
+
+          <p className="text-sm text-foreground-muted">Loading…</p>
 
         </div>
 

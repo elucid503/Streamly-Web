@@ -69,7 +69,7 @@ export class VolumeControl extends Component<VolumeControlProps, VolumeControlSt
 
             onToggleMute();
 
-          }} className="rounded-md p-1.5 text-foreground transition-colors hover:bg-white/10" >
+          }} className="flex size-8 shrink-0 items-center justify-center rounded-md text-foreground transition-colors hover:bg-white/15" >
 
           {muted || volume === 0 ? <VolumeX size={18} /> : <Volume2 size={18} />}
 
@@ -142,7 +142,7 @@ export class ControlButton extends Component<{
 
         }} aria-label={ariaLabel} className={cn(
 
-          "rounded-md p-1.5 text-foreground transition-colors hover:bg-white/10",
+          "flex size-9 shrink-0 items-center justify-center rounded-md text-foreground transition-colors hover:bg-white/15",
           className
 
         )} >

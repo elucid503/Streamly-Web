@@ -29,7 +29,7 @@ const IOSSteps = () => (
 
     <li className="flex items-start gap-3">
 
-      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-surface-overlay text-xs font-medium text-foreground">
+      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-surface-overlay text-xs font-medium text-foreground">
         1
       </span>
 
@@ -41,7 +41,7 @@ const IOSSteps = () => (
 
     <li className="flex items-start gap-3">
 
-      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-surface-overlay text-xs font-medium text-foreground">
+      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-surface-overlay text-xs font-medium text-foreground">
         2
       </span>
 
@@ -53,7 +53,7 @@ const IOSSteps = () => (
 
     <li className="flex items-start gap-3">
 
-      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-surface-overlay text-xs font-medium text-foreground">
+      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-surface-overlay text-xs font-medium text-foreground">
         3
       </span>
 
@@ -73,7 +73,7 @@ const AndroidSteps = () => (
 
     <li className="flex items-start gap-3">
 
-      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-surface-overlay text-xs font-medium text-foreground">
+      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-surface-overlay text-xs font-medium text-foreground">
         1
       </span>
 
@@ -85,7 +85,7 @@ const AndroidSteps = () => (
 
     <li className="flex items-start gap-3">
 
-      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-surface-overlay text-xs font-medium text-foreground">
+      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-surface-overlay text-xs font-medium text-foreground">
         2
       </span>
 
@@ -97,7 +97,7 @@ const AndroidSteps = () => (
 
     <li className="flex items-start gap-3">
 
-      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-surface-overlay text-xs font-medium text-foreground">
+      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-surface-overlay text-xs font-medium text-foreground">
         3
       </span>
 
@@ -140,11 +140,11 @@ export class PWAInstallGate extends Component<object, State> {
 
       <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-surface/90 backdrop-blur-md px-6">
 
-        <div className="w-full max-w-sm rounded-2xl border border-border-subtle bg-surface p-6">
+        <div className="w-full max-w-sm rounded-xl border border-border-subtle bg-surface-raised p-6 shadow-xl">
 
           <div className="mb-6 flex items-center gap-4">
 
-            <img src="/icon-192.png" alt="Streamly" className="h-14 w-14 rounded-2xl shadow-sm" />
+            <img src="/icon-192.png" alt="Streamly" className="h-14 w-14 rounded-xl border border-border-subtle shadow-sm" />
 
             <div>
 

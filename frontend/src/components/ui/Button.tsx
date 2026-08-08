@@ -4,8 +4,8 @@ import { Component, type ButtonHTMLAttributes, type ReactNode } from "react";
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 
-  variant?: "default" | "ghost" | "outline";
-  size?: "sm" | "md" | "lg";
+  variant?: "default" | "ghost" | "outline" | "secondary";
+  size?: "sm" | "md" | "lg" | "icon" | "icon-sm";
 
   children: ReactNode;
 
@@ -21,15 +21,18 @@ export class Button extends Component<ButtonProps> {
 
       <button className={cn(
 
-          "inline-flex items-center justify-center gap-2 rounded-md font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent disabled:pointer-events-none disabled:opacity-40",
+          "inline-flex shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-md font-medium transition-all focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-accent/40 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0",
 
-          variant === "default" && "bg-foreground text-surface hover:bg-accent",
+          variant === "default" && "bg-foreground text-surface shadow-sm hover:bg-accent",
           variant === "ghost" && "text-foreground-muted hover:bg-surface-overlay hover:text-foreground",
-          variant === "outline" && "border border-border text-foreground hover:bg-surface-overlay",
+          variant === "outline" && "border border-border bg-transparent text-foreground shadow-sm hover:bg-surface-overlay",
+          variant === "secondary" && "bg-surface-overlay text-foreground shadow-sm hover:bg-border",
 
-          size === "sm" && "h-8 px-3 text-xs",
-          size === "md" && "h-9 px-4 text-sm",
-          size === "lg" && "h-11 px-6 text-sm",
+          size === "sm" && "h-8 gap-1.5 px-3 text-xs",
+          size === "md" && "h-9 px-4 text-sm has-[>svg]:px-3",
+          size === "lg" && "h-10 px-6 text-sm has-[>svg]:px-4",
+          size === "icon" && "size-9 p-0",
+          size === "icon-sm" && "size-8 p-0",
 
           className
 

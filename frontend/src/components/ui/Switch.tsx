@@ -59,7 +59,7 @@ export class Switch extends Component<SwitchProps> {
 
             <div className={cn(
 
-                "absolute top-0.5 left-0.5 h-4 w-4 rounded-full bg-surface transition-transform",
+                "absolute top-0.5 left-0.5 size-4 rounded-full bg-surface shadow-sm transition-transform",
                 checked && "translate-x-4"
 
               )}

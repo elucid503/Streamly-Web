@@ -89,7 +89,7 @@ export class PWAInstallDesktop extends Component<object, State> {
 
     return (
 
-      <div className="fixed right-4 bottom-4 z-50 w-64 rounded-xl border border-border-subtle bg-surface-raised p-4 shadow-xl">
+      <div className="fixed right-4 bottom-4 z-50 w-64 rounded-xl border border-border-subtle bg-surface-raised/95 p-4 shadow-xl backdrop-blur-md">
 
         <p className="text-sm font-medium text-foreground">Install Streamly</p>
 
@@ -102,7 +102,7 @@ export class PWAInstallDesktop extends Component<object, State> {
           <button
             type="button"
             onClick={this.handleInstall}
-            className="flex-1 rounded-lg bg-foreground py-1.5 text-xs font-medium text-surface transition-opacity hover:opacity-80"
+            className="flex h-8 flex-1 items-center justify-center rounded-md bg-foreground text-xs font-medium text-surface shadow-sm transition-opacity hover:opacity-80"
           >
             Install
           </button>
@@ -110,7 +110,7 @@ export class PWAInstallDesktop extends Component<object, State> {
           <button
             type="button"
             onClick={this.handleDismiss}
-            className="flex-1 rounded-lg border border-border py-1.5 text-xs font-medium text-foreground-muted transition-colors hover:text-foreground"
+            className="flex h-8 flex-1 items-center justify-center rounded-md border border-border bg-transparent text-xs font-medium text-foreground-muted shadow-sm transition-colors hover:bg-surface-overlay hover:text-foreground"
           >
             Not now
           </button>
