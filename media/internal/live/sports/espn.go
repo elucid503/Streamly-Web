@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"sync"
@@ -185,9 +186,17 @@ func fetchAllLeagues(client *http.Client) ([]Match, error) {
 
 func fetchLeague(client *http.Client, path, category, label string) ([]Match, error) {
 
-	url := espnScoreboardBase + "/" + path + "/scoreboard"
+	now := time.Now().UTC()
+	params := url.Values{
 
-	req, err := http.NewRequest(http.MethodGet, url, nil)
+		"dates": {now.Format("20060102") + "-" + now.Add(7*24*time.Hour).Format("20060102")},
+		"limit": {"1000"},
+
+	}
+
+	scoreboardURL := espnScoreboardBase + "/" + path + "/scoreboard?" + params.Encode()
+
+	req, err := http.NewRequest(http.MethodGet, scoreboardURL, nil)
 
 	if err != nil {
 
@@ -195,7 +204,6 @@ func fetchLeague(client *http.Client, path, category, label string) ([]Match, er
 
 	}
 
-	req.Header.Set("User-Agent", "Mozilla/5.0 (compatible; Streamly/1.0)")
 	req.Header.Set("Accept", "application/json")
 
 	resp, err := client.Do(req)
