@@ -14,14 +14,12 @@ import (
 
 // Episode is a chainable handle for one episode of a TV show.
 type Episode struct {
-
 	show *Show
 
-	season int
+	season  int
 	episode int
 
 	file *febbox.File
-
 }
 
 // SeasonNumber returns the season number.
@@ -161,7 +159,7 @@ func (e *Episode) File() (*MediaFile, error) {
 }
 
 // Qualities lists available download renditions for this episode.
-// Share-key folders are tried first, then Vixsrc (TMDB).
+// Streams are resolved from Febbox share-key folders.
 func (e *Episode) Qualities() ([]quality.Quality, error) {
 
 	details, err := e.show.Details()
@@ -183,18 +181,6 @@ func (e *Episode) Qualities() ([]quality.Quality, error) {
 		streamDebugf("show %d S%02dE%02d share-key path ok count=%d", e.show.id, e.season, e.episode, len(qualities))
 
 		return qualities, nil
-
-	}
-
-	if err == nil && details.TMDBId > 0 {
-
-		if qualities, ok := providerQualities(e.show.deps, details.TMDBId, "tv", e.season, e.episode); ok {
-
-			return qualities, nil
-
-		}
-
-		streamDebugf("show %d S%02dE%02d vixsrc path miss", e.show.id, e.season, e.episode)
 
 	}
 

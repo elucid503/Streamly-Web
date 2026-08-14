@@ -31,45 +31,29 @@ var (
 const proxyTokenCacheMax = 4096
 
 type ProxyEntry struct {
-
-	Token string
-	TargetURL string
-	Referer string
+	Token          string
+	TargetURL      string
+	Referer        string
 	RequestHeaders map[string]string
-	ExpiresAt time.Time
-
+	ExpiresAt      time.Time
 }
 
 type proxyTokenCacheEntry struct {
-
-	token string
+	token     string
 	expiresAt time.Time
-
 }
 
 type ProxyService struct {
-
-	ttl time.Duration
+	ttl    time.Duration
 	client *http.Client
-	proxiedClient *http.Client
-	vixsrcProxy *url.URL
 
-	tokenMu sync.Mutex
-	tokenByKey map[string]proxyTokenCacheEntry
+	tokenMu      sync.Mutex
+	tokenByKey   map[string]proxyTokenCacheEntry
 	entryByToken map[string]ProxyEntry
-	tokenGroup singleflight.Group
-
+	tokenGroup   singleflight.Group
 }
 
 func NewProxyService(cfg *config.Config) *ProxyService {
-
-	var vixsrcProxy *url.URL
-
-	if parsed, err := parseVixsrcProxyURL(cfg.VixsrcProxyURL); err == nil {
-
-		vixsrcProxy = parsed
-
-	}
 
 	checkRedirect := func(req *http.Request, via []*http.Request) error {
 
@@ -87,54 +71,26 @@ func NewProxyService(cfg *config.Config) *ProxyService {
 
 		Proxy: http.ProxyFromEnvironment,
 
-		MaxIdleConns: 64,
+		MaxIdleConns:        64,
 		MaxIdleConnsPerHost: 16,
 
-		IdleConnTimeout: 90 * time.Second,
+		IdleConnTimeout:       90 * time.Second,
 		ResponseHeaderTimeout: 30 * time.Second,
-
 	}
 
 	svc := &ProxyService{
 
 		ttl: cfg.ProxyTokenTTL,
-		vixsrcProxy: vixsrcProxy,
 
-		tokenByKey: make(map[string]proxyTokenCacheEntry),
+		tokenByKey:   make(map[string]proxyTokenCacheEntry),
 		entryByToken: make(map[string]ProxyEntry),
 
 		client: &http.Client{
 
-			Transport: transport,
-			Timeout: 0,
+			Transport:     transport,
+			Timeout:       0,
 			CheckRedirect: checkRedirect,
-
 		},
-
-	}
-
-	if vixsrcProxy != nil {
-
-		proxiedTransport := &http.Transport{
-
-			Proxy: http.ProxyURL(vixsrcProxy),
-
-			MaxIdleConns: 64,
-			MaxIdleConnsPerHost: 16,
-
-			IdleConnTimeout: 90 * time.Second,
-			ResponseHeaderTimeout: 30 * time.Second,
-
-		}
-
-		svc.proxiedClient = &http.Client{
-
-			Transport: proxiedTransport,
-			Timeout: 0,
-			CheckRedirect: checkRedirect,
-
-		}
-
 	}
 
 	return svc
@@ -142,12 +98,10 @@ func NewProxyService(cfg *config.Config) *ProxyService {
 }
 
 type ProxySession struct {
-
-	Token string `json:"token"`
+	Token     string `json:"token"`
 	ProxyPath string `json:"proxyPath"`
 
 	IsHLS bool `json:"isHls"`
-
 }
 
 func (s *ProxyService) CreateSession(ctx context.Context, targetURL, referer string, isHLS bool) (*ProxySession, error) {
@@ -186,10 +140,9 @@ func (s *ProxyService) CreateSessionWithHeaders(ctx context.Context, targetURL s
 
 	return &ProxySession{
 
-		Token: token,
+		Token:     token,
 		ProxyPath: "/api/proxy/" + token,
-		IsHLS: isHLS,
-
+		IsHLS:     isHLS,
 	}, nil
 
 }
@@ -262,74 +215,7 @@ func (s *ProxyService) Fetch(ctx context.Context, entry *ProxyEntry, incoming ht
 
 	}
 
-	return s.clientForTarget(entry.TargetURL).Do(req)
-
-}
-
-func (s *ProxyService) clientForTarget(targetURL string) *http.Client {
-
-	// Only Vixsrc hosts should use VIXSRC_PROXY_URL. Routing live CDNs
-	// (DaddyLive, Pluto, etc.) through that proxy causes widespread 502s.
-	if s.proxiedClient != nil && isVixsrcProxyHost(targetURL) {
-
-		return s.proxiedClient
-
-	}
-
-	return s.client
-
-}
-
-func isVixsrcProxyHost(rawURL string) bool {
-
-	parsed, err := url.Parse(rawURL)
-
-	if err != nil || parsed.Host == "" {
-
-		return false
-
-	}
-
-	host := strings.ToLower(parsed.Hostname())
-
-	return strings.Contains(host, "vixsrc") ||
-		strings.Contains(host, "vix-content") ||
-		strings.HasSuffix(host, "vixsrc.to") ||
-		strings.HasSuffix(host, "vixsrc.me")
-
-}
-
-func parseVixsrcProxyURL(raw string) (*url.URL, error) {
-
-	raw = strings.TrimSpace(raw)
-
-	if raw == "" {
-
-		return nil, nil
-
-	}
-
-	if !strings.Contains(raw, "://") {
-
-		raw = "http://" + raw
-
-	}
-
-	parsed, err := url.Parse(raw)
-
-	if err != nil {
-
-		return nil, err
-
-	}
-
-	if parsed.Scheme == "" {
-
-		parsed.Scheme = "http"
-
-	}
-
-	return parsed, nil
+	return s.client.Do(req)
 
 }
 
@@ -496,12 +382,11 @@ func (s *ProxyService) getOrCreateTokenWithHeaders(targetURL, referer string, he
 
 		entry := ProxyEntry{
 
-			Token: token,
-			TargetURL: targetURL,
-			Referer: referer,
+			Token:          token,
+			TargetURL:      targetURL,
+			Referer:        referer,
 			RequestHeaders: cloneProxyHeaders(headers),
-			ExpiresAt: expiresAt,
-
+			ExpiresAt:      expiresAt,
 		}
 
 		s.tokenMu.Lock()
@@ -510,9 +395,8 @@ func (s *ProxyService) getOrCreateTokenWithHeaders(targetURL, referer string, he
 
 		s.tokenByKey[key] = proxyTokenCacheEntry{
 
-			token: token,
+			token:     token,
 			expiresAt: expiresAt,
-
 		}
 
 		s.entryByToken[token] = entry

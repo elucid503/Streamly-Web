@@ -1,17 +1,13 @@
 package vod
 
 import (
-
 	"mediakit/internal/febbox"
 	"mediakit/internal/introdb"
 	"mediakit/internal/meta"
-	"mediakit/internal/quality"
-
 )
 
 // Deps is the interface that Client provides to Movie, Show, Season, and Episode handles.
 type Deps interface {
-
 	GetMovieDetails(id int) (meta.TitleDetails, error)
 	GetShowDetails(id int) (meta.TitleDetails, error)
 	GetEpisodeMeta(imdbID string, season, episode int) (EpisodeInfo, bool)
@@ -30,7 +26,4 @@ type Deps interface {
 	GetDownloadURL(shareKey string, fid any, cookie string) (string, error)
 
 	GetIntro(query introdb.MediaQuery) (*introdb.MediaRecord, error)
-
-	ResolveProviderStreams(tmdbID int, mediaType string, season, episode int) ([]quality.Quality, error)
-
 }

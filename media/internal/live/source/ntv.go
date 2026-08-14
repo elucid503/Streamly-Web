@@ -16,37 +16,31 @@ import (
 // Catalog is name-matched; streams are extracted from player pages.
 
 type ntvProvider struct {
-
-	client *http.Client
+	client  *http.Client
 	baseURL string
 
-	mu sync.Mutex
-	channels []ntvChannel
+	mu        sync.Mutex
+	channels  []ntvChannel
 	fetchedAt time.Time
-
 }
 
 type ntvChannel struct {
-
-	ID string `json:"channel_id"`
-	Name string `json:"channel_name"`
-	Code string `json:"channel_code"`
+	ID        string `json:"channel_id"`
+	Name      string `json:"channel_name"`
+	Code      string `json:"channel_code"`
 	PlayerURL string `json:"channel_url"`
-	Server string `json:"server"`
-
+	Server    string `json:"server"`
 }
 
 type ntvChannelsResponse struct {
-
-	Success bool `json:"success"`
+	Success  bool         `json:"success"`
 	Channels []ntvChannel `json:"channels"`
-
 }
 
 var (
 	ntvVarDeclRE = regexp.MustCompile(`var\s+(\w+)\s*=\s*'([^']*)';`)
-	ntvChainRE = regexp.MustCompile(`var\s+\w+\s*=\s*((?:\w+\(\w+\)\s*\+\s*)*\w+\(\w+\))\s*;`)
-	ntvCallRE = regexp.MustCompile(`\w+\((\w+)\)`)
+	ntvChainRE   = regexp.MustCompile(`var\s+\w+\s*=\s*((?:\w+\(\w+\)\s*\+\s*)*\w+\(\w+\))\s*;`)
+	ntvCallRE    = regexp.MustCompile(`\w+\((\w+)\)`)
 )
 
 // NewNTV builds the NTV source provider.
@@ -54,9 +48,8 @@ func NewNTV() Provider {
 
 	return &ntvProvider{
 
-		client: newHTTPClient(25 * time.Second),
+		client:  newHTTPClient(25 * time.Second),
 		baseURL: "https://ntv.cx",
-
 	}
 
 }
@@ -95,10 +88,9 @@ func (p *ntvProvider) Resolve(ctx context.Context, req Request) (Stream, error) 
 
 	headers := map[string]string{
 
-		"Referer": "https://cdnlivetv.tv/",
-		"Origin": "https://cdnlivetv.tv",
+		"Referer":    "https://cdnlivetv.tv/",
+		"Origin":     "https://cdnlivetv.tv",
 		"User-Agent": browserUA,
-
 	}
 
 	// Only accept playable playlists — NTV often returns tokenized URLs that 502.
@@ -117,11 +109,10 @@ func (p *ntvProvider) Resolve(ctx context.Context, req Request) (Stream, error) 
 
 	return Stream{
 
-		URL: streamURL,
-		IsHLS: true,
-		Headers: headers,
+		URL:      streamURL,
+		IsHLS:    true,
+		Headers:  headers,
 		Provider: p.Name(),
-
 	}, nil
 
 }
@@ -138,7 +129,7 @@ func (p *ntvProvider) listChannels(ctx context.Context) ([]ntvChannel, error) {
 	}
 
 	body, status, err := getText(ctx, p.client, p.baseURL+"/api/get-channels", map[string]string{
-		"Accept": "application/json",
+		"Accept":          "application/json",
 		"Accept-Language": "en-US,en;q=0.9",
 	})
 
@@ -191,6 +182,19 @@ func (p *ntvProvider) listChannels(ctx context.Context) ([]ntvChannel, error) {
 	p.fetchedAt = time.Now()
 
 	return p.channels, nil
+
+}
+
+// Matches reports whether NTV's cached inventory has a strong name match.
+func (p *ntvProvider) Matches(ctx context.Context, req Request) bool {
+
+	channels, err := p.listChannels(ctx)
+	if err != nil {
+		return false
+	}
+
+	_, ok := p.matchChannel(req, channels)
+	return ok
 
 }
 

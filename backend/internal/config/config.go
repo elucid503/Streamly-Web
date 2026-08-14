@@ -11,16 +11,15 @@ import (
 )
 
 type Config struct {
-
 	Port string
 
-	MongoURI  string
+	MongoURI string
 
 	JWTSecret string
 	JWTExpiry time.Duration
 
-	CookieSecure bool
-	CookieDomain string
+	CookieSecure   bool
+	CookieDomain   string
 	FrontendOrigin string
 
 	FebboxCookie        string
@@ -29,22 +28,19 @@ type Config struct {
 	SubDLAPIKey         string
 	OpenSubtitlesAPIKey string
 
-	VixsrcServerEnabled bool
-	VixsrcProxyURL      string
-	TVBaseURL           string
+	TVBaseURL string
 
 	ChildMode string
 
 	BootstrapCode  string
 	DefaultQuality int
 
-	ProxyTokenTTL time.Duration
-	CatalogCacheTTL time.Duration
+	ProxyTokenTTL    time.Duration
+	CatalogCacheTTL  time.Duration
 	CatalogCacheFile string
 	SubtitleCacheTTL time.Duration
 
 	StaticDir string
-
 }
 
 func Load() (*Config, error) {
@@ -53,13 +49,13 @@ func Load() (*Config, error) {
 
 	cfg := &Config{
 
-		Port: envOr("PORT", "8080"),
-		MongoURI: os.Getenv("MONGO_URI"),
+		Port:      envOr("PORT", "8080"),
+		MongoURI:  os.Getenv("MONGO_URI"),
 		JWTSecret: envOr("JWT_SECRET", "change-me-in-production"),
 		JWTExpiry: durationOr("JWT_EXPIRY", 7*24*time.Hour),
 
-		CookieSecure: boolOr("COOKIE_SECURE", false),
-		CookieDomain: os.Getenv("COOKIE_DOMAIN"),
+		CookieSecure:   boolOr("COOKIE_SECURE", false),
+		CookieDomain:   os.Getenv("COOKIE_DOMAIN"),
 		FrontendOrigin: envOr("FRONTEND_ORIGIN", "http://localhost:5173"),
 
 		FebboxCookie:        os.Getenv("FEBBOX_UI_COOKIE"),
@@ -68,23 +64,19 @@ func Load() (*Config, error) {
 		SubDLAPIKey:         os.Getenv("SUBDL_API_KEY"),
 		OpenSubtitlesAPIKey: os.Getenv("OPENSUBTITLES_API_KEY"),
 
-		VixsrcServerEnabled: !boolFalse("VIXSRC_SERVER"),
-		VixsrcProxyURL:      strings.TrimSpace(os.Getenv("VIXSRC_PROXY_URL")),
-
 		TVBaseURL: os.Getenv("TV_BASE_URL"),
 
 		ChildMode: envOr("CHILD_MODE", "0"),
 
-		BootstrapCode: os.Getenv("BOOTSTRAP_ACCESS_CODE"),
+		BootstrapCode:  os.Getenv("BOOTSTRAP_ACCESS_CODE"),
 		DefaultQuality: intOr("DEFAULT_QUALITY", 1080),
 
-		ProxyTokenTTL: durationOr("PROXY_TOKEN_TTL", 4*time.Hour),
-		CatalogCacheTTL: durationOr("CATALOG_CACHE_TTL", time.Hour),
+		ProxyTokenTTL:    durationOr("PROXY_TOKEN_TTL", 4*time.Hour),
+		CatalogCacheTTL:  durationOr("CATALOG_CACHE_TTL", time.Hour),
 		CatalogCacheFile: envOr("CATALOG_CACHE_FILE", "data/catalog.cache.json"),
 		SubtitleCacheTTL: durationOr("SUBTITLE_CACHE_TTL", 15*time.Minute),
 
 		StaticDir: envOr("STATIC_DIR", "../frontend/dist"),
-
 	}
 
 	return cfg, nil

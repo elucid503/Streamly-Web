@@ -15,11 +15,10 @@ import (
 
 // Movie is a chainable handle for a film.
 type Movie struct {
-
 	deps Deps
-	id int
+	id   int
 
-	mu sync.Mutex
+	mu      sync.Mutex
 	details *meta.TitleDetails
 
 	shareKey string
@@ -27,7 +26,6 @@ type Movie struct {
 	shareSet bool
 
 	file *febbox.File
-
 }
 
 // NewMovie creates a Movie handle for the given Showbox id.
@@ -116,17 +114,16 @@ func (m *Movie) File() (*MediaFile, error) {
 
 	return &MediaFile{
 
-		ID: file.FID,
+		ID:   file.FID,
 		Name: file.FileName,
 
 		shareKey: shareKey,
-
 	}, nil
 
 }
 
 // Qualities lists available download renditions for this movie.
-// Share-key folders are tried first, then console IMDb bindings, then Vixsrc (TMDB).
+// Share-key folders are tried first, then console IMDb bindings.
 func (m *Movie) Qualities() ([]quality.Quality, error) {
 
 	details, err := m.Details()
@@ -162,16 +159,6 @@ func (m *Movie) Qualities() ([]quality.Quality, error) {
 		}
 
 		streamDebugf("movie %d console path miss imdb=%q", m.id, details.IMDBId)
-
-	}
-
-	if err == nil && details.TMDBId > 0 {
-
-		if qualities, ok := providerQualities(m.deps, details.TMDBId, "movie", 0, 0); ok {
-
-			return qualities, nil
-
-		}
 
 	}
 

@@ -14,14 +14,14 @@ import (
 
 const (
 	espnScoreboardBase = "https://site.api.espn.com/apis/site/v2/sports"
-	espnFetchTimeout = 12 * time.Second
+	espnFetchTimeout   = 12 * time.Second
 )
 
 // leagues is the set of ESPN sport/league paths used for the sports feed.
 var leagues = []struct {
-	Path string
+	Path     string
 	Category string
-	Label string
+	Label    string
 }{
 
 	{"baseball/mlb", "baseball", "MLB"},
@@ -38,111 +38,86 @@ var leagues = []struct {
 	{"racing/f1", "motor-sports", "Formula 1"},
 	{"golf/pga", "golf", "PGA"},
 	{"mma/ufc", "mma", "UFC"},
-
 }
 
 type espnScoreboard struct {
-
 	Events []espnEvent `json:"events"`
-
 }
 
 type espnEvent struct {
-
-	ID string `json:"id"`
-	Name string `json:"name"`
-	ShortName string `json:"shortName"`
-	Date string `json:"date"`
+	ID           string            `json:"id"`
+	Name         string            `json:"name"`
+	ShortName    string            `json:"shortName"`
+	Date         string            `json:"date"`
 	Competitions []espnCompetition `json:"competitions"`
-	Status espnStatus `json:"status"`
-
+	Status       espnStatus        `json:"status"`
 }
 
 type espnCompetition struct {
-
 	Competitors []espnCompetitor `json:"competitors"`
-	Status espnStatus `json:"status"`
-	StartDate string `json:"startDate"`
+	Status      espnStatus       `json:"status"`
+	StartDate   string           `json:"startDate"`
 
 	// Live TV / stream outlets for this game.
-	Broadcast string `json:"broadcast"`
-	Broadcasts []espnBroadcast `json:"broadcasts"`
+	Broadcast     string             `json:"broadcast"`
+	Broadcasts    []espnBroadcast    `json:"broadcasts"`
 	GeoBroadcasts []espnGeoBroadcast `json:"geoBroadcasts"`
-
 }
 
 type espnBroadcast struct {
-
-	Market string `json:"market"`
-	Names []string `json:"names"`
-
+	Market string   `json:"market"`
+	Names  []string `json:"names"`
 }
 
 type espnGeoBroadcast struct {
-
 	Type struct {
-
 		ShortName string `json:"shortName"`
-
 	} `json:"type"`
 
 	Market struct {
-
 		Type string `json:"type"`
-
 	} `json:"market"`
 
 	Media struct {
-
 		ShortName string `json:"shortName"`
-
 	} `json:"media"`
 
-	Lang string `json:"lang"`
+	Lang   string `json:"lang"`
 	Region string `json:"region"`
-
 }
 
 type espnCompetitor struct {
-
-	HomeAway string `json:"homeAway"`
-	Score string `json:"score"`
-	Team espnTeam `json:"team"`
-
+	HomeAway string   `json:"homeAway"`
+	Score    string   `json:"score"`
+	Team     espnTeam `json:"team"`
 }
 
 type espnTeam struct {
-
-	DisplayName string `json:"displayName"`
+	DisplayName      string `json:"displayName"`
 	ShortDisplayName string `json:"shortDisplayName"`
-	Name string `json:"name"`
-	Abbreviation string `json:"abbreviation"`
-	Logo string `json:"logo"`
-
+	Name             string `json:"name"`
+	Abbreviation     string `json:"abbreviation"`
+	Logo             string `json:"logo"`
 }
 
 type espnStatus struct {
-
 	Type espnStatusType `json:"type"`
-
 }
 
 type espnStatusType struct {
-
-	State string `json:"state"`
-	Completed bool `json:"completed"`
-	Detail string `json:"detail"`
+	State       string `json:"state"`
+	Completed   bool   `json:"completed"`
+	Detail      string `json:"detail"`
 	ShortDetail string `json:"shortDetail"`
 	Description string `json:"description"`
-
 }
 
 func fetchAllLeagues(client *http.Client) ([]Match, error) {
 
 	var (
-		mu sync.Mutex
-		wg sync.WaitGroup
-		out []Match
+		mu   sync.Mutex
+		wg   sync.WaitGroup
+		out  []Match
 		errs []error
 	)
 
@@ -186,61 +161,52 @@ func fetchAllLeagues(client *http.Client) ([]Match, error) {
 
 func fetchLeague(client *http.Client, path, category, label string) ([]Match, error) {
 
+	baseURL := espnScoreboardBase + "/" + path + "/scoreboard"
 	now := time.Now().UTC()
 	params := url.Values{
 
 		"dates": {now.Format("20060102") + "-" + now.Add(7*24*time.Hour).Format("20060102")},
 		"limit": {"1000"},
+	}
+
+	// ESPN's undated scoreboard is the authoritative current slate (including
+	// live scores), while a dated request supplies the future schedule. Fetch
+	// both because the dated response can omit games already in progress.
+	urls := []string{baseURL, baseURL + "?" + params.Encode()}
+	events := make(map[string]espnEvent)
+	var errs []error
+
+	for _, scoreboardURL := range urls {
+
+		board, err := fetchScoreboard(client, scoreboardURL, path)
+		if err != nil {
+
+			errs = append(errs, err)
+			continue
+
+		}
+
+		for _, event := range board.Events {
+
+			key := event.ID
+			if key == "" {
+				key = event.Date + "\x00" + event.Name
+			}
+			events[key] = event
+
+		}
 
 	}
 
-	scoreboardURL := espnScoreboardBase + "/" + path + "/scoreboard?" + params.Encode()
+	if len(events) == 0 && len(errs) > 0 {
 
-	req, err := http.NewRequest(http.MethodGet, scoreboardURL, nil)
-
-	if err != nil {
-
-		return nil, err
+		return nil, errs[0]
 
 	}
 
-	req.Header.Set("Accept", "application/json")
+	matches := make([]Match, 0, len(events))
 
-	resp, err := client.Do(req)
-
-	if err != nil {
-
-		return nil, err
-
-	}
-
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-
-		return nil, fmt.Errorf("%s: status %d", path, resp.StatusCode)
-
-	}
-
-	body, err := io.ReadAll(io.LimitReader(resp.Body, 4<<20))
-
-	if err != nil {
-
-		return nil, err
-
-	}
-
-	var board espnScoreboard
-
-	if err := json.Unmarshal(body, &board); err != nil {
-
-		return nil, err
-
-	}
-
-	matches := make([]Match, 0, len(board.Events))
-
-	for _, event := range board.Events {
+	for _, event := range events {
 
 		if m, ok := matchFromEvent(event, category, label); ok {
 
@@ -251,6 +217,49 @@ func fetchLeague(client *http.Client, path, category, label string) ([]Match, er
 	}
 
 	return matches, nil
+
+}
+
+func fetchScoreboard(client *http.Client, scoreboardURL, path string) (espnScoreboard, error) {
+
+	req, err := http.NewRequest(http.MethodGet, scoreboardURL, nil)
+	if err != nil {
+
+		return espnScoreboard{}, err
+
+	}
+
+	req.Header.Set("Accept", "application/json")
+
+	resp, err := client.Do(req)
+	if err != nil {
+
+		return espnScoreboard{}, err
+
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+
+		return espnScoreboard{}, fmt.Errorf("%s: status %d", path, resp.StatusCode)
+
+	}
+
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 4<<20))
+	if err != nil {
+
+		return espnScoreboard{}, err
+
+	}
+
+	var board espnScoreboard
+	if err := json.Unmarshal(body, &board); err != nil {
+
+		return espnScoreboard{}, err
+
+	}
+
+	return board, nil
 
 }
 
@@ -287,10 +296,9 @@ func matchFromEvent(event espnEvent, category, label string) (Match, bool) {
 
 			team := &Team{
 
-				Name: firstNonEmpty(c.Team.DisplayName, c.Team.ShortDisplayName, c.Team.Name),
-				Logo: c.Team.Logo,
+				Name:         firstNonEmpty(c.Team.DisplayName, c.Team.ShortDisplayName, c.Team.Name),
+				Logo:         c.Team.Logo,
 				Abbreviation: c.Team.Abbreviation,
-
 			}
 
 			var score *int
@@ -385,24 +393,23 @@ func matchFromEvent(event espnEvent, category, label string) (Match, bool) {
 
 	return Match{
 
-		ID: "espn-" + id,
-		Title: title,
+		ID:       "espn-" + id,
+		Title:    title,
 		Category: category,
-		League: label,
+		League:   label,
 
 		StartTime: start,
-		Live: live,
+		Live:      live,
 
 		HomeTeam: home,
 		AwayTeam: away,
 
-		HomeScore: homeScore,
-		AwayScore: awayScore,
-		Broadcasts: broadcastLabels,
-		Broadcast: primaryBroadcastLabel(broadcasts),
+		HomeScore:    homeScore,
+		AwayScore:    awayScore,
+		Broadcasts:   broadcastLabels,
+		Broadcast:    primaryBroadcastLabel(broadcasts),
 		StatusDetail: statusDetail,
-		Status: normalizeStatus(state, live),
-
+		Status:       normalizeStatus(state, live),
 	}, true
 
 }
@@ -435,11 +442,10 @@ func parseESPNBroadcasts(comp espnCompetition) []broadcastCandidate {
 		seen[key] = true
 		out = append(out, broadcastCandidate{
 
-			Name: name,
-			Kind: strings.ToLower(strings.TrimSpace(kind)),
+			Name:   name,
+			Kind:   strings.ToLower(strings.TrimSpace(kind)),
 			Market: strings.ToLower(strings.TrimSpace(market)),
 			Prefer: prefer,
-
 		})
 
 	}
@@ -624,4 +630,3 @@ func firstNonEmpty(values ...string) string {
 	return ""
 
 }
-

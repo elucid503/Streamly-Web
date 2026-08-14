@@ -13,11 +13,10 @@ import (
 	"mediakit/internal/introdb"
 	"mediakit/internal/live/catalog"
 	"mediakit/internal/live/guide"
-	livesports "mediakit/internal/live/sports"
 	"mediakit/internal/live/source"
+	livesports "mediakit/internal/live/sports"
 	"mediakit/internal/meta"
-	"mediakit/internal/providers"
-	"mediakit/internal/quality"
+
 	"mediakit/internal/showbox"
 	"mediakit/internal/tmdb"
 	"mediakit/internal/vod"
@@ -147,26 +146,25 @@ type shareKeyCacheEntry struct {
 // Client is the entry point for catalogue search, VOD browsing, and live TV.
 type Client struct {
 	showbox *showbox.Client
-	febbox febboxBrowser
+	febbox  febboxBrowser
 
 	liveCatalog *catalog.Client
-	liveGuide *guide.Client
-	liveSports *livesports.Client
-	liveSource *source.Resolver
+	liveGuide   *guide.Client
+	liveSports  *livesports.Client
+	liveSource  *source.Resolver
 
-	imdb *imdb.Client
-	tmdb *tmdb.Client
+	imdb  *imdb.Client
+	tmdb  *tmdb.Client
 	intro introFetcher
-	resolver *providers.Resolver
 
-	titleMu sync.Mutex
-	titleGroup singleflight.Group
-	showTitles map[int]titleCacheEntry
+	titleMu     sync.Mutex
+	titleGroup  singleflight.Group
+	showTitles  map[int]titleCacheEntry
 	movieTitles map[int]titleCacheEntry
 
-	shareKeyMu sync.Mutex
+	shareKeyMu    sync.Mutex
 	shareKeyGroup singleflight.Group
-	shareKeys map[string]shareKeyCacheEntry
+	shareKeys     map[string]shareKeyCacheEntry
 }
 
 // New builds a Client with optional configuration.
@@ -196,29 +194,28 @@ func New(opts ...Option) *Client {
 
 	liveCatalog := catalog.New()
 	liveGuide := guide.New(liveCatalog)
-	liveSports := livesports.New(liveCatalog)
 
 	// FMHY-evaluated live TV sources: DaddyLive, NTV, Pluto, Vavoo.
 	liveSource := source.Default()
+	liveSports := livesports.New(liveCatalog, liveSource)
 
 	return &Client{
 
 		showbox: showbox.New(showbox.Options{ChildMode: cfg.childMode}),
-		febbox: febbox.NewCached(febboxClient),
+		febbox:  febbox.NewCached(febboxClient),
 
 		liveCatalog: liveCatalog,
-		liveGuide: liveGuide,
-		liveSports: liveSports,
-		liveSource: liveSource,
+		liveGuide:   liveGuide,
+		liveSports:  liveSports,
+		liveSource:  liveSource,
 
-		imdb: imdb.New(cfg.tmdbAPIKey),
-		tmdb: tmdb.New(cfg.tmdbAPIKey),
+		imdb:  imdb.New(cfg.tmdbAPIKey),
+		tmdb:  tmdb.New(cfg.tmdbAPIKey),
 		intro: intro,
-		resolver: providers.New(cfg.tmdbAPIKey),
 
-		showTitles: make(map[int]titleCacheEntry),
+		showTitles:  make(map[int]titleCacheEntry),
 		movieTitles: make(map[int]titleCacheEntry),
-		shareKeys: make(map[string]shareKeyCacheEntry),
+		shareKeys:   make(map[string]shareKeyCacheEntry),
 	}
 
 }
@@ -428,6 +425,16 @@ func (c *Client) ResolveChannel(channelID string) (string, error) {
 // providerKey is an optional public anonymized key ("auto", "s1", …); empty means auto.
 func (c *Client) ResolveChannelStream(channelID string, providerKey ...string) (source.Stream, error) {
 
+	if name, ok := livesports.DecodeChannelID(channelID); ok {
+		// Synthetic sports identities are created only after confirming an NTV
+		// inventory match. Keep them pinned to that provider so another fuzzy
+		// provider cannot resolve the team name to an unrelated channel.
+		return c.liveSource.ResolveWith(context.Background(), source.Request{
+			ChannelID: channelID,
+			Name:      name,
+		}, "s2")
+	}
+
 	cat, err := c.liveCatalog.List()
 
 	if err != nil {
@@ -455,11 +462,10 @@ func (c *Client) ResolveChannelStream(channelID string, providerKey ...string) (
 	return c.liveSource.ResolveWith(context.Background(), source.Request{
 
 		ChannelID: ch.ID,
-		Name: ch.Name,
-		AltNames: append([]string(nil), ch.AltNames...),
-		Network: ch.Network,
-		Country: ch.Country.Code,
-
+		Name:      ch.Name,
+		AltNames:  append([]string(nil), ch.AltNames...),
+		Network:   ch.Network,
+		Country:   ch.Country.Code,
 	}, key)
 
 }
@@ -757,12 +763,6 @@ func (c *Client) GetConsoleLinks(fid int) ([]febbox.Quality, error) {
 
 }
 
-func (c *Client) ResolveProviderStreams(tmdbID int, mediaType string, season, episode int) ([]quality.Quality, error) {
-
-	return c.resolver.Resolve(tmdbID, mediaType, season, episode)
-
-}
-
 func (c *Client) ListFiles(shareKey string, parentID any, cookie string) ([]febbox.File, error) {
 
 	return c.febbox.ListFiles(shareKey, parentID, cookie)
@@ -806,7 +806,6 @@ func (c *Client) GetShowSeasonsByTMDB(tmdbID int) ([]vod.ShowSeasonInfo, error) 
 			Number:       s.Number,
 			EpisodeCount: s.EpisodeCount,
 			Name:         s.Name,
-
 		}
 
 	}

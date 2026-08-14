@@ -18,10 +18,8 @@ import (
 )
 
 const (
-
-	titleDetailsTTL = 6 * time.Hour
+	titleDetailsTTL        = 6 * time.Hour
 	titleDetailsMaxEntries = 1024
-
 )
 
 // Type aliases so callers (handlers, subtitles, proxy) need not import sub-packages.
@@ -36,103 +34,87 @@ type EpisodeDTO = vod.EpisodeDTO
 
 // MediaService is the central media orchestrator.
 type MediaService struct {
-
 	client *mediakit.Client
-	cfg *config.Config
+	cfg    *config.Config
 
-	catalog  *catalog.Cache
+	catalog *catalog.Cache
 
 	search *search.Cache
 	stream *stream.Cache
 
 	vod *vod.Cache
 
-	detailsMu sync.RWMutex
+	detailsMu    sync.RWMutex
 	detailsGroup singleflight.Group
 
 	movieDetails map[int]titleDetailsCacheEntry
-	showDetails map[int]titleDetailsCacheEntry
-
+	showDetails  map[int]titleDetailsCacheEntry
 }
 
 // TitleDetailsDTO is user-facing metadata for a movie or show.
 type TitleDetailsDTO struct {
-
-	ID int `json:"id"`
+	ID   int    `json:"id"`
 	Kind string `json:"kind"`
 
 	Title string `json:"title"`
-	Year string `json:"year"`
+	Year  string `json:"year"`
 
 	Poster string `json:"poster"`
 	Banner string `json:"banner,omitempty"`
 
 	Description string `json:"description"`
-	Rating string `json:"rating"`
-
+	Rating      string `json:"rating"`
 }
 
 type titleDetailsCacheEntry struct {
-
-	details *TitleDetailsDTO
+	details   *TitleDetailsDTO
 	fetchedAt time.Time
-
 }
 
 // QualityDTO is one downloadable rendition of a video file.
 type QualityDTO struct {
-
-	Label string `json:"label"`
-	Height int `json:"height"`
+	Label  string `json:"label"`
+	Height int    `json:"height"`
 
 	IsHLS bool `json:"isHls"`
 
-	URL string `json:"url"`
+	URL      string `json:"url"`
 	ProxyURL string `json:"proxyUrl,omitempty"`
 
 	Headers map[string]string `json:"headers,omitempty"`
-
 }
 
 // StreamDTO is the resolved streaming payload returned to clients.
 type StreamDTO struct {
-
 	Qualities []QualityDTO `json:"qualities"`
-
 }
 
 // SubtitleDTO describes an external subtitle track.
 type SubtitleDTO struct {
-
-	ID string `json:"id"`
+	ID    string `json:"id"`
 	Label string `json:"label"`
 
 	Language string `json:"language"`
-	Format string `json:"format"`
+	Format   string `json:"format"`
 
 	ProxyURL string `json:"proxyUrl"`
-	Source string `json:"source,omitempty"`
-
+	Source   string `json:"source,omitempty"`
 }
 
 // IntroDTO carries skip-intro timing offsets.
 type IntroDTO struct {
-
 	IntroStartMs *int64 `json:"introStartMs,omitempty"`
-	IntroEndMs *int64 `json:"introEndMs,omitempty"`
+	IntroEndMs   *int64 `json:"introEndMs,omitempty"`
 
 	CreditsStartMs *int64 `json:"creditsStartMs,omitempty"`
-
 }
 
 // NextEpisodeDTO identifies the episode after the current one.
 type NextEpisodeDTO struct {
-
 	Season  int `json:"season"`
 	Episode int `json:"episode"`
 
 	Title string `json:"title"`
-
 }
 
 func NewMediaService(cfg *config.Config) *MediaService {
@@ -154,7 +136,7 @@ func NewMediaService(cfg *config.Config) *MediaService {
 	return &MediaService{
 
 		client: client,
-		cfg: cfg,
+		cfg:    cfg,
 
 		catalog: cat,
 
@@ -164,8 +146,7 @@ func NewMediaService(cfg *config.Config) *MediaService {
 		vod: vod.New(client),
 
 		movieDetails: make(map[int]titleDetailsCacheEntry),
-		showDetails: make(map[int]titleDetailsCacheEntry),
-
+		showDetails:  make(map[int]titleDetailsCacheEntry),
 	}
 
 }
@@ -497,7 +478,6 @@ func (s *MediaService) NextEpisode(showID, season, episode int) (*NextEpisodeDTO
 		Season:  nextSzn,
 		Episode: nextEp,
 		Title:   title,
-
 	}, nil
 
 }
@@ -522,7 +502,21 @@ func (s *MediaService) LiveSearch(query string, limit int) ([]LiveChannelDTO, er
 
 func (s *MediaService) LiveChannel(id string) (LiveChannelDTO, bool) {
 
-	return s.catalog.LiveChannel(id)
+	if channel, ok := s.catalog.LiveChannel(id); ok {
+		return channel, true
+	}
+
+	if name, ok := mediakit.DecodeSportsChannelID(id); ok {
+		return LiveChannelDTO{
+			ID:         id,
+			Name:       name,
+			Category:   "Sports",
+			Categories: []string{"Sports"},
+			Enriched:   true,
+		}, true
+	}
+
+	return LiveChannelDTO{}, false
 
 }
 
@@ -537,22 +531,18 @@ func (s *MediaService) LiveSports() ([]SportsMatchDTO, error) {
 
 // LiveStreamRef is a resolved live TV stream (URL + optional playback headers).
 type LiveStreamRef struct {
-
-	URL string
-	IsHLS bool
+	URL     string
+	IsHLS   bool
 	Headers map[string]string
 	// Provider is an anonymized public key (auto/s1/s2/…), never an upstream brand.
 	Provider string
-
 }
 
 // LiveSourceOption is an anonymized provider choice for the player UI.
 type LiveSourceOption struct {
-
-	Key string `json:"key"`
-	Label string `json:"label"`
+	Key         string `json:"key"`
+	Label       string `json:"label"`
 	Description string `json:"description,omitempty"`
-
 }
 
 // LiveSourceProviders returns anonymized live source options.
@@ -565,10 +555,9 @@ func (s *MediaService) LiveSourceProviders() []LiveSourceOption {
 
 		out = append(out, LiveSourceOption{
 
-			Key: p.Key,
-			Label: p.Label,
+			Key:         p.Key,
+			Label:       p.Label,
 			Description: p.Description,
-
 		})
 
 	}
@@ -591,11 +580,10 @@ func (s *MediaService) ResolveLiveStream(id string, providerKey string) (LiveStr
 
 	return LiveStreamRef{
 
-		URL: stream.URL,
-		IsHLS: stream.IsHLS || mediakit.IsHLSURL(stream.URL),
-		Headers: stream.Headers,
+		URL:      stream.URL,
+		IsHLS:    stream.IsHLS || mediakit.IsHLSURL(stream.URL),
+		Headers:  stream.Headers,
 		Provider: stream.Provider,
-
 	}, nil
 
 }
@@ -620,7 +608,6 @@ func QualitiesToDTO(items []mediakit.Quality) []QualityDTO {
 			IsHLS:   q.IsHLS,
 			URL:     q.URL,
 			Headers: cloneQualityHeaders(q.Headers),
-
 		}
 
 		out = append(out, dto)

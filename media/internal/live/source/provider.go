@@ -15,23 +15,19 @@ var ErrNoProviders = errors.New("live/source: no providers configured")
 // Request carries catalog channel identity for source resolution.
 // Providers match by ID, name, alt names, or network — never by stored stream URLs.
 type Request struct {
-
 	ChannelID string
-	Name string
-	AltNames []string
-	Network string
-	Country string
-
+	Name      string
+	AltNames  []string
+	Network   string
+	Country   string
 }
 
 // Stream is a playable media reference returned by a source provider.
 type Stream struct {
-
-	URL string
-	IsHLS bool
-	Headers map[string]string
+	URL      string
+	IsHLS    bool
+	Headers  map[string]string
 	Provider string
-
 }
 
 // Provider resolves catalog channel identity into playable streams.
@@ -42,14 +38,17 @@ type Provider interface {
 
 	// Resolve returns a stream for the given catalog channel request.
 	Resolve(ctx context.Context, req Request) (Stream, error)
+}
 
+// Matcher is optionally implemented by providers that can cheaply confirm
+// whether their current inventory contains a request without resolving a stream.
+type Matcher interface {
+	Matches(ctx context.Context, req Request) bool
 }
 
 // Resolver queries registered providers in order until one succeeds.
 type Resolver struct {
-
 	providers []Provider
-
 }
 
 // NewResolver builds a multi-provider resolver.
@@ -177,6 +176,33 @@ func (r *Resolver) ResolveWith(ctx context.Context, req Request, publicKey strin
 	}
 
 	return Stream{}, ErrUnavailable
+
+}
+
+// Matches reports whether a selected provider currently has an inventory match.
+// It does not resolve or probe the stream.
+func (r *Resolver) Matches(ctx context.Context, req Request, publicKey string) bool {
+
+	if r == nil {
+		return false
+	}
+
+	internal := InternalName(publicKey)
+	if internal == "" {
+		return false
+	}
+
+	p := r.providerByName(internal)
+	matcher, ok := p.(Matcher)
+	if !ok {
+		return false
+	}
+
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
+	return matcher.Matches(ctx, req)
 
 }
 

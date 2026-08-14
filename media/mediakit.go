@@ -9,8 +9,8 @@ import (
 	"mediakit/internal/intro"
 	"mediakit/internal/live/catalog"
 	"mediakit/internal/live/guide"
-	livesports "mediakit/internal/live/sports"
 	"mediakit/internal/live/source"
+	livesports "mediakit/internal/live/sports"
 	"mediakit/internal/meta"
 	"mediakit/internal/quality"
 	"mediakit/internal/tmdb"
@@ -88,6 +88,14 @@ type Program = guide.Program
 // Match is a single sports fixture.
 type Match = livesports.Match
 
+// DecodeSportsChannelID validates and decodes an opaque synthetic sports
+// channel identity.
+func DecodeSportsChannelID(id string) (string, bool) {
+
+	return livesports.DecodeChannelID(id)
+
+}
+
 // MatchTeam is one side of a sports match.
 type MatchTeam = livesports.Team
 
@@ -122,10 +130,8 @@ type TMDBItem = tmdb.Item
 type TMDBKind = tmdb.MediaKind
 
 const (
-
 	TMDBMovie = tmdb.KindMovie
-	TMDBTV = tmdb.KindTV
-
+	TMDBTV    = tmdb.KindTV
 )
 
 // TMDBGenreName returns a display name for a TMDB genre id.
