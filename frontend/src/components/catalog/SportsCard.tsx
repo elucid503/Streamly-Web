@@ -128,7 +128,8 @@ function Scoreline({ match, className }: { match: SportsMatch; className?: strin
 export function SportsRow({ match, onSelect }: SportsRowProps) {
 
   const channel = match.channel ? matchedChannelToLiveChannel(match.channel, match.category) : null;
-  const { day, time } = splitStart(match.startsAt);
+
+  const { day } = splitStart(match.startsAt);
   const scored = hasScore(match);
 
   return (

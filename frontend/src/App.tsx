@@ -6,7 +6,6 @@ import { store } from "@/lib/store";
 import { isMobile, shouldReduceMotion } from "@/lib/platform";
 
 import { PWAInstallDesktop } from "@/components/layout/PWAInstallDesktop";
-import { PWAInstallGate } from "@/components/layout/PWAInstallGate";
 import { Button } from "@/components/ui/Button";
 
 import { Component, createRef, lazy, Suspense, type ReactNode } from "react";
