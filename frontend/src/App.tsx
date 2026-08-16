@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/Button";
 import { Component, createRef, lazy, Suspense, type ReactNode } from "react";
 import { motion, MotionConfig, type PanInfo } from "framer-motion";
 import type { Location } from "history";
+import { PWAInstallGate } from "./components/layout/PWAInstallGate";
 
 // Lazy loads pages for better performance.
 
@@ -361,7 +362,7 @@ export class App extends Component<object, AppState> {
         {this.renderPage()}
         {this.renderPlayer()}
 
-        {/*<PWAInstallGate />*/}
+        <PWAInstallGate />
 
         <PWAInstallDesktop />
 
