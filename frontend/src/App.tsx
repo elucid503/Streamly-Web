@@ -3,7 +3,7 @@ import { api } from "@/api/client";
 import { consumeReturnPath, currentPath, history, navigate, parseRoute, saveReturnPath, } from "@/lib/navigation";
 
 import { store } from "@/lib/store";
-import { isIOS } from "@/lib/platform";
+import { isMobile, shouldReduceMotion } from "@/lib/platform";
 
 import { PWAInstallDesktop } from "@/components/layout/PWAInstallDesktop";
 import { PWAInstallGate } from "@/components/layout/PWAInstallGate";
@@ -30,6 +30,16 @@ interface AppState {
 
 }
 
+function persistMiniPlayer(): boolean {
+
+  if (typeof window === "undefined") return true;
+
+  if (isMobile()) return false;
+
+  return window.matchMedia("(min-width: 768px) and (pointer: fine)").matches;
+
+}
+
 export class App extends Component<object, AppState> {
 
   private unlisten = () => {};
@@ -49,6 +59,11 @@ export class App extends Component<object, AppState> {
 
   async componentDidMount() {
 
+    this.syncPlayerViewport();
+
+    window.visualViewport?.addEventListener("resize", this.syncPlayerViewport);
+    window.addEventListener("resize", this.syncPlayerViewport);
+
     this.unlisten = history.listen(({ location }) => {
 
       const route = parseRoute(location);
@@ -56,8 +71,12 @@ export class App extends Component<object, AppState> {
       this.setState((previous) => ({
 
         location,
-        activeWatchPath: route.name === "watch" ? route.watchPath ?? null : previous.activeWatchPath,
-        playerReady: route.name === "watch" && route.watchPath !== previous.activeWatchPath ? false : previous.playerReady,
+        activeWatchPath: route.name === "watch"
+          ? route.watchPath ?? null
+          : persistMiniPlayer() ? previous.activeWatchPath : null,
+        playerReady: route.name === "watch" && route.watchPath !== previous.activeWatchPath
+          ? false
+          : persistMiniPlayer() || route.name === "watch" ? previous.playerReady : false,
 
       }));
 
@@ -71,7 +90,22 @@ export class App extends Component<object, AppState> {
 
     this.unlisten();
 
+    window.visualViewport?.removeEventListener("resize", this.syncPlayerViewport);
+    window.removeEventListener("resize", this.syncPlayerViewport);
+
   }
+
+  syncPlayerViewport = () => {
+
+    const height = Math.max(
+      window.innerHeight,
+      window.visualViewport?.height ?? 0,
+      document.documentElement.clientHeight,
+    );
+
+    document.documentElement.style.setProperty("--player-vvh", `${Math.round(height)}px`);
+
+  };
 
   bootstrap = async () => {
 
@@ -223,6 +257,8 @@ export class App extends Component<object, AppState> {
 
     const route = parseRoute(location);
     const minimized = route.name !== "watch";
+
+    if (minimized && !persistMiniPlayer()) return null;
     const verticalCorner = miniPlayerCorner.startsWith("top")
       ? "top-0"
       : "bottom-[calc(env(safe-area-inset-bottom,0px)+4.5rem)] sm:bottom-0";
@@ -249,10 +285,10 @@ export class App extends Component<object, AppState> {
 
     return (
 
-      <div ref={this.miniPlayerBounds} className={minimized ? "pointer-events-none fixed inset-3 z-[80] sm:inset-5" : "fixed inset-0 z-[80]"}>
+      <div ref={this.miniPlayerBounds} className={minimized ? "pointer-events-none fixed inset-3 z-[80] sm:inset-5" : "player-screen z-[80]"}>
 
         <motion.div
-          layout
+          layout={minimized}
           drag={minimized ? true : false}
           dragConstraints={this.miniPlayerBounds}
           dragElastic={0.05}
@@ -260,11 +296,11 @@ export class App extends Component<object, AppState> {
           dragSnapToOrigin
           onDragStart={() => { this.suppressMiniPlayerReturnUntil = Number.POSITIVE_INFINITY; }}
           onDragEnd={snapToCorner}
-          animate={{ x: 0, y: 0 }}
+          animate={minimized ? { x: 0, y: 0 } : undefined}
           transition={{ type: "spring", stiffness: 360, damping: 34 }}
           className={minimized
             ? `${playerReady ? "pointer-events-auto visible" : "pointer-events-none invisible"} absolute ${verticalCorner} ${horizontalCorner} aspect-video w-[min(22rem,calc(100vw-1.5rem))] overflow-hidden rounded-xl border border-border-subtle bg-surface shadow-2xl`
-            : "absolute inset-0 bg-surface"}
+            : "absolute inset-0 h-full min-h-full w-full bg-black"}
         >
 
           {this.renderShell(
@@ -273,7 +309,17 @@ export class App extends Component<object, AppState> {
               navigate={navigate}
               watchPath={activeWatchPath}
               minimized={minimized}
-              onMinimize={navigate}
+              onMinimize={(path) => {
+
+                if (!persistMiniPlayer()) {
+
+                  this.setState({ activeWatchPath: null, playerReady: false });
+
+                }
+
+                navigate(path);
+
+              }}
               onReturn={returnToPlayer}
               onDismiss={() => this.setState({ activeWatchPath: null, playerReady: false })}
               onReadyChange={(ready) => this.setState({ playerReady: ready })}
@@ -311,12 +357,12 @@ export class App extends Component<object, AppState> {
 
     return (
 
-      <MotionConfig reducedMotion={isIOS() ? "always" : "user"}>
+      <MotionConfig reducedMotion={shouldReduceMotion() ? "always" : "user"}>
 
         {this.renderPage()}
         {this.renderPlayer()}
 
-        <PWAInstallGate />
+        {/*<PWAInstallGate />*/}
 
         <PWAInstallDesktop />
 

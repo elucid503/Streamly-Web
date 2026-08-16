@@ -1,6 +1,8 @@
 import { Button } from "@/components/ui/Button";
 import { CachedImage } from "@/components/ui/CachedImage";
+import { HScrollRow } from "@/components/ui/HScrollRow";
 import { Modal } from "@/components/ui/Modal";
+import { PlayerMobileSheet } from "@/components/player/PlayerMobileSheet";
 
 import { cn } from "@/lib/utils";
 import type { Episode, Season } from "@/lib/types";
@@ -11,6 +13,7 @@ import { ChevronLeft, ChevronRight, Clapperboard, Film, Play, X } from "lucide-r
 interface EpisodePickerPanelProps {
 
   open: boolean;
+  compact?: boolean;
 
   seasons: Season[];
   episodes: Episode[];
@@ -200,7 +203,7 @@ export class EpisodePickerPanel extends Component<EpisodePickerPanelProps, Episo
 
             <span className="flex size-full items-center justify-center text-foreground-faint">
 
-              <Film size={28} strokeWidth={1.5} />
+              <Film size={this.props.compact ? 16 : 28} strokeWidth={1.5} />
 
             </span>
 
@@ -212,7 +215,7 @@ export class EpisodePickerPanel extends Component<EpisodePickerPanelProps, Episo
 
         <span className="flex size-full items-center justify-center text-foreground-faint">
 
-          <Film size={28} strokeWidth={1.5} />
+          <Film size={this.props.compact ? 16 : 28} strokeWidth={1.5} />
 
         </span>
 
@@ -224,7 +227,7 @@ export class EpisodePickerPanel extends Component<EpisodePickerPanelProps, Episo
 
   renderEpisodeCard = (ep: Episode) => {
 
-    const { currentSeason, currentEpisode, onEpisodeSelect } = this.props;
+    const { currentSeason, currentEpisode, onEpisodeSelect, compact } = this.props;
 
     const key = `${ep.season}-${ep.episode}`;
 
@@ -234,7 +237,7 @@ export class EpisodePickerPanel extends Component<EpisodePickerPanelProps, Episo
 
     return (
 
-      <div className="flex w-[min(78vw,16.5rem)] flex-shrink-0 snap-start sm:w-64"
+      <div className={cn("flex flex-shrink-0 snap-start", compact ? "w-[min(32vw,6.75rem)]" : "w-64")}
 
         key={key}
         data-episode-card
@@ -249,7 +252,8 @@ export class EpisodePickerPanel extends Component<EpisodePickerPanelProps, Episo
 
           }} className={cn(
 
-              "group flex h-full w-full flex-col overflow-hidden rounded-lg border text-left transition-colors",
+              "group flex h-full w-full flex-col overflow-hidden border text-left transition-colors",
+              compact ? "rounded-md" : "rounded-lg",
               active ? "ring-2 ring-[#969696] bg-white/10" : "border-transparent bg-white/5 ring-1 ring-white/10 hover:ring-white/20 hover:bg-white/8"
 
           )}
@@ -260,7 +264,14 @@ export class EpisodePickerPanel extends Component<EpisodePickerPanelProps, Episo
 
             {this.renderEpisodeThumbnail(ep, "size-full")}
 
-            <span className="absolute top-2 left-2 rounded-md border border-border-subtle bg-surface/80 px-2 py-0.5 text-[10px] font-medium tracking-wide text-foreground backdrop-blur-md">
+            <span className={cn(
+
+                "absolute font-medium tracking-wide text-foreground border border-border-subtle bg-surface/80",
+                compact ? "top-1 left-1 rounded px-1 py-px text-[8px]" : "top-2 left-2 rounded-md px-2 py-0.5 text-[10px]"
+
+              )}
+
+            >
 
               E{ep.episode}
 
@@ -268,18 +279,18 @@ export class EpisodePickerPanel extends Component<EpisodePickerPanelProps, Episo
 
           </div>
 
-          <div className="flex flex-1 flex-col p-3">
+          <div className={cn("flex flex-1 flex-col", compact ? "p-1.5" : "p-3")}>
 
-            <p className="line-clamp-2 shrink-0 text-sm font-medium leading-snug text-foreground">
+            <p className={cn("line-clamp-2 shrink-0 font-medium leading-snug text-foreground", compact ? "text-[10px]" : "text-sm")}>
 
               {ep.title}
 
             </p>
 
-            <div className="mt-0.5 flex min-h-[3.25rem] flex-1 flex-col justify-between gap-1">
+            <div className={cn("mt-0.5 flex flex-1 flex-col justify-between", compact ? "min-h-[1.5rem] gap-0.5" : "min-h-[3.25rem] gap-1")}>
 
               <p className={cn(
-                  "line-clamp-2 text-xs leading-relaxed",
+                  compact ? "line-clamp-1 text-[9px] leading-snug" : "line-clamp-2 text-xs leading-relaxed",
                   description ? "text-foreground-muted" : "text-foreground-faint"
                 )}
               >
@@ -305,7 +316,7 @@ export class EpisodePickerPanel extends Component<EpisodePickerPanelProps, Episo
 
                   }
 
-                }} className="text-[11px] font-medium text-foreground/80 underline-offset-2 hover:text-foreground hover:underline" >
+                }} className={cn("font-medium text-foreground/80 underline-offset-2 hover:text-foreground hover:underline", compact ? "text-[8px]" : "text-[11px]")} >
 
                 Show more
 
@@ -318,6 +329,184 @@ export class EpisodePickerPanel extends Component<EpisodePickerPanelProps, Episo
         </button>
 
       </div>
+
+    );
+
+  };
+
+  renderMobileRow = (ep: Episode) => {
+
+    const { currentSeason, currentEpisode, onEpisodeSelect } = this.props;
+
+    const key = `${ep.season}-${ep.episode}`;
+
+    const active = currentSeason === ep.season && currentEpisode === ep.episode;
+
+    const description = ep.description?.trim() ?? "";
+
+    return (
+
+      <div key={key} className={cn("flex items-center gap-3 rounded-xl border p-2.5", active ? "border-white/20 bg-white/10" : "border-transparent bg-white/5")}>
+
+        <button type="button" onClick={(e) => {
+
+            e.stopPropagation();
+
+            onEpisodeSelect(ep.season, ep.episode);
+
+          }} className="relative w-[7.75rem] shrink-0 overflow-hidden rounded-lg text-left"
+
+        >
+
+          {this.renderEpisodeThumbnail(ep, "aspect-video w-full")}
+
+          <span className="absolute top-1.5 left-1.5 rounded-md border border-border-subtle bg-surface/80 px-1.5 py-0.5 text-[10px] font-medium text-foreground">
+
+            E{ep.episode}
+
+          </span>
+
+        </button>
+
+        <div className="min-w-0 flex-1 py-0.5">
+
+          <button type="button" onClick={(e) => {
+
+              e.stopPropagation();
+
+              onEpisodeSelect(ep.season, ep.episode);
+
+            }} className="w-full text-left"
+
+          >
+
+            <p className="truncate text-sm font-medium leading-snug text-foreground landscape:text-base">
+
+              {ep.title}
+
+            </p>
+
+          </button>
+
+          <div className="relative mt-1">
+
+            <p className={cn("truncate pr-10 text-xs leading-relaxed landscape:pr-12 landscape:text-sm", description ? "text-foreground-muted" : "text-foreground-faint")}>
+
+              {description || "No description available"}
+
+            </p>
+
+            <button type="button" onClick={(e) => {
+
+                e.stopPropagation();
+
+                this.openDetail(ep);
+
+              }} className="absolute right-0 bottom-0 text-xs font-medium text-foreground/80 underline-offset-2 hover:text-foreground hover:underline landscape:text-sm"
+
+            >
+
+              More
+
+            </button>
+
+          </div>
+
+        </div>
+
+      </div>
+
+    );
+
+  };
+
+  renderMobile = () => {
+
+    const { open, seasons, episodes, menuSeason, episodesLoading, onClose, onSeasonChange } = this.props;
+
+    const seasonChips = seasons.length > 0 ? (
+
+      <HScrollRow className="gap-2">
+
+        {seasons.map((season) => (
+
+          <button key={season.number} type="button" onClick={(e) => {
+
+              e.stopPropagation();
+
+              if (season.number === menuSeason) return;
+
+              onSeasonChange(season.number);
+
+            }} className={cn(
+
+              "flex-shrink-0 rounded-lg border px-3 py-2 text-sm transition-colors",
+              menuSeason === season.number ? "border-foreground bg-foreground text-surface" : "border-white/10 text-foreground-muted hover:border-white/20 hover:text-foreground"
+
+            )} >
+
+            {season.label}
+
+          </button>
+
+        ))}
+
+      </HScrollRow>
+
+    ) : null;
+
+    return (
+
+      <>
+        <PlayerMobileSheet open={open} title="Episodes" layout="fill" icon={<Clapperboard size={16} className="text-foreground-muted" />} onClose={onClose} headerExtra={seasonChips} >
+
+          <div className="grid grid-cols-1 gap-3 landscape:grid-cols-2">
+
+            {episodesLoading &&
+
+              Array.from({ length: 6 }).map((_, index) => (
+
+                <div key={`ep-mobile-skel-${index}`} className="flex gap-3 rounded-xl bg-white/5 p-2.5">
+
+                  <div className="aspect-video w-[7.75rem] shrink-0 animate-pulse rounded-lg bg-white/8" />
+
+                  <div className="min-w-0 flex-1 space-y-2 py-1">
+
+                    <div className="h-4 w-3/4 animate-pulse rounded bg-white/8" />
+
+                    <div className="h-3 w-full animate-pulse rounded bg-white/6" />
+
+                    <div className="h-3 w-5/6 animate-pulse rounded bg-white/6" />
+
+                  </div>
+
+                </div>
+
+              ))}
+
+            {!episodesLoading && episodes.map((ep) => this.renderMobileRow(ep))}
+
+            {!episodesLoading && episodes.length === 0 && (
+
+              <div className="flex items-center justify-center py-16">
+
+                <p className="text-sm text-foreground-muted">
+
+                  No episodes found for this season
+
+                </p>
+
+              </div>
+
+            )}
+
+          </div>
+
+        </PlayerMobileSheet>
+
+        {this.renderDetailModal()}
+
+      </>
 
     );
 
@@ -390,9 +579,11 @@ export class EpisodePickerPanel extends Component<EpisodePickerPanelProps, Episo
 
   render() {
 
-    const { open, seasons, episodes, menuSeason, episodesLoading, onClose, onSeasonChange } = this.props;
+    const { open, compact, seasons, episodes, menuSeason, episodesLoading, onClose, onSeasonChange } = this.props;
 
     const { canScrollLeft, canScrollRight } = this.state;
+
+    if (compact) return this.renderMobile();
 
     if (!open) return null;
 
@@ -401,15 +592,15 @@ export class EpisodePickerPanel extends Component<EpisodePickerPanelProps, Episo
       <>
         <div className="w-full animate-fade-in" onClick={(e) => e.stopPropagation()}>
 
-          <div className="-mx-4 border-t border-border-subtle bg-surface/85 shadow-[0_-16px_48px_rgba(0,0,0,0.45)] backdrop-blur-xl sm:-mx-6">
+          <div className={cn("-mx-4 border-t border-border-subtle bg-surface/85 shadow-[0_-16px_48px_rgba(0,0,0,0.45)] backdrop-blur-xl", !compact && "sm:-mx-6")}>
 
-            <div className="flex items-center justify-between gap-4 px-4 py-3 sm:px-6">
+            <div className={cn("flex items-center justify-between", compact ? "gap-2 px-2 py-1" : "gap-4 px-6 py-3")}>
 
-              <div className="flex items-center gap-2">
+              <div className={cn("flex items-center", compact ? "gap-1.5" : "gap-2")}>
 
-                <Clapperboard size={15} className="shrink-0 text-foreground-muted" />
+                <Clapperboard size={compact ? 12 : 15} className="shrink-0 text-foreground-muted" />
 
-                <p className="text-sm font-medium text-foreground">
+                <p className={cn("font-medium text-foreground", compact ? "text-xs" : "text-sm")}>
 
                   Episodes
 
@@ -423,9 +614,9 @@ export class EpisodePickerPanel extends Component<EpisodePickerPanelProps, Episo
 
                   onClose();
 
-                }} className="flex size-8 shrink-0 items-center justify-center rounded-md text-foreground-muted transition-colors hover:bg-white/10 hover:text-foreground" aria-label="Close episode picker" >
+                }} className={cn("flex shrink-0 items-center justify-center rounded-md text-foreground-muted transition-colors hover:bg-white/10 hover:text-foreground", compact ? "size-6" : "size-8")} aria-label="Close episode picker" >
 
-                <X size={16} />
+                <X size={compact ? 13 : 16} />
 
               </button>
 
@@ -433,7 +624,7 @@ export class EpisodePickerPanel extends Component<EpisodePickerPanelProps, Episo
 
             {seasons.length > 0 && (
 
-              <div className="mb-3 flex gap-2 overflow-x-auto px-4 pb-1 scrollbar-hide sm:px-6">
+              <HScrollRow className={cn(compact ? "mb-1 gap-1 px-2 pb-0.5" : "mb-3 gap-2 px-6 pb-1")}>
 
                 {seasons.map((season) => (
 
@@ -447,7 +638,8 @@ export class EpisodePickerPanel extends Component<EpisodePickerPanelProps, Episo
 
                     }} className={cn(
 
-                      "flex-shrink-0 rounded-md border px-3 py-1.5 text-xs transition-colors",
+                      "flex-shrink-0 transition-colors",
+                      compact ? "rounded border px-1.5 py-0.5 text-[9px]" : "rounded-md border px-3 py-1.5 text-xs",
                       menuSeason === season.number ? "border-foreground bg-foreground text-surface" : "border-white/10 text-foreground-muted hover:border-white/20 hover:text-foreground"
 
                     )} >
@@ -458,7 +650,7 @@ export class EpisodePickerPanel extends Component<EpisodePickerPanelProps, Episo
 
                 ))}
 
-              </div>
+              </HScrollRow>
 
             )}
 
@@ -476,7 +668,7 @@ export class EpisodePickerPanel extends Component<EpisodePickerPanelProps, Episo
 
                       this.scrollCarousel(-1);
 
-                    }} className="absolute top-1/2 left-2 z-10 flex size-9 -translate-y-1/2 items-center justify-center rounded-md border border-border-subtle bg-surface/80 text-foreground shadow-lg shadow-black/30 backdrop-blur-xl transition-colors hover:bg-surface-overlay sm:left-3" aria-label="Scroll episodes left" >
+                    }} className="absolute top-1/2 left-2 z-10 hidden size-9 -translate-y-1/2 items-center justify-center rounded-md border border-border-subtle bg-surface/80 text-foreground shadow-lg shadow-black/30 backdrop-blur-xl transition-colors hover:bg-surface-overlay sm:left-3 sm:flex" aria-label="Scroll episodes left" >
 
                     <ChevronLeft size={22} strokeWidth={2.5} />
 
@@ -497,7 +689,7 @@ export class EpisodePickerPanel extends Component<EpisodePickerPanelProps, Episo
 
                       this.scrollCarousel(1);
 
-                    }} className="absolute top-1/2 right-2 z-10 flex size-9 -translate-y-1/2 items-center justify-center rounded-md border border-border-subtle bg-surface/80 text-foreground shadow-lg shadow-black/30 backdrop-blur-xl transition-colors hover:bg-surface-overlay sm:right-3" aria-label="Scroll episodes right" >
+                    }} className="absolute top-1/2 right-2 z-10 hidden size-9 -translate-y-1/2 items-center justify-center rounded-md border border-border-subtle bg-surface/80 text-foreground shadow-lg shadow-black/30 backdrop-blur-xl transition-colors hover:bg-surface-overlay sm:right-3 sm:flex" aria-label="Scroll episodes right" >
 
                     <ChevronRight size={22} strokeWidth={2.5} />
 
@@ -507,7 +699,12 @@ export class EpisodePickerPanel extends Component<EpisodePickerPanelProps, Episo
 
               )}
 
-              <div className="flex items-stretch gap-4 overflow-x-auto scroll-smooth pb-5 pl-4 pr-4 pt-1 snap-x snap-mandatory scrollbar-hide scroll-pl-4 sm:gap-5 sm:pb-6 sm:pl-6 sm:pr-6 sm:scroll-pl-6"
+              <div className={cn(
+
+                  "flex items-stretch overflow-x-auto scroll-smooth snap-x snap-mandatory scrollbar-hide",
+                  compact ? "gap-1.5 pb-2 pl-2 pr-2 pt-0.5 scroll-pl-2" : "gap-5 pb-6 pl-6 pr-6 pt-1 scroll-pl-6"
+
+                )}
 
                 ref={this.carouselRef}
                 onScroll={this.updateScrollButtons}
@@ -517,27 +714,27 @@ export class EpisodePickerPanel extends Component<EpisodePickerPanelProps, Episo
 
                   Array.from({ length: 4 }).map((_, index) => (
 
-                    <div key={`ep-picker-skeleton-${index}`} data-episode-card className="flex w-[min(78vw,16.5rem)] flex-shrink-0 snap-start sm:w-64" >
+                    <div key={`ep-picker-skeleton-${index}`} data-episode-card className={cn("flex flex-shrink-0 snap-start", compact ? "w-[min(32vw,6.75rem)]" : "w-64")} >
 
-                      <div className="flex h-full w-full flex-col overflow-hidden rounded-lg border border-white/10 bg-white/5">
+                      <div className={cn("flex h-full w-full flex-col overflow-hidden border border-white/10 bg-white/5", compact ? "rounded-md" : "rounded-lg")}>
 
                         <div className="aspect-[2/1] shrink-0 animate-pulse bg-white/8" />
 
-                        <div className="flex flex-1 flex-col p-3">
+                        <div className={cn("flex flex-1 flex-col", compact ? "p-1.5" : "p-3")}>
 
-                          <div className="h-4 w-3/4 shrink-0 animate-pulse rounded bg-white/8" />
+                          <div className={cn("w-3/4 shrink-0 animate-pulse rounded bg-white/8", compact ? "h-3" : "h-4")} />
 
-                          <div className="mt-0.5 flex min-h-[3.25rem] flex-1 flex-col justify-between gap-1">
+                          <div className={cn("mt-0.5 flex flex-1 flex-col justify-between", compact ? "min-h-[1.5rem] gap-0.5" : "min-h-[3.25rem] gap-1")}>
 
-                            <div className="space-y-1.5">
+                            <div className={compact ? "space-y-1" : "space-y-1.5"}>
 
-                              <div className="h-3 w-full animate-pulse rounded bg-white/6" />
+                              <div className={cn("w-full animate-pulse rounded bg-white/6", compact ? "h-2" : "h-3")} />
 
-                              <div className="h-3 w-5/6 animate-pulse rounded bg-white/6" />
+                              {!compact && <div className="h-3 w-5/6 animate-pulse rounded bg-white/6" />}
 
                             </div>
 
-                            <div className="h-3 w-14 animate-pulse rounded bg-white/6" />
+                            <div className={cn("animate-pulse rounded bg-white/6", compact ? "h-2 w-10" : "h-3 w-14")} />
 
                           </div>
 
@@ -553,9 +750,9 @@ export class EpisodePickerPanel extends Component<EpisodePickerPanelProps, Episo
 
                 {!episodesLoading && episodes.length === 0 && (
 
-                  <div className="flex w-full items-center justify-center py-10">
+                  <div className={cn("flex w-full items-center justify-center", compact ? "py-5" : "py-10")}>
 
-                    <p className="text-sm text-foreground-muted">
+                    <p className={cn("text-foreground-muted", compact ? "text-xs" : "text-sm")}>
 
                       No episodes found for this season
 

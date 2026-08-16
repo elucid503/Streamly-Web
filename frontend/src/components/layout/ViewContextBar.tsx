@@ -1,9 +1,11 @@
-import { cn } from "@/lib/utils";
-import type { FavoriteItem, MainView, WatchHistoryItem } from "@/lib/types";
-
 import { Component, type ReactNode } from "react";
 import { Dices, Heart, Play, Radio, Sparkles } from "lucide-react";
+
+import { HScrollRow } from "@/components/ui/HScrollRow";
+
 import { lastWatched } from "@/lib/history";
+import type { FavoriteItem, MainView, WatchHistoryItem } from "@/lib/types";
+import { cn } from "@/lib/utils";
 
 export type ContextActionId = "continue" | "dice" | "shuffle-favorites";
 
@@ -124,7 +126,7 @@ export class ViewContextBar extends Component<ViewContextBarProps> {
 
     return (
 
-      <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+      <HScrollRow className="items-center gap-1.5">
 
         {actions.map((action) => {
 
@@ -139,7 +141,7 @@ export class ViewContextBar extends Component<ViewContextBarProps> {
 
               className={cn(
 
-                "flex h-8 items-center gap-1.5 rounded-md border border-border bg-surface-overlay px-3 text-xs font-medium shadow-sm transition-all",
+                "flex h-8 shrink-0 items-center gap-1.5 rounded-md border border-border bg-surface-overlay px-3 text-xs font-medium shadow-sm transition-all",
                 "text-foreground-muted hover:bg-border/60 hover:text-foreground active:scale-[0.98]",
                 loading && "pointer-events-none opacity-70",
                 loadingAction !== null && !loading && "opacity-50"
@@ -166,7 +168,7 @@ export class ViewContextBar extends Component<ViewContextBarProps> {
 
         })}
 
-      </div>
+      </HScrollRow>
 
     );
 

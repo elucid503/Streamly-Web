@@ -23,6 +23,8 @@ interface PauseOverlayProps {
 
   onResume: () => void;
 
+  simplified?: boolean;
+
 }
 
 interface PauseOverlayState {
@@ -68,6 +70,7 @@ export class PauseOverlay extends Component<PauseOverlayProps, PauseOverlayState
       onResume,
       pausedAt: progress,
       totalDuration,
+      simplified,
     } = this.props;
 
     const { posterFailed } = this.state;
@@ -95,8 +98,10 @@ export class PauseOverlay extends Component<PauseOverlayProps, PauseOverlayState
 
               <div className={cn(
 
-                  "flex animate-fade-in flex-col items-center gap-4",
-                  isLive ? "w-fit max-w-5xl md:flex-row md:items-center md:gap-7 md:text-left" : "w-full max-w-5xl -mt-3 md:flex-row md:items-center md:gap-7 md:text-left"
+                  "flex animate-fade-in flex-col items-center",
+                  simplified
+                    ? "w-fit max-w-2xl gap-4 px-2 text-center landscape:flex-row landscape:items-center landscape:gap-6 landscape:text-left"
+                    : isLive ? "w-fit max-w-5xl gap-4 md:flex-row md:items-center md:gap-7 md:text-left" : "w-full max-w-5xl -mt-3 gap-4 md:flex-row md:items-center md:gap-7 md:text-left"
 
                 )}
 
@@ -109,7 +114,7 @@ export class PauseOverlay extends Component<PauseOverlayProps, PauseOverlayState
                     <img
                       src={poster}
                       alt=""
-                      className="h-28 w-28 object-contain sm:h-36 sm:w-36"
+                      className={simplified ? "h-24 w-24 object-contain landscape:h-28 landscape:w-28" : "h-28 w-28 object-contain sm:h-36 sm:w-36"}
                       onError={this.handlePosterError}
                     />
 
@@ -122,7 +127,9 @@ export class PauseOverlay extends Component<PauseOverlayProps, PauseOverlayState
                   <div className={cn(
 
                       "flex-shrink-0 overflow-hidden rounded-lg shadow-2xl ring-1 ring-white/10",
-                      layout === "episode" ? "aspect-video w-full max-w-xl md:w-[min(42vw,28rem)]" : "aspect-[2/3] w-28 sm:w-36 md:w-40"
+                      layout === "episode"
+                        ? (simplified ? "aspect-video w-56 landscape:w-72" : "aspect-video w-full max-w-xl md:w-[min(42vw,28rem)]")
+                        : (simplified ? "aspect-[2/3] w-28 landscape:w-32" : "aspect-[2/3] w-28 sm:w-36 md:w-40")
 
                     )}
 
@@ -139,9 +146,9 @@ export class PauseOverlay extends Component<PauseOverlayProps, PauseOverlayState
 
                 )}
 
-                <div className="min-w-0 space-y-1.5">
+                <div className={cn("min-w-0", simplified ? "space-y-1.5" : "space-y-1.5")}>
 
-                  <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl">
+                  <h2 className={simplified ? "text-2xl font-semibold tracking-tight landscape:text-3xl" : "text-2xl font-semibold tracking-tight sm:text-3xl"}>
 
                     {title}
 
@@ -149,7 +156,14 @@ export class PauseOverlay extends Component<PauseOverlayProps, PauseOverlayState
 
                   {isLive && subtitle && (
 
-                    <p className="text-sm font-medium tracking-wide text-foreground-muted uppercase">
+                    <p className={cn(
+
+                        "font-medium tracking-wide text-foreground-muted uppercase",
+                        simplified ? "text-xs" : "text-sm"
+
+                      )}
+
+                    >
 
                       {subtitle}
 
@@ -159,7 +173,7 @@ export class PauseOverlay extends Component<PauseOverlayProps, PauseOverlayState
 
                   {episodeTitle && (
 
-                    <p className="text-base text-foreground/90 sm:text-lg">
+                    <p className={simplified ? "text-base text-foreground/90 landscape:text-lg" : "text-base text-foreground/90 sm:text-lg"}>
 
                       {episodeTitle}
 
@@ -171,8 +185,8 @@ export class PauseOverlay extends Component<PauseOverlayProps, PauseOverlayState
 
                     <p className={cn(
 
-                        "text-sm leading-relaxed text-foreground-muted sm:text-[15px] sm:leading-7",
-                        !isLive ? "max-w-3xl sm:line-clamp-none" : "line-clamp-4"
+                        "text-foreground-muted",
+                        simplified ? "line-clamp-3 max-w-xl text-sm leading-relaxed landscape:text-[15px]" : cn("text-sm leading-relaxed sm:text-[15px] sm:leading-7", !isLive ? "max-w-3xl sm:line-clamp-none" : "line-clamp-4")
 
                       )}
 
@@ -190,7 +204,7 @@ export class PauseOverlay extends Component<PauseOverlayProps, PauseOverlayState
 
             </div>
 
-            {showProgress && (
+            {showProgress && !simplified && (
 
               <p className="pointer-events-none absolute inset-x-0 top-24 z-10 text-center text-xs tracking-wide text-foreground/40 sm:bottom-28 sm:text-sm">
 
@@ -201,11 +215,15 @@ export class PauseOverlay extends Component<PauseOverlayProps, PauseOverlayState
 
             )}
 
-            <p className="pointer-events-none absolute inset-x-0 bottom-24 z-10 text-center text-xs tracking-wide text-foreground/40 sm:bottom-28 sm:text-sm">
+            {!simplified && (
 
-              Click Anywhere to Resume
+              <p className="pointer-events-none absolute inset-x-0 bottom-24 z-10 text-center text-xs tracking-wide text-foreground/40 sm:bottom-28 sm:text-sm">
 
-            </p>
+                Click Anywhere to Resume
+
+              </p>
+
+            )}
 
           </button>
 

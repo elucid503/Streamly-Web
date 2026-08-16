@@ -18,6 +18,8 @@ import { store } from "@/lib/store";
 import { navigate } from "@/lib/navigation";
 import { hasIntroWindow, isInIntroWindow } from "@/lib/intro";
 import { isProxiedStream, isWebPlayableUrl } from "@/lib/streamClient";
+import { isMobile } from "@/lib/platform";
+import { clearMediaSession, enableBackgroundAudio, setMediaSessionHandlers, setMediaSessionMetadata, setMediaSessionPlaybackState, setMediaSessionPosition } from "@/lib/mediaSession";
 import { cn, formatDuration } from "@/lib/utils";
 import type { Episode, IntroInfo, LiveChannel, LiveSourceProvider, NextEpisode, Season, StreamQuality, SubtitleTrack, } from "@/lib/types";
 
@@ -204,7 +206,21 @@ interface VideoPlayerState {
 
   behindLive: boolean;
 
+  portrait: boolean;
+
 }
+
+const readPortrait = (): boolean => {
+
+  if (typeof window === "undefined") {
+
+    return false;
+
+  }
+
+  return window.matchMedia("(orientation: portrait)").matches;
+
+};
 
 const readStoredVolume = (): { volume: number; muted: boolean } => {
 
@@ -238,6 +254,9 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
 
   private hls: HLS | null = null;
 
+  private mobile = isMobile();
+  private portraitQuery: MediaQueryList | null = null;
+
   private controlsTimer: ReturnType<typeof setTimeout> | null = null;
   private waitingTimer: ReturnType<typeof setTimeout> | null = null;
   private liveFailoverTimer: ReturnType<typeof setTimeout> | null = null;
@@ -264,10 +283,11 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
   private static readonly HOLD_PAUSE_DELAY_MS = 220;
   private static readonly UP_NEXT_VISIBLE_LEAD_MS = 150_000;
   private static readonly UP_NEXT_COUNTDOWN_LEAD_MS = 60_000;
+
   state: VideoPlayerState = {
 
     playing: false,
-    ...readStoredVolume(),
+    ...(this.mobile ? { volume: 1, muted: false } : readStoredVolume()),
 
     showControls: true,
     showOptions: false,
@@ -279,6 +299,8 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
     upNextCountdown: 0,
 
     fullscreen: false,
+    portrait: readPortrait(),
+
     loading: true,
     seeking: false,
     holdPauseActive: false,
@@ -318,6 +340,12 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
 
     this.syncSubtitlePreference();
 
+    this.watchOrientation();
+
+    this.setupBackgroundAudio();
+
+    this.syncMediaSession();
+
   }
 
   componentDidUpdate(prev: VideoPlayerProps) {
@@ -344,6 +372,12 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
     if (prev.subtitleTracks !== this.props.subtitleTracks || prev.subtitlesEnabled !== this.props.subtitlesEnabled) {
 
       this.syncSubtitlePreference();
+
+    }
+
+    if (prev.title !== this.props.title || prev.subtitle !== this.props.subtitle || prev.episodeTitle !== this.props.episodeTitle || prev.poster !== this.props.poster) {
+
+      this.syncMediaSession();
 
     }
 
@@ -386,8 +420,119 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
 
     document.removeEventListener("keydown", this.onKeyDown);
     document.removeEventListener("fullscreenchange", this.onFullscreenChange);
+    document.removeEventListener("visibilitychange", this.onVisibilityChange);
+
+    this.portraitQuery?.removeEventListener("change", this.onOrientationChange);
+
+    window.visualViewport?.removeEventListener("resize", this.syncViewportHeight);
+    window.visualViewport?.removeEventListener("scroll", this.syncViewportHeight);
+    window.removeEventListener("resize", this.syncViewportHeight);
+
+    clearMediaSession();
 
   }
+
+  watchOrientation = () => {
+
+    if (typeof window === "undefined") return;
+
+    this.portraitQuery = window.matchMedia("(orientation: portrait)");
+
+    this.setState({ portrait: this.portraitQuery.matches });
+
+    this.portraitQuery.addEventListener("change", this.onOrientationChange);
+
+    this.syncViewportHeight();
+
+    window.visualViewport?.addEventListener("resize", this.syncViewportHeight);
+    window.visualViewport?.addEventListener("scroll", this.syncViewportHeight);
+    window.addEventListener("resize", this.syncViewportHeight);
+
+  };
+
+  syncViewportHeight = () => {
+
+    const height = Math.max(
+      window.innerHeight,
+      window.visualViewport?.height ?? 0,
+      document.documentElement.clientHeight,
+    );
+
+    document.documentElement.style.setProperty("--player-vvh", `${Math.round(height)}px`);
+
+  };
+
+  onOrientationChange = (event: MediaQueryListEvent) => {
+
+    this.setState({ portrait: event.matches });
+
+  };
+
+  setupBackgroundAudio = () => {
+
+    enableBackgroundAudio();
+
+    document.addEventListener("visibilitychange", this.onVisibilityChange);
+
+  };
+
+  onVisibilityChange = () => {
+
+    const video = this.videoRef.current;
+
+    if (!video || document.visibilityState !== "hidden") return;
+
+    // iOS pauses the element when the PWA is backgrounded; resuming straight away keeps the audio running.
+    if (this.state.playing && video.paused) {
+
+      void video.play().catch(() => {});
+
+    }
+
+  };
+
+  playFromMediaSession = () => {
+
+    const video = this.videoRef.current;
+
+    if (video) void video.play().catch(() => {});
+
+  };
+
+  pauseFromMediaSession = () => {
+
+    this.videoRef.current?.pause();
+
+  };
+
+  syncMediaSession = () => {
+
+    const { title, subtitle, episodeTitle, poster, live, nextEpisode } = this.props;
+
+    setMediaSessionMetadata({
+
+      title: episodeTitle || title,
+      artist: episodeTitle ? title : subtitle ?? "",
+      album: live ? "Live TV" : subtitle ?? "",
+
+      artwork: poster,
+
+    });
+
+    setMediaSessionHandlers({
+
+      onPlay: this.playFromMediaSession,
+      onPause: this.pauseFromMediaSession,
+
+      onSeekBackward: live ? undefined : () => this.seekBy(-10_000),
+      onSeekForward: live ? undefined : () => this.seekBy(10_000),
+      onSeekTo: live ? undefined : (positionMs) => this.seek(positionMs),
+
+      onNextTrack: !live && nextEpisode ? () => this.props.onNextEpisode?.() : undefined,
+
+    });
+
+  };
 
   bindVideoEvents = () => {
 
@@ -510,6 +655,8 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
       this.lastUiUpdate = now;
 
       this.updateProgressUI(currentMs, durationMs);
+
+      setMediaSessionPosition(durationMs, currentMs, video.playbackRate);
       this.updateBufferUI();
 
     }
@@ -693,6 +840,10 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
 
     this.clearBuffering();
     this.setState({ playing: true, playbackPrimed: true });
+
+    this.syncMediaSession();
+
+    setMediaSessionPlaybackState("playing");
     this.props.onPlaybackStateChange?.(true);
 
   };
@@ -706,6 +857,8 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
 
     });
 
+    setMediaSessionPlaybackState("paused");
+
     this.props.onPlaybackStateChange?.(false);
 
   };
@@ -714,7 +867,7 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
 
     const video = this.videoRef.current;
 
-    if (!video) return;
+    if (!video || this.mobile) return;
 
     // In multiview, primary may be force-muted while another pane has audio —
     // don't clobber the shared volume preference from that forced mute.
@@ -1062,6 +1215,8 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
       loading: true,
       playbackPrimed: false,
       behindLive: false,
+
+      portrait: readPortrait(),
 
       showUpNext: false,
       showUpNextMini: false,
@@ -1673,6 +1828,8 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
       case "ArrowUp":
       case "ArrowDown": {
 
+        if (this.mobile) break;
+
         event.preventDefault();
 
         const delta = event.key === "ArrowUp" ? 0.05 : -0.05; // 5% volume change in either direction
@@ -1853,7 +2010,7 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
   render() {
 
     const { title, subtitle, episodeTitle, description, poster, qualities = [], selectedHeight = 1080, preferredHeight, nextEpisode, onBack, ambienceEnabled, live, compact, onReturn, onDismiss, onQualityChange, onOpenSettings, seasons, episodes, currentSeason, currentEpisode, menuSeason, episodesLoading, onSeasonChange, onEpisodeSelect, primaryChannelId, multiviewStreams = [], multiviewChannels, multiviewLoading, onMultiviewSearch, onMultiviewToggle, onMultiviewRemove, streamResolving, sourceProviders, selectedSourceKey, sourceSwitching, onSourceChange, } = this.props;
-    const { playing, muted, volume, showControls, showOptions, showMultiview, showEpisodes, showSkipIntro, showUpNext, showUpNextMini, upNextCountdown, fullscreen, loading, seeking, holdPauseActive, activeSubtitleId, actionFeedback, hdrHeights, audioChannelId, playbackPrimed, behindLive, } = this.state;
+    const { playing, muted, volume, showControls, showOptions, showMultiview, showEpisodes, showSkipIntro, showUpNext, showUpNextMini, upNextCountdown, fullscreen, loading, seeking, holdPauseActive, activeSubtitleId, actionFeedback, hdrHeights, audioChannelId, playbackPrimed, behindLive, portrait, } = this.state;
 
     // Live always uses a stable grid shell so adding multiview panes does not remount
     // the primary <video> (which would tear down the HLS MediaSource attachment).
@@ -1863,10 +2020,12 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
     const primaryAudio = !multiviewActive || audioChannelId === (primaryChannelId ?? null);
 
     const resolving = !!streamResolving;
+    const portraitMobile = portrait && this.mobile;
+    const menuOpen = showOptions || showMultiview || showEpisodes;
     const controlsPinned = resolving || loading || seeking;
-    const effectiveShowControls = showControls || controlsPinned;
+    const effectiveShowControls = (showControls || controlsPinned) && !menuOpen;
 
-    const showPauseOverlay = !multiviewActive && !playing && !loading && !seeking && !holdPauseActive && !showEpisodes && !resolving && playbackPrimed && !!this.props.src.trim() && store.settings?.disablePauseOverlay !== true;
+    const showPauseOverlay = !multiviewActive && !playing && !loading && !seeking && !holdPauseActive && !showEpisodes && !showOptions && !showMultiview && !resolving && playbackPrimed && !!this.props.src.trim() && store.settings?.disablePauseOverlay !== true;
 
     const qualityEnabled = !live && qualities.length > 0 && !!onQualityChange;
     const sourceEnabled = !!live && (sourceProviders?.length ?? 0) > 0 && !!onSourceChange;
@@ -1891,6 +2050,13 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
 
         }
 
+        if (this.mobile) {
+
+          this.showControlsTemporarily();
+          return;
+
+        }
+
         this.togglePlay();
 
       },
@@ -1899,7 +2065,7 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
 
     return (
 
-      <div className={cn("relative flex h-full w-full flex-col bg-black", compact && "group/miniplayer")}
+      <div className={cn("player-portrait-band relative flex h-full min-h-full w-full flex-col bg-black", compact && "group/miniplayer")}
 
         ref={this.containerRef}
         onMouseMove={this.showControlsTemporarily}
@@ -2063,6 +2229,7 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
           <SubtitleDisplay
 
             videoRef={this.videoRef}
+            compact={this.mobile}
             track={showPauseOverlay || showEpisodes ? null : this.activeSubtitleTrack()}
 
           />
@@ -2083,6 +2250,7 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
           onResume={this.togglePlay}
           pausedAt={this.videoRef.current ? this.videoRef.current.currentTime : 0}
           totalDuration={this.videoRef.current ? this.videoRef.current.duration : 0}
+          simplified={this.mobile}
 
         />}
 
@@ -2137,7 +2305,8 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
         {!compact && <div className={cn(
 
             // Pass clicks through empty top band so multiview pane chrome stays usable.
-            "pointer-events-none absolute top-4 right-4 left-4 z-30 grid grid-cols-[1fr_auto_1fr] items-start gap-4 transition-opacity duration-300",
+            "player-chrome-safe pointer-events-none absolute right-3 left-3 z-30 grid grid-cols-[1fr_auto_1fr] items-start gap-2 transition-opacity duration-300 sm:right-4 sm:left-4 sm:gap-4",
+            portraitMobile ? "player-top-portrait" : "top-[max(1rem,calc(env(safe-area-inset-top,0px)+0.5rem))]",
             effectiveShowControls ? "opacity-100" : "opacity-0"
 
           )}
@@ -2201,15 +2370,26 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
 
             }}
             className="pointer-events-auto justify-self-end px-1 py-1 text-sm font-semibold tracking-tight text-foreground transition-colors hover:text-accent"
+            aria-label="Streamly Web"
           >
 
-            Streamly <span className="font-light text-foreground-muted">Web</span>
+            {portrait ? (
+
+              <img src="/Streamly.svg" alt="" className="h-7 w-7" />
+
+            ) : (
+
+              <>
+                Streamly <span className="font-light text-foreground-muted">Web</span>
+              </>
+
+            )}
 
           </button>
 
         </div>}
 
-        {!live && showSkipIntro && (
+        {!live && showSkipIntro && !menuOpen && (
 
           <button onClick={(e) => {
 
@@ -2217,7 +2397,12 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
 
               this.skipIntro();
 
-            }} className="pointer-events-auto absolute right-6 bottom-20 z-40 flex animate-fade-in items-center gap-2 rounded-md border border-border-subtle bg-surface/80 px-4 py-2.5 text-sm font-medium shadow-lg shadow-black/30 backdrop-blur-xl transition-colors hover:bg-surface-overlay" >
+            }} className={cn(
+
+              "pointer-events-auto absolute right-4 z-40 flex animate-fade-in items-center gap-2 rounded-md border border-border-subtle bg-surface/80 px-3 py-2 text-xs font-medium shadow-lg shadow-black/30 backdrop-blur-xl transition-colors hover:bg-surface-overlay sm:right-6 sm:px-4 sm:py-2.5 sm:text-sm",
+              portraitMobile ? "player-skip-portrait" : "bottom-20"
+
+            )} >
 
             <SkipForward size={14} />
 
@@ -2227,7 +2412,7 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
 
         )}
 
-        {!live && showUpNextMini && !showUpNext && nextEpisode && (
+        {!live && showUpNextMini && !showUpNext && !menuOpen && nextEpisode && (
 
           <button onClick={(e) => {
 
@@ -2235,7 +2420,12 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
 
               this.props.onNextEpisode?.();
 
-            }} className="pointer-events-auto absolute right-6 bottom-28 z-40 flex animate-fade-in items-center gap-2 rounded-md border border-border-subtle bg-surface/80 px-4 py-2.5 text-sm font-medium shadow-lg shadow-black/30 backdrop-blur-xl transition-colors hover:bg-surface-overlay" >
+            }} className={cn(
+
+              "pointer-events-auto absolute right-4 z-40 flex animate-fade-in items-center gap-2 rounded-md border border-border-subtle bg-surface/80 px-3 py-2 text-xs font-medium shadow-lg shadow-black/30 backdrop-blur-xl transition-colors hover:bg-surface-overlay sm:right-6 sm:px-4 sm:py-2.5 sm:text-sm",
+              portraitMobile ? "player-upnext-portrait" : "bottom-28"
+
+            )} >
 
             <SkipForward size={14} />
 
@@ -2245,9 +2435,14 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
 
         )}
 
-        {!live && showUpNext && nextEpisode && (
+        {!live && showUpNext && !menuOpen && nextEpisode && (
 
-          <div className="pointer-events-auto absolute right-6 bottom-28 z-40 w-72 animate-fade-in rounded-lg border border-border-subtle bg-surface/80 p-4 shadow-lg shadow-black/30 backdrop-blur-xl">
+          <div className={cn(
+
+            "pointer-events-auto absolute right-4 z-40 w-[min(17rem,calc(100vw-2rem))] animate-fade-in rounded-lg border border-border-subtle bg-surface/80 p-3.5 shadow-lg shadow-black/30 backdrop-blur-xl sm:right-6 sm:w-72 sm:p-4",
+            portraitMobile ? "player-upnext-portrait" : "bottom-28"
+
+          )}>
 
             <p className="text-[11px] tracking-wide text-foreground-faint uppercase">
 
@@ -2288,10 +2483,12 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
 
         )}
 
-        {!compact && <div className={cn(
+        {!compact && <div style={{ padding: "12px" }} className={cn(
 
             // Outer shell is pointer-events-none so its padding doesn't block multiview pane chrome (audio/remove) under the bottom control band.
-            "pointer-events-none absolute inset-x-0 bottom-0 z-20 px-4 pb-4 transition-opacity duration-300 sm:px-6",
+
+            "player-chrome-safe pointer-events-none absolute inset-x-0 z-20 px-6 transition-opacity duration-300",
+            portraitMobile && !showEpisodes ? "player-bottom-portrait pb-[max(0.75rem,env(safe-area-inset-bottom,0px))]" : "bottom-0 pb-[max(1rem,env(safe-area-inset-bottom,0px))]",
             showEpisodes ? "pt-2" : "pt-10",
             effectiveShowControls || showEpisodes ? "opacity-100" : "opacity-0"
 
@@ -2306,6 +2503,7 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
               <EpisodePickerPanel
 
                 open={showEpisodes}
+                compact={this.mobile}
                 seasons={seasons ?? []}
                 episodes={episodes ?? []}
 
@@ -2391,7 +2589,7 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
 
               </ControlButton>
 
-              {!live && (
+              {!live && !portraitMobile && (
 
                 <ControlButton onClick={() => this.seekBy(-10_000)} aria-label="Seek back 10 seconds">
 
@@ -2401,7 +2599,7 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
 
               )}
 
-              {!live && (
+              {!live && !portraitMobile && (
 
                 <ControlButton onClick={() => this.seekBy(10_000)} aria-label="Seek forward 10 seconds">
 
@@ -2411,15 +2609,19 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
 
               )}
 
-              <VolumeControl
+              {!this.mobile && (
 
-                volume={volume}
-                muted={muted}
+                <VolumeControl
 
-                onVolumeChange={this.setVolume}
-                onToggleMute={this.toggleMute}
+                  volume={volume}
+                  muted={muted}
 
-              />
+                  onVolumeChange={this.setVolume}
+                  onToggleMute={this.toggleMute}
+
+                />
+
+              )}
 
               {live && (
 
@@ -2493,6 +2695,7 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
                 <MultiviewMenu
 
                   open={showMultiview}
+                  compact={this.mobile}
                   channels={multiviewChannels ?? []}
                   selectedIds={this.multiviewSelectedIds()}
                   pendingIds={this.multiviewPendingIds()}
@@ -2514,6 +2717,7 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
                 <PlayerOptionsMenu
 
                   open={showOptions}
+                  compact={this.mobile}
                   qualities={qualities}
                   selectedHeight={selectedHeight}
                   preferredHeight={preferredHeight}
@@ -2550,11 +2754,15 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
 
               )}
 
-              <ControlButton onClick={this.toggleFullscreen}>
+              {!this.mobile && (
 
-                {fullscreen ? <Minimize size={20} /> : <Maximize size={20} />}
+                <ControlButton onClick={this.toggleFullscreen}>
 
-              </ControlButton>
+                  {fullscreen ? <Minimize size={20} /> : <Maximize size={20} />}
+
+                </ControlButton>
+
+              )}
 
             </div>
 

@@ -40,10 +40,6 @@ interface SearchChromeProps {
   contextLoading: ContextActionId | null;
   onContextAction: (actionId: ContextActionId) => void;
 
-  category?: string;
-  categoryOptions?: { value: string; label: string }[];
-  onCategoryChange?: (category: string) => void;
-
   onOpenSettings: () => void;
   onOpenAdmin: () => void;
   onLogout: () => void;
@@ -226,9 +222,6 @@ export class SearchChrome extends Component<SearchChromeProps, SearchChromeState
       favorites,
       contextLoading,
       onContextAction,
-      category,
-      categoryOptions,
-      onCategoryChange,
       onOpenSettings,
       onOpenAdmin,
       onLogout,
@@ -237,10 +230,8 @@ export class SearchChrome extends Component<SearchChromeProps, SearchChromeState
     const { faqOpen, version, menuPos } = this.state;
 
     const hasQuery = searchQuery.length > 0;
-    const showCategory = Boolean(categoryOptions && categoryOptions.length > 0);
     const user = store.user;
-    const hideSearch = view === "friends";
-    const showContextBar = !hideSearch && !showSearch && view !== "sports";
+    const showContextBar = !showSearch && view !== "sports" && view !== "friends";
 
     const renderContextBar = () => (
 
@@ -282,7 +273,7 @@ export class SearchChrome extends Component<SearchChromeProps, SearchChromeState
 
       <>
 
-        <div className="flex flex-col gap-3 px-4 pt-[max(1rem,env(safe-area-inset-top))] sm:px-6 sm:pt-6 lg:px-8 lg:pt-8">
+        <div className={cn("flex flex-col gap-3 px-4 pt-[max(1rem,env(safe-area-inset-top))] sm:px-6 sm:pt-6 lg:px-8 lg:pt-8", view === "friends" && "lg:mx-auto lg:w-full lg:max-w-3xl")}>
 
           <div className="flex items-center gap-2">
 
@@ -296,9 +287,7 @@ export class SearchChrome extends Component<SearchChromeProps, SearchChromeState
 
             </button>
 
-            {!hideSearch && (
-
-              <div className={cn("flex min-w-0 max-w-md md:ml-2 flex-1 items-center gap-2", showCategory && "max-w-[28rem]")}>
+            <div className="flex min-w-0 max-w-md flex-1 items-center gap-2 md:ml-2">
 
                 <div className="relative min-w-0 flex-1">
 
@@ -330,23 +319,7 @@ export class SearchChrome extends Component<SearchChromeProps, SearchChromeState
 
                 </div>
 
-                {showCategory && (
-
-                  <SelectMenu
-                    value={category ?? "all"}
-                    options={categoryOptions!}
-                    onChange={(v) => onCategoryChange?.(v)}
-                    placement="bottom"
-                    text="faint"
-                    label="Category"
-                    className="shrink-0"
-                  />
-
-                )}
-
-              </div>
-
-            )}
+            </div>
 
             <div className="ml-auto flex min-w-0 shrink-0 items-center gap-2">
 
@@ -372,7 +345,7 @@ export class SearchChrome extends Component<SearchChromeProps, SearchChromeState
 
           {showContextBar && (
 
-            <div className="flex flex-wrap items-center gap-1.5 lg:hidden">
+            <div className="min-w-0 lg:hidden">
 
               {renderContextBar()}
 
@@ -380,7 +353,7 @@ export class SearchChrome extends Component<SearchChromeProps, SearchChromeState
 
           )}
 
-          {!hideSearch && showSearch && (
+          {showSearch && (
 
             <div className="flex flex-wrap items-center gap-1.5">
 

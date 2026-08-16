@@ -6,6 +6,7 @@ import "time"
 type Team struct {
 
 	Name string
+	ShortName string
 	Logo string
 	Abbreviation string
 

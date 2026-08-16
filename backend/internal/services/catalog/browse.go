@@ -352,6 +352,7 @@ func sportsMatchFromMatch(m mediakit.Match) SportsMatchDTO {
 	if m.HomeTeam != nil {
 
 		dto.HomeTeam = m.HomeTeam.Name
+		dto.HomeShortName = m.HomeTeam.ShortName
 		dto.HomeLogo = m.HomeTeam.Logo
 
 	}
@@ -359,6 +360,7 @@ func sportsMatchFromMatch(m mediakit.Match) SportsMatchDTO {
 	if m.AwayTeam != nil {
 
 		dto.AwayTeam = m.AwayTeam.Name
+		dto.AwayShortName = m.AwayTeam.ShortName
 		dto.AwayLogo = m.AwayTeam.Logo
 
 	}

@@ -2,12 +2,63 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Phones repaint every backdrop-filter layer on each scroll frame, and these sit on per-card badges, so scrolling stutters. */
+@media (max-width: 767px) {
+
+  [class*="backdrop-blur"],
+  [class*="backdrop-saturate"] {
+
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+
+  }
+
+  .skeleton {
+
+    animation: none !important;
+    background-image: none !important;
+    background-color: #1a1a1a;
+
+  }
+
+  .animate-fade-in {
+
+    animation-duration: 0.15s !important;
+
+  }
+
+}
+
+@media (prefers-reduced-motion: reduce) {
+
+  *,
+  *::before,
+  *::after {
+
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+
+  }
+
+  .animate-spin {
+
+    animation-duration: 1s !important;
+    animation-iteration-count: infinite !important;
+
+  }
+
+}
+
 @layer base {
 
   html {
 
     @apply overflow-x-clip;
     font-size: 106.25%;
+    height: 100%;
+    height: -webkit-fill-available;
     overscroll-behavior: none;
     touch-action: manipulation;
 
@@ -23,6 +74,8 @@
 
     @apply overflow-x-clip bg-surface text-foreground antialiased;
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    min-height: 100%;
+    min-height: -webkit-fill-available;
     overscroll-behavior: none;
 
   }
@@ -30,6 +83,8 @@
   #root {
 
     @apply overflow-x-clip;
+    min-height: 100%;
+    min-height: -webkit-fill-available;
 
   }
 
@@ -49,6 +104,58 @@
 }
 
 @layer utilities {
+
+  /* Fill the real device screen — 100dvh is short on iOS when the URL bar hides. */
+  .player-screen {
+
+    position: fixed;
+    top: 0;
+    right: 0;
+    left: 0;
+    width: 100%;
+    height: var(--player-vvh, 100lvh);
+    min-height: 100%;
+    min-height: -webkit-fill-available;
+
+  }
+
+  /* A portrait phone letterboxes a 16:9 picture; chrome stays on the screen edges. */
+  .player-portrait-band {
+
+    --player-band: max(calc((100dvh - (100vw * 9 / 16)) / 2), 0px);
+
+  }
+
+  .player-top-portrait {
+
+    top: max(env(safe-area-inset-top, 0px), 0.5rem);
+
+  }
+
+  .player-bottom-portrait {
+
+    bottom: 0;
+
+  }
+
+  .player-skip-portrait {
+
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 5.5rem);
+
+  }
+
+  .player-upnext-portrait {
+
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 6.5rem);
+
+  }
+
+  .player-chrome-safe {
+
+    padding-left: env(safe-area-inset-left, 0px);
+    padding-right: env(safe-area-inset-right, 0px);
+
+  }
 
   /* BottomNav pill (~2.75rem) + outer pb-3 + margin above the dock. */
   .pb-dock {

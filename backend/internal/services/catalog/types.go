@@ -56,6 +56,8 @@ type SportsMatchDTO struct {
 
 	HomeTeam string `json:"homeTeam,omitempty"`
 	AwayTeam string `json:"awayTeam,omitempty"`
+	HomeShortName string `json:"homeShortName,omitempty"`
+	AwayShortName string `json:"awayShortName,omitempty"`
 	HomeLogo string `json:"homeLogo,omitempty"`
 	AwayLogo string `json:"awayLogo,omitempty"`
 

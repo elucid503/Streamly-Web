@@ -66,9 +66,6 @@ interface HomePageState {
 
   contextLoading: ContextActionId | null;
 
-  sportsCategory: string;
-  sportsCategoryOptions: { value: string; label: string }[];
-
 }
 
 export class HomePage extends Component<HomePageProps, HomePageState> {
@@ -103,9 +100,6 @@ export class HomePage extends Component<HomePageProps, HomePageState> {
     interruptionOpen: false,
 
     contextLoading: null,
-
-    sportsCategory: "all",
-    sportsCategoryOptions: [],
 
   };
 
@@ -382,7 +376,20 @@ export class HomePage extends Component<HomePageProps, HomePageState> {
 
   handleSearch = (query: string) => {
 
-    this.setState({ searchQuery: query });
+    const jumpToVod = query.trim().length > 0 && this.state.view === "friends";
+
+    if (jumpToVod) {
+
+      localStorage.setItem("streamly:lastView", "vod");
+
+    }
+
+    this.setState({
+
+      searchQuery: query,
+      ...(jumpToVod ? { view: "vod" as const, contextLoading: null } : {}),
+
+    });
 
     if (this.searchDebounce) clearTimeout(this.searchDebounce);
 
@@ -755,7 +762,7 @@ export class HomePage extends Component<HomePageProps, HomePageState> {
 
   render() {
 
-    const { view, searchQuery, searchKind, searchYear, searchRating, searchProgress, history, favorites, settingsOpen, adminOpen, interruption, interruptionOpen, contextLoading, sportsCategory, sportsCategoryOptions } = this.state;
+    const { view, searchQuery, searchKind, searchYear, searchRating, searchProgress, history, favorites, settingsOpen, adminOpen, interruption, interruptionOpen, contextLoading } = this.state;
 
     const showSearch = searchQuery.trim().length > 0 && view !== "live" && view !== "sports" && view !== "friends";
 
@@ -791,14 +798,6 @@ export class HomePage extends Component<HomePageProps, HomePageState> {
 
         contextLoading={contextLoading}
         onContextAction={this.handleContextAction}
-
-        category={view === "sports" ? sportsCategory : undefined}
-        categoryOptions={view === "sports" ? sportsCategoryOptions : undefined}
-        onCategoryChange={(v) => {
-
-          if (view === "sports") this.setState({ sportsCategory: v });
-
-        }}
 
         onOpenSettings={() => this.setState({ settingsOpen: true })}
         onOpenAdmin={() => this.setState({ adminOpen: true })}
@@ -896,8 +895,6 @@ export class HomePage extends Component<HomePageProps, HomePageState> {
                     onSelectChannel={this.handleLiveSelect}
 
                     searchQuery={searchQuery}
-                    category={sportsCategory}
-                    onCategoriesChange={(opts) => this.setState({ sportsCategoryOptions: opts })}
 
                   />
 

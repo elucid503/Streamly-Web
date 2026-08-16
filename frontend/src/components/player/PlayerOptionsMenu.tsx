@@ -1,3 +1,5 @@
+import { PlayerMobileSheet } from "@/components/player/PlayerMobileSheet";
+
 import { cn } from "@/lib/utils";
 import type { LiveSourceProvider, StreamQuality, SubtitleTrack } from "@/lib/types";
 
@@ -9,6 +11,7 @@ type OptionsPanel = "quality" | "subtitles" | "source";
 interface PlayerOptionsMenuProps {
 
   open: boolean;
+  compact?: boolean;
 
   qualities: StreamQuality[];
   selectedHeight: number;
@@ -123,6 +126,8 @@ export class PlayerOptionsMenu extends Component<PlayerOptionsMenuProps, PlayerO
 
     }
 
+    if (this.props.compact) return;
+
     if (this.props.open !== prev.open) {
 
       if (this.props.open) {
@@ -163,17 +168,19 @@ export class PlayerOptionsMenu extends Component<PlayerOptionsMenuProps, PlayerO
   renderTab = (panel: OptionsPanel, label: string) => {
 
     const active = this.state.panel === panel;
+    const compact = this.props.compact;
 
     return (
 
       <button onClick={() => this.setState({ panel })} className={cn(
 
-          "relative flex flex-1 items-center justify-center rounded-md px-3 py-2 text-sm font-medium transition-colors",
+          "relative flex flex-1 items-center justify-center font-medium transition-colors",
+          compact ? "rounded-lg px-3 py-2.5 text-sm" : "rounded-md px-3 py-2 text-sm",
           active ? "text-surface" : "text-foreground-muted hover:text-foreground"
 
         )} >
 
-        {active && <span className="absolute inset-0 rounded-md bg-foreground shadow-sm" />}
+        {active && <span className={cn("absolute inset-0 bg-foreground shadow-sm", compact ? "rounded-lg" : "rounded-md")} />}
 
         <span className="relative z-10">
 
@@ -207,7 +214,8 @@ export class PlayerOptionsMenu extends Component<PlayerOptionsMenuProps, PlayerO
 
       }} className={cn(
 
-        "flex w-full items-center gap-2.5 rounded-md px-2.5 py-2.5 text-left text-sm transition-colors",
+        "flex w-full items-center text-left transition-colors",
+        this.props.compact ? "min-h-14 gap-3 rounded-xl px-4 py-3.5 text-sm" : "gap-2.5 rounded-md px-2.5 py-2.5 text-sm",
         disabled && "cursor-not-allowed opacity-40",
         !disabled && (active || loading) && "bg-white/10 text-foreground",
         !disabled && !active && !loading && "text-foreground-muted hover:bg-white/6 hover:text-foreground"
@@ -216,20 +224,21 @@ export class PlayerOptionsMenu extends Component<PlayerOptionsMenuProps, PlayerO
 
       {loading ? (
 
-        <Loader2 size={16} className="h-4 w-4 shrink-0 animate-spin text-foreground-muted" strokeWidth={2.5} />
+        <Loader2 size={this.props.compact ? 18 : 16} className="shrink-0 animate-spin text-foreground-muted" strokeWidth={2.5} />
 
       ) : (
 
         <span className={cn(
 
-            "flex h-4 w-4 shrink-0 items-center justify-center rounded-full border transition-colors",
+            "flex shrink-0 items-center justify-center rounded-full border transition-colors",
+            this.props.compact ? "h-5 w-5" : "h-4 w-4",
             active ? "border-accent bg-accent text-black" : "border-white/20 bg-transparent"
 
           )}
 
         >
 
-          {active && <Check size={10} strokeWidth={3} />}
+          {active && <Check size={this.props.compact ? 12 : 10} strokeWidth={3} />}
 
         </span>
 
@@ -245,7 +254,7 @@ export class PlayerOptionsMenu extends Component<PlayerOptionsMenuProps, PlayerO
 
         {detail && (
 
-          <p className="mt-0.5 truncate text-[11px] leading-tight text-foreground-faint">
+          <p className={cn("truncate leading-tight text-foreground-faint", this.props.compact ? "mt-0.5 text-xs" : "mt-0.5 text-[11px]")}>
 
             {detail}
 
@@ -262,7 +271,7 @@ export class PlayerOptionsMenu extends Component<PlayerOptionsMenuProps, PlayerO
   render() {
 
     const {
-      open, qualities, selectedHeight, subtitleTracks, activeSubtitleId, qualityEnabled,
+      open, compact, qualities, selectedHeight, subtitleTracks, activeSubtitleId, qualityEnabled,
       preferredHeight, hdrHeights, sourceProviders = [], selectedSourceKey = "auto",
       sourceSwitching = false, onSourceChange, onToggle, onClose, onQualityChange,
       onSubtitleChange, onOpenSettings,
@@ -280,26 +289,223 @@ export class PlayerOptionsMenu extends Component<PlayerOptionsMenuProps, PlayerO
 
     const showTabs = panelOrder.length > 1;
 
+    const title = sourceOn && !qualityEnabled ? "Stream source" : "Playback";
+
+    const tabs = showTabs ? (
+
+      <div className={cn("rounded-xl border border-border-subtle bg-white/5", compact ? "p-1" : "mx-4 mb-3 p-1")}>
+
+        <div className="flex gap-1">
+
+          {sourceOn && this.renderTab("source", "Source")}
+
+          {qualityEnabled && this.renderTab("quality", "Quality")}
+
+          {panelOrder.includes("subtitles") && this.renderTab("subtitles", "Subtitles")}
+
+        </div>
+
+      </div>
+
+    ) : null;
+
+    const sourceList = sourceOn && (
+
+      <div className={compact ? "grid grid-cols-1 gap-2" : "space-y-1"}>
+
+        {sourceProviders.map((provider) => {
+
+          const active = selectedSourceKey === provider.key;
+          const loading = sourceSwitching && active;
+
+          return this.renderOption(
+
+            active,
+            provider.label,
+            provider.description,
+            () => {
+
+              if (provider.key === selectedSourceKey || sourceSwitching) return;
+
+              onSourceChange?.(provider.key);
+
+            },
+            `source-${provider.key}`,
+            sourceSwitching && !active,
+            loading,
+
+          );
+
+        })}
+
+      </div>
+
+    );
+
+    const qualityList = qualityEnabled && (
+
+      <div className={compact ? "grid grid-cols-1 gap-2" : "space-y-1"}>
+
+        {sortedQualities.map((quality) => {
+
+          const isPreferred = preferredHeight === quality.height;
+          const isHdr = hdrHeights?.has(quality.height) ?? false;
+
+          const parts: string[] = [];
+          const label = qualityDetailLabel(quality);
+
+          if (label) parts.push(label);
+          if (isHdr) parts.push("HDR");
+          if (isPreferred) parts.push("Preferred");
+
+          const detail = parts.join(" · ") || undefined;
+
+          return this.renderOption(
+
+            selectedHeight === quality.height,
+
+            qualityLabel(quality.height),
+            detail,
+
+            () => onQualityChange?.(quality.height),
+            `quality-${quality.height}`
+
+          );
+
+        })}
+
+        {onOpenSettings && (
+
+          <button className={cn("flex w-full items-center gap-2 rounded-lg text-left text-foreground-muted transition-colors hover:bg-white/6 hover:text-foreground", compact ? "mt-2 min-h-12 px-3 py-3 text-sm" : "mt-2 mb-2 px-2 py-1.5 text-sm")} onClick={(e) => {
+
+              e.stopPropagation();
+
+              onClose();
+              onOpenSettings();
+
+            }}>
+
+            <Settings size={16} className="shrink-0 opacity-80" />
+            <span>Change Quality Settings</span>
+
+          </button>
+
+        )}
+
+      </div>
+
+    );
+
+    const subtitleList = (
+
+      <div className={compact ? "grid grid-cols-1 gap-2" : "space-y-1"}>
+
+        {this.renderOption(
+
+          activeSubtitleId === null,
+
+          "Off",
+          "No subtitles",
+
+          () => onSubtitleChange(null),
+
+          "subtitle-off"
+
+        )}
+
+        {subtitleTracks.map((track) =>
+
+          this.renderOption(
+
+            activeSubtitleId === track.id,
+
+            track.label,
+
+            subtitleTrackDetail(track),
+            () => onSubtitleChange(track.id),
+
+            track.id
+
+          )
+
+        )}
+
+        {subtitleTracks.length === 0 && (
+
+          <div className="rounded-lg px-4 py-10 text-center">
+
+            <Subtitles size={24} className="mx-auto mb-3 text-foreground-faint" />
+
+            <p className="text-sm text-foreground-muted">
+
+              No subtitles available
+
+            </p>
+
+            <p className="mt-1 text-xs text-foreground-faint">
+
+              Subtitles may not be available for this stream, or there may have been an error loading them.
+
+            </p>
+
+          </div>
+
+        )}
+
+      </div>
+
+    );
+
+    const trigger = (
+
+      <button onClick={(e) => {
+
+          e.stopPropagation();
+
+          onToggle();
+
+        }} className={cn(
+
+          "flex size-9 shrink-0 items-center justify-center rounded-md text-foreground transition-colors hover:bg-white/15",
+          open && "bg-white/15"
+
+        )} aria-label="Playback options" >
+
+        <Settings2 size={20} />
+
+      </button>
+
+    );
+
+    if (compact) {
+
+      return (
+
+        <div className="relative">
+
+          {trigger}
+
+          <PlayerMobileSheet open={open} title={title} icon={<Settings2 size={16} className="text-foreground-muted" />} onClose={onClose} headerExtra={tabs} >
+
+            {panel === "source" && sourceList}
+
+            {panel === "quality" && qualityList}
+
+            {panel === "subtitles" && subtitleList}
+
+          </PlayerMobileSheet>
+
+        </div>
+
+      );
+
+    }
+
     return (
 
       <div ref={this.rootRef} className="relative">
 
-        <button onClick={(e) => {
-
-            e.stopPropagation();
-
-            onToggle();
-
-          }} className={cn(
-
-            "flex size-9 shrink-0 items-center justify-center rounded-md text-foreground transition-colors hover:bg-white/15",
-            open && "bg-white/15"
-
-          )} aria-label="Playback options" >
-
-          <Settings2 size={20} />
-
-        </button>
+        {trigger}
 
         <div className={cn(
 
@@ -320,7 +526,7 @@ export class PlayerOptionsMenu extends Component<PlayerOptionsMenuProps, PlayerO
 
                 <p className="text-sm font-medium text-foreground">
 
-                  {sourceOn && !qualityEnabled ? "Stream source" : "Playback"}
+                  {title}
 
                 </p>
 
@@ -340,23 +546,7 @@ export class PlayerOptionsMenu extends Component<PlayerOptionsMenuProps, PlayerO
 
             </div>
 
-            {showTabs && (
-
-              <div className="mx-4 mb-3 rounded-xl border border-border-subtle bg-white/5 p-1">
-
-                <div className="flex gap-1">
-
-                  {sourceOn && this.renderTab("source", "Source")}
-
-                  {qualityEnabled && this.renderTab("quality", "Quality")}
-
-                  {panelOrder.includes("subtitles") && this.renderTab("subtitles", "Subtitles")}
-
-                </div>
-
-              </div>
-
-            )}
+            {tabs}
 
             <div className="max-h-72 overflow-hidden px-3 pb-3">
 
@@ -375,34 +565,7 @@ export class PlayerOptionsMenu extends Component<PlayerOptionsMenuProps, PlayerO
 
                   <div className="max-h-72 w-full flex-shrink-0 overflow-y-auto pr-1">
 
-                    <div className="space-y-1.5">
-
-                      {sourceProviders.map((provider) => {
-
-                        const active = selectedSourceKey === provider.key;
-                        const loading = sourceSwitching && active;
-
-                        return this.renderOption(
-
-                          active,
-                          provider.label,
-                          provider.description,
-                          () => {
-
-                            if (provider.key === selectedSourceKey || sourceSwitching) return;
-
-                            onSourceChange?.(provider.key);
-
-                          },
-                          `source-${provider.key}`,
-                          sourceSwitching && !active,
-                          loading,
-
-                        );
-
-                      })}
-
-                    </div>
+                    {sourceList}
 
                   </div>
 
@@ -412,55 +575,7 @@ export class PlayerOptionsMenu extends Component<PlayerOptionsMenuProps, PlayerO
 
                   <div className="max-h-72 w-full flex-shrink-0 overflow-y-auto pr-1">
 
-                    <div className="space-y-1.5">
-
-                      {sortedQualities.map((quality) => {
-
-                        const isPreferred = preferredHeight === quality.height;
-                        const isHdr = hdrHeights?.has(quality.height) ?? false;
-
-                        const parts: string[] = [];
-                        const label = qualityDetailLabel(quality);
-
-                        if (label) parts.push(label);
-                        if (isHdr) parts.push("HDR");
-                        if (isPreferred) parts.push("Preferred");
-
-                        const detail = parts.join(" · ") || undefined;
-
-                        return this.renderOption(
-
-                          selectedHeight === quality.height,
-
-                          qualityLabel(quality.height),
-                          detail,
-
-                          () => onQualityChange?.(quality.height),
-                          `quality-${quality.height}`
-
-                        );
-
-                      })}
-
-                    </div>
-
-                    {onOpenSettings && (
-
-                      <button className="mt-2 mb-2 flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm text-foreground-muted transition-colors hover:bg-white/6 hover:text-foreground" onClick={(e) => {
-
-                          e.stopPropagation();
-
-                          onClose();
-                          onOpenSettings();
-
-                        }}>
-
-                        <Settings size={13} className="shrink-0 opacity-80" />
-                        <span>Change Quality Settings</span>
-
-                      </button>
-
-                    )}
+                    {qualityList}
 
                   </div>
 
@@ -468,61 +583,7 @@ export class PlayerOptionsMenu extends Component<PlayerOptionsMenuProps, PlayerO
 
                 <div className="max-h-72 w-full flex-shrink-0 overflow-y-auto pr-1">
 
-                  <div className="space-y-1.5">
-
-                    {this.renderOption(
-
-                      activeSubtitleId === null,
-
-                      "Off",
-                      "No subtitles",
-
-                      () => onSubtitleChange(null),
-
-                      "subtitle-off"
-
-                    )}
-
-                    {subtitleTracks.map((track) =>
-
-                      this.renderOption(
-
-                        activeSubtitleId === track.id,
-
-                        track.label,
-
-                        subtitleTrackDetail(track),
-                        () => onSubtitleChange(track.id),
-
-                        track.id
-
-                      )
-
-                    )}
-
-                    {subtitleTracks.length === 0 && (
-
-                      <div className="rounded-md px-3 py-5 text-center">
-
-                        <Subtitles size={20} className="mx-auto mb-2 text-foreground-faint" />
-
-                        <p className="text-sm text-foreground-muted">
-
-                          No subtitles available
-
-                        </p>
-
-                        <p className="mt-1 text-xs text-foreground-faint">
-
-                          Subtitles may not be available for this stream, or there may have been an error loading them.
-
-                        </p>
-
-                      </div>
-
-                    )}
-
-                  </div>
+                  {subtitleList}
 
                 </div>
 

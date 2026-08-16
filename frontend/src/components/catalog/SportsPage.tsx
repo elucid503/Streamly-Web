@@ -1,6 +1,8 @@
 import { api } from "@/api/client";
 
-import { SportsRow, MatchTitle, matchedChannelToLiveChannel, prettyCategory } from "@/components/catalog/SportsCard";
+import { SportsRow, MatchTitle, condensedMatchTitle, matchedChannelToLiveChannel, prettyCategory } from "@/components/catalog/SportsCard";
+import { Button } from "@/components/ui/Button";
+import { HScrollRow } from "@/components/ui/HScrollRow";
 
 import { sportsBackgroundImage } from "@/lib/sportsBackgrounds";
 import type { LiveChannel, SportsMatch } from "@/lib/types";
@@ -25,8 +27,6 @@ interface SportsPageProps {
   onSelectChannel: (channel: LiveChannel) => void;
 
   searchQuery: string;
-  category?: string;
-  onCategoriesChange?: (options: { value: string; label: string }[]) => void;
 
 }
 
@@ -34,6 +34,9 @@ interface SportsPageState {
 
   matches: SportsMatch[];
   loading: boolean;
+
+  category: string;
+  categories: string[];
 
   showAllLive: boolean;
   showAllSoon: boolean;
@@ -193,17 +196,13 @@ class FeaturedTeamSelect extends Component<FeaturedTeamSelectProps, FeaturedTeam
 
       <div ref={this.rootRef} className="relative">
 
-        <button
-          type="button"
-          className={cn(
-            "field-focus flex h-9 min-w-[132px] max-w-[11rem] items-center justify-between gap-2 rounded-md border border-border-subtle bg-surface-raised px-3 text-left text-xs font-medium text-foreground hover:border-border hover:bg-surface-overlay",
-            open && "border-border bg-surface-overlay"
-          )}
+        <button type="button" className={cn("hidden field-focus md:flex h-9 min-w-[132px] max-w-[11rem] items-center justify-between gap-2 rounded-md border border-border-subtle bg-surface-raised px-3 text-left text-xs font-medium text-foreground hover:border-border hover:bg-surface-overlay", open && "border-border bg-surface-overlay" )}
           aria-haspopup="listbox"
           aria-expanded={open}
           aria-label="Featured team"
           title="Feature a team in the banner"
           onClick={this.toggleOpen}
+
         >
 
           <span className="truncate">{triggerLabel}</span>
@@ -327,6 +326,9 @@ export class SportsPage extends Component<SportsPageProps, SportsPageState> {
     matches: [],
     loading: true,
 
+    category: "all",
+    categories: [],
+
     showAllLive: false,
     showAllSoon: false,
     showAllUpcoming: false,
@@ -360,27 +362,14 @@ export class SportsPage extends Component<SportsPageProps, SportsPageState> {
 
       const matches = matchesOrEmpty(await api.liveSports());
 
-      this.setState({ matches, loading: false });
+      const categories = Array.from(new Set([
 
-      if (initial) {
+        "motor-sports",
+        ...matches.map((m) => m.category).filter(Boolean),
 
-        // Always offer Formula 1 as a filter option, even if no motor-sports
-        // match happens to be in the current lookup window.
-        const categories = Array.from(new Set([
+      ])).sort();
 
-          "motor-sports",
-          ...matches.map((m) => m.category).filter(Boolean),
-
-        ])).sort();
-
-        this.props.onCategoriesChange?.([
-
-          { value: "all", label: "All" },
-          ...categories.map((c) => ({ value: c, label: prettyCategory(c) })),
-
-        ]);
-
-      }
+      this.setState({ matches, loading: false, categories });
 
     } catch {
 
@@ -399,8 +388,8 @@ export class SportsPage extends Component<SportsPageProps, SportsPageState> {
 
   filtered = () => {
 
-    const { category, searchQuery } = this.props;
-    const { matches } = this.state;
+    const { searchQuery } = this.props;
+    const { matches, category } = this.state;
 
     const query = searchQuery.trim().toLowerCase();
 
@@ -413,6 +402,53 @@ export class SportsPage extends Component<SportsPageProps, SportsPageState> {
       return true;
 
     });
+
+  };
+
+  renderFilters = () => {
+
+    const { category, categories } = this.state;
+
+    if (categories.length === 0) return null;
+
+    return (
+
+      <div className="mb-6 px-4 sm:px-8">
+
+        <HScrollRow className="items-center gap-1.5">
+
+          <Button
+            variant={category === "all" ? "default" : "secondary"}
+            size="sm"
+            className="shrink-0"
+            onClick={() => this.setState({ category: "all" })}
+          >
+
+            All
+
+          </Button>
+
+          {categories.map((value) => (
+
+            <Button
+              key={value}
+              variant={category === value ? "default" : "secondary"}
+              size="sm"
+              className="shrink-0"
+              onClick={() => this.setState({ category: category === value ? "all" : value })}
+            >
+
+              {prettyCategory(value)}
+
+            </Button>
+
+          ))}
+
+        </HScrollRow>
+
+      </div>
+
+    );
 
   };
 
@@ -596,7 +632,9 @@ export class SportsPage extends Component<SportsPageProps, SportsPageState> {
 
     return (
 
-      <div className="animate-fade-in py-8">
+      <div className="animate-fade-in py-8 pt-4">
+
+        {this.renderFilters()}
 
         {featured && (
 
@@ -644,7 +682,11 @@ export class SportsPage extends Component<SportsPageProps, SportsPageState> {
 
                   </div>
 
-                  <MatchTitle title={featured.title} className="text-2xl font-bold text-white sm:text-3xl" />
+                  <MatchTitle
+                    title={condensedMatchTitle(featured)}
+                    className="block min-w-0 truncate text-xl font-bold text-white sm:text-3xl"
+                    separatorClassName="text-white/40"
+                  />
 
                   {(featured.homeScore !== undefined && featured.awayScore !== undefined) && (
 
@@ -678,11 +720,7 @@ export class SportsPage extends Component<SportsPageProps, SportsPageState> {
 
                   {featured.channel ? (
 
-                    <button
-                      type="button"
-                      onClick={() => this.props.onSelectChannel(matchedChannelToLiveChannel(featured.channel!, featured.category))}
-                      className="flex h-9 items-center gap-2 rounded-md bg-white px-5 text-sm font-semibold text-black transition-opacity hover:opacity-90"
-                    >
+                    <button type="button" onClick={() => this.props.onSelectChannel(matchedChannelToLiveChannel(featured.channel!, featured.category))} className="flex h-9 items-center gap-2 rounded-md bg-white px-5 text-sm font-semibold text-black text-nowrap transition-opacity hover:opacity-90" >
 
                       Watch on {featured.channel.name}
 

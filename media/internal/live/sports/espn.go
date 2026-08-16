@@ -297,8 +297,10 @@ func matchFromEvent(event espnEvent, category, label string) (Match, bool) {
 			team := &Team{
 
 				Name:         firstNonEmpty(c.Team.DisplayName, c.Team.ShortDisplayName, c.Team.Name),
+				ShortName:    firstNonEmpty(c.Team.ShortDisplayName, c.Team.Name),
 				Logo:         c.Team.Logo,
 				Abbreviation: c.Team.Abbreviation,
+
 			}
 
 			var score *int

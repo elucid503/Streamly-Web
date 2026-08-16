@@ -221,6 +221,8 @@ export interface SportsMatch {
 
   homeTeam?: string;
   awayTeam?: string;
+  homeShortName?: string;
+  awayShortName?: string;
   homeLogo?: string;
   awayLogo?: string;
 

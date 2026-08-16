@@ -3,6 +3,7 @@ import { api } from "@/api/client";
 import { PosterImage } from "@/components/catalog/PosterImage";
 import { Button } from "@/components/ui/Button";
 import { CachedImage } from "@/components/ui/CachedImage";
+import { HScrollRow } from "@/components/ui/HScrollRow";
 
 import { episodeProgressPercent, resumePath, showEpisodeHistory, showResumeItem, } from "@/lib/history"
 
@@ -444,9 +445,9 @@ export class DetailPage extends Component<DetailPageProps, DetailPageState> {
 
           <div className="absolute inset-0 bg-gradient-to-t from-surface via-surface/50 to-surface/10" />
 
-          <button onClick={() => navigate("/")} className="absolute left-4 top-[calc(env(safe-area-inset-top,0px)+1rem)] z-10 flex h-8 items-center gap-2 rounded-md border border-border-subtle bg-surface/80 px-3 text-xs backdrop-blur-md transition-colors hover:bg-surface-overlay" >
+          <button onClick={() => navigate("/")} className="absolute left-4 top-[calc(env(safe-area-inset-top,0px)+1rem)] z-10 flex items-center gap-2 px-1 py-1 text-sm text-foreground transition-colors hover:text-accent" >
 
-            <ArrowLeft size={14} />
+            <ArrowLeft size={16} />
             Back
 
           </button>
@@ -536,7 +537,7 @@ export class DetailPage extends Component<DetailPageProps, DetailPageState> {
 
               <>
 
-                <div className="mb-4 flex gap-2 overflow-x-auto scrollbar-hide">
+                <HScrollRow className="mb-4 gap-2">
 
                   {seasons.map((sn) => {
 
@@ -568,7 +569,7 @@ export class DetailPage extends Component<DetailPageProps, DetailPageState> {
 
                   })}
 
-                </div>
+                </HScrollRow>
 
                 <div className={cn(
 

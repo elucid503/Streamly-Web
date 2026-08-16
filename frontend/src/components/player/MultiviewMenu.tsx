@@ -1,3 +1,5 @@
+import { PlayerMobileSheet } from "@/components/player/PlayerMobileSheet";
+
 import { cn } from "@/lib/utils";
 import type { LiveChannel } from "@/lib/types";
 
@@ -9,6 +11,7 @@ export const MULTIVIEW_MAX_STREAMS = 6;
 interface MultiviewMenuProps {
 
   open: boolean;
+  compact?: boolean;
 
   channels: LiveChannel[];
   selectedIds: string[];
@@ -46,6 +49,8 @@ export class MultiviewMenu extends Component<MultiviewMenuProps, MultiviewMenuSt
       this.props.onSearch?.("");
 
     }
+
+    if (this.props.compact) return;
 
     if (this.props.open !== prev.open) {
 
@@ -120,7 +125,8 @@ export class MultiviewMenu extends Component<MultiviewMenuProps, MultiviewMenuSt
 
       }} className={cn(
 
-        "flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm transition-colors",
+        "flex w-full items-center rounded-lg text-left transition-colors",
+        this.props.compact ? "min-h-14 gap-3 px-4 py-3.5 text-sm" : "gap-2 px-2 py-1.5 text-sm",
         disabled && "cursor-not-allowed opacity-40",
         !disabled && (active || loading) && "bg-white/10 text-foreground",
         !disabled && !active && !loading && "text-foreground-muted hover:bg-white/6 hover:text-foreground"
@@ -129,20 +135,21 @@ export class MultiviewMenu extends Component<MultiviewMenuProps, MultiviewMenuSt
 
       {loading ? (
 
-        <Loader2 size={16} className="h-4 w-4 shrink-0 animate-spin text-foreground-muted" strokeWidth={2.5} />
+        <Loader2 size={this.props.compact ? 18 : 16} className="shrink-0 animate-spin text-foreground-muted" strokeWidth={2.5} />
 
       ) : (
 
         <span className={cn(
 
-            "flex h-4 w-4 shrink-0 items-center justify-center rounded-full border transition-colors",
+            "flex shrink-0 items-center justify-center rounded-full border transition-colors",
+            this.props.compact ? "h-5 w-5" : "h-4 w-4",
             active ? "border-accent bg-accent text-black" : "border-white/20 bg-transparent"
 
           )}
 
         >
 
-          {active && <Check size={10} strokeWidth={3} />}
+          {active && <Check size={this.props.compact ? 12 : 10} strokeWidth={3} />}
 
         </span>
 
@@ -158,7 +165,7 @@ export class MultiviewMenu extends Component<MultiviewMenuProps, MultiviewMenuSt
 
         {detail && (
 
-          <p className="mt-0.5 truncate text-[11px] leading-tight text-foreground-faint">
+          <p className={cn("truncate leading-tight text-foreground-faint", this.props.compact ? "mt-0.5 text-xs" : "mt-0.5 text-[11px]")}>
 
             {detail}
 
@@ -174,33 +181,131 @@ export class MultiviewMenu extends Component<MultiviewMenuProps, MultiviewMenuSt
 
   render() {
 
-    const { open, channels, selectedIds, pendingIds, primaryId, loading, onToggle, onClose, onToggleChannel } = this.props;
+    const { open, compact, channels, selectedIds, pendingIds, primaryId, loading, onToggle, onClose, onToggleChannel } = this.props;
     const { query } = this.state;
 
     const selectedSet = new Set(selectedIds);
     const pendingSet = new Set(pendingIds);
     const atCap = 1 + selectedIds.length >= MULTIVIEW_MAX_STREAMS;
 
+    const channelList = (
+
+      <>
+        {loading && channels.length === 0 && (
+
+          <div className="flex items-center justify-center gap-2 py-10 text-sm text-foreground-muted">
+
+            <Loader2 size={16} className="animate-spin" />
+            Loading channels…
+
+          </div>
+
+        )}
+
+        {!loading && channels.length === 0 && (
+
+          <div className="px-4 py-10 text-center text-sm text-foreground-muted">
+
+            No channels found
+
+          </div>
+
+        )}
+
+        <div className={this.props.compact ? "grid grid-cols-1 gap-2" : "space-y-1"}>
+
+          {channels.map((channel) => {
+
+            const isPrimary = channel.id === primaryId;
+            const selected = selectedSet.has(channel.id);
+            const pending = pendingSet.has(channel.id);
+            const active = isPrimary || selected;
+
+            return this.renderOption(
+
+              active,
+
+              channel.name,
+              channel.category || channel.country || undefined,
+
+              () => {
+
+                if (isPrimary) return;
+
+                onToggleChannel?.(channel);
+
+              },
+              `mv-${channel.id}`,
+              isPrimary || (!selected && !pending && atCap),
+              pending
+
+            );
+
+          })}
+
+        </div>
+      </>
+
+    );
+
+    const search = (
+
+      <div className="relative">
+
+        <Search size={16} className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-foreground-faint" />
+
+        <input value={query} onChange={(e) => this.handleQuery(e.target.value)} placeholder="Search channels…" className="w-full rounded-lg border border-border-subtle bg-white/5 py-2.5 pr-3 pl-9 text-sm text-foreground placeholder:text-foreground-faint focus:border-white/20 focus:outline-none" />
+
+      </div>
+
+    );
+
+    const trigger = (
+
+      <button onClick={(e) => {
+
+          e.stopPropagation();
+
+          onToggle();
+
+        }} className={cn(
+
+          "flex size-9 shrink-0 items-center justify-center rounded-md text-foreground transition-colors hover:bg-white/15",
+          open && "bg-white/15"
+
+        )} aria-label="Multiview" >
+
+        <LayoutGrid size={20} />
+
+      </button>
+
+    );
+
+    if (compact) {
+
+      return (
+
+        <div className="relative">
+
+          {trigger}
+
+          <PlayerMobileSheet open={open} title="Multiview" icon={<LayoutGrid size={16} className="text-foreground-muted" />} onClose={onClose} headerExtra={search} >
+
+            {channelList}
+
+          </PlayerMobileSheet>
+
+        </div>
+
+      );
+
+    }
+
     return (
 
       <div ref={this.rootRef} className="relative">
 
-        <button onClick={(e) => {
-
-            e.stopPropagation();
-
-            onToggle();
-
-          }} className={cn(
-
-            "flex size-9 shrink-0 items-center justify-center rounded-md text-foreground transition-colors hover:bg-white/15",
-            open && "bg-white/15"
-
-          )} aria-label="Multiview" >
-
-          <LayoutGrid size={20} />
-
-        </button>
+        {trigger}
 
         <div className={cn(
 
@@ -243,71 +348,13 @@ export class MultiviewMenu extends Component<MultiviewMenuProps, MultiviewMenuSt
 
             <div className="px-3 pb-2">
 
-              <div className="relative">
-
-                <Search size={14} className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-foreground-faint" />
-
-                <input value={query} onChange={(e) => this.handleQuery(e.target.value)} placeholder="Search channels…" className="w-full rounded-md border border-border-subtle bg-white/5 py-2 pr-3 pl-9 text-sm text-foreground placeholder:text-foreground-faint focus:border-white/20 focus:outline-none" />
-
-              </div>
+              {search}
 
             </div>
 
             <div className="max-h-72 overflow-y-auto px-2 pb-2">
 
-              {loading && channels.length === 0 && (
-
-                <div className="flex items-center justify-center gap-2 py-8 text-sm text-foreground-muted">
-
-                  <Loader2 size={16} className="animate-spin" />
-                  Loading channels…
-
-                </div>
-
-              )}
-
-              {!loading && channels.length === 0 && (
-
-                <div className="px-4 py-8 text-center text-sm text-foreground-muted">
-
-                  No channels found
-
-                </div>
-
-              )}
-
-              <div className="space-y-1">
-
-                {channels.map((channel) => {
-
-                  const isPrimary = channel.id === primaryId;
-                  const selected = selectedSet.has(channel.id);
-                  const pending = pendingSet.has(channel.id);
-                  const active = isPrimary || selected;
-
-                  return this.renderOption(
-
-                    active,
-
-                    channel.name,
-                    channel.category || channel.country || undefined,
-
-                    () => {
-
-                      if (isPrimary) return;
-
-                      onToggleChannel?.(channel);
-
-                    },
-                    `mv-${channel.id}`,
-                    isPrimary || (!selected && !pending && atCap),
-                    pending
-
-                  );
-
-                })}
-
-              </div>
+              {channelList}
 
             </div>
 

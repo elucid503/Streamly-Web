@@ -1388,7 +1388,7 @@ export class WatchPage extends Component<WatchPageProps, WatchPageState> {
 
       return (
 
-        <div className="relative flex h-screen flex-col items-center justify-center gap-5 bg-black px-6">
+        <div className="relative flex h-full min-h-full flex-col items-center justify-center gap-5 bg-black px-6">
 
           <button onClick={this.handleBack}
             className="absolute left-4 top-[calc(env(safe-area-inset-top,0px)+1rem)] flex h-8 items-center gap-2 rounded-md border border-border-subtle bg-surface/80 px-3 text-xs text-foreground backdrop-blur-md transition-colors hover:bg-surface-overlay"
@@ -1431,7 +1431,7 @@ export class WatchPage extends Component<WatchPageProps, WatchPageState> {
 
     return (
 
-      <div className={this.props.minimized ? "relative h-full overflow-hidden bg-black" : "relative h-screen overflow-hidden bg-black"}>
+      <div className="relative h-full min-h-full overflow-hidden bg-black">
 
         <VideoPlayer
 

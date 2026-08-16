@@ -50,11 +50,11 @@ export function prettyCategory(category: string): string {
 
 }
 
-// MatchTitle renders "Team A vs Team B" with the teams in full contrast and
-// the "vs" separator dimmed, so the two names read clearly at a glance.
-export function MatchTitle({ title, className }: { title: string; className?: string }) {
+// MatchTitle renders "Team A vs/at Team B" with the teams in full contrast and
+// the separator dimmed, so the two names read clearly at a glance.
+export function MatchTitle({ title, className, separatorClassName }: { title: string; className?: string; separatorClassName?: string }) {
 
-  const match = title.match(/^(.*?)\s+vs\.?\s+(.*)$/i);
+  const match = title.match(/^(.*?)\s+(vs\.?|at)\s+(.*)$/i);
 
   if (!match) {
 
@@ -62,19 +62,38 @@ export function MatchTitle({ title, className }: { title: string; className?: st
 
   }
 
+  const separator = /^at$/i.test(match[2]) ? "at" : "vs";
+
   return (
 
     <span className={className}>
 
       {match[1]}
 
-      <span className="mx-1.5 font-normal text-foreground-faint">vs</span>
+      <span className={cn("mx-1.5 font-normal", separatorClassName ?? "text-foreground-faint")}>{separator}</span>
 
-      {match[2]}
+      {match[3]}
 
     </span>
 
   );
+
+}
+
+// Prefer ESPN nicknames ("Red Sox at Pirates") when they actually shorten the title.
+export function condensedMatchTitle(match: SportsMatch): string {
+
+  const away = match.awayShortName?.trim();
+  const home = match.homeShortName?.trim();
+
+  if (!away || !home) return match.title;
+
+  const connector = /\s+at\s+/i.test(match.title) ? "at" : "vs";
+  const condensed = `${away} ${connector} ${home}`;
+
+  if (condensed.length >= match.title.trim().length) return match.title;
+
+  return condensed;
 
 }
 
@@ -94,11 +113,11 @@ function Scoreline({ match, className }: { match: SportsMatch; className?: strin
 
   return (
 
-    <span className={cn("tabular-nums font-semibold", className)}>
+    <span className={cn("inline-flex shrink-0 items-center justify-center tabular-nums font-semibold", className)}>
 
-      {left}
+      {match.startsAt > Date.now() / 1000 ? (left || "") : left}
       <span className="mx-1 font-normal text-foreground-faint">–</span>
-      {right}
+      {match.startsAt > Date.now() / 1000 ? (right || "") : right}
 
     </span>
 
@@ -129,7 +148,7 @@ export function SportsRow({ match, onSelect }: SportsRowProps) {
 
     >
 
-      <div className="hidden md:flex w-30 flex-shrink-0 flex-col items-center justify-center whitespace-nowrap border-r border-border-subtle pr-4 text-center">
+      <div className="hidden md:flex w-[70px] flex-shrink-0 flex-col items-center justify-center overflow-hidden border-r border-border-subtle pr-4 text-center">
 
         {(match.live || match.status === "in") ? (
 
@@ -143,16 +162,6 @@ export function SportsRow({ match, onSelect }: SportsRowProps) {
 
             )}
 
-            {match.statusDetail && (
-
-              <span className="mt-0.5 max-w-[7rem] truncate text-[10px] text-foreground-faint">
-
-                {match.statusDetail}
-
-              </span>
-
-            )}
-
           </>
 
         ) : scored || match.status === "post" ? (
@@ -161,16 +170,6 @@ export function SportsRow({ match, onSelect }: SportsRowProps) {
 
             <Scoreline match={match} className="text-base text-foreground-muted" />
 
-            {match.statusDetail && (
-
-              <span className="mt-0.5 max-w-[7rem] truncate text-[10px] text-foreground-faint">
-
-                {match.statusDetail}
-
-              </span>
-
-            )}
-
           </>
 
         ) : (
@@ -178,8 +177,6 @@ export function SportsRow({ match, onSelect }: SportsRowProps) {
           <>
 
             {day && <span className="text-xs text-foreground-faint">{day}</span>}
-
-            <span className="text-lg font-bold text-foreground-muted">{time}</span>
 
           </>
 
@@ -204,7 +201,6 @@ export function SportsRow({ match, onSelect }: SportsRowProps) {
           <span className="truncate text-xs font-medium text-foreground-faint">
 
             {prettyCategory(match.category)}
-            {match.broadcast ? ` · ${match.broadcast}` : match.channel ? ` · ${match.channel.name}` : ""}
 
           </span>
 
@@ -216,7 +212,7 @@ export function SportsRow({ match, onSelect }: SportsRowProps) {
 
         </div>
 
-        <MatchTitle title={match.title} className="truncate text-base font-semibold text-foreground" />
+        <MatchTitle title={match.title} className="block min-w-0 truncate text-base font-semibold text-foreground" />
 
       </div>
 

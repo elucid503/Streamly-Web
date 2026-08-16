@@ -4,6 +4,7 @@ import { ContentRow } from "@/components/catalog/ContentRow";
 import { LiveLogo } from "@/components/catalog/LiveLogo";
 import { TVGuide } from "@/components/catalog/TVGuide";
 import { Button } from "@/components/ui/Button";
+import { HScrollRow } from "@/components/ui/HScrollRow";
 import { PlayOverlay } from "@/components/ui/PlayOverlay";
 import { SelectMenu } from "@/components/ui/SelectMenu";
 
@@ -258,52 +259,58 @@ export class LiveView extends Component<LiveViewProps, LiveViewState> {
 
     return (
 
-      <div className="mb-6 flex flex-wrap items-center gap-1.5 px-4 sm:px-8">
+      <div className="mb-4 px-4 sm:px-8">
 
-        {regions.length > 0 && (
+        <HScrollRow className="items-center gap-1.5">
 
-          <SelectMenu
-            value={region ?? "all"}
-            options={regionOptions}
-            onChange={(value) => this.setState({ region: value === "all" ? null : value })}
-            label="Region"
-            className="shrink-0 [&_button]:min-w-28"
-          />
+          {regions.length > 0 && (
 
-        )}
+            <SelectMenu
+              value={region ?? "all"}
+              options={regionOptions}
+              onChange={(value) => this.setState({ region: value === "all" ? null : value })}
+              label="Region"
+              className="shrink-0 [&_button]:min-w-28"
+            />
 
-        {categories.length > 0 && (
+          )}
 
-          <>
+          {categories.length > 0 && (
 
-            <Button
-              variant={category === null ? "default" : "secondary"}
-              size="sm"
-              onClick={() => this.setState({ category: null })}
-            >
-
-              All
-
-            </Button>
-
-            {categories.map((value) => (
+            <>
 
               <Button
-                key={value}
-                variant={category === value ? "default" : "secondary"}
+                variant={category === null ? "default" : "secondary"}
                 size="sm"
-                onClick={() => this.setState({ category: category === value ? null : value })}
+                className="shrink-0"
+                onClick={() => this.setState({ category: null })}
               >
 
-                {value}
+                All
 
               </Button>
 
-            ))}
+              {categories.map((value) => (
 
-          </>
+                <Button
+                  key={value}
+                  variant={category === value ? "default" : "secondary"}
+                  size="sm"
+                  className="shrink-0"
+                  onClick={() => this.setState({ category: category === value ? null : value })}
+                >
 
-        )}
+                  {value}
+
+                </Button>
+
+              ))}
+
+            </>
+
+          )}
+
+        </HScrollRow>
 
       </div>
 
@@ -340,8 +347,6 @@ export class LiveView extends Component<LiveViewProps, LiveViewState> {
 
       <div className="animate-fade-in py-8">
 
-        {this.renderFilters(filterSource)}
-
         {showing ? (
 
           <>
@@ -355,6 +360,8 @@ export class LiveView extends Component<LiveViewProps, LiveViewState> {
                   Channels
 
                 </h2>
+
+                {this.renderFilters(filterSource)}
 
                 {this.renderGrid(showing)}
 
@@ -400,29 +407,27 @@ export class LiveView extends Component<LiveViewProps, LiveViewState> {
 
             </div>
 
-            {(filteredPopular.length > 0 || loading) && (
+            <section className="mb-8 scroll-mt-36">
 
-              <section className="mb-8 scroll-mt-36">
+              <h2 className="mb-4 px-4 text-base font-semibold tracking-tight text-foreground sm:px-8">
 
-                <h2 className="mb-4 px-4 text-base font-semibold tracking-tight text-foreground sm:px-8">
+                Popular Channels
 
-                  Popular Channels
+              </h2>
 
-                </h2>
+              {this.renderFilters(filterSource)}
 
-                {loading && filteredPopular.length === 0 ? (
+              {loading && filteredPopular.length === 0 ? (
 
-                  <ContentRow title="" loading />
+                <ContentRow title="" loading />
 
-                ) : (
+              ) : filteredPopular.length > 0 ? (
 
-                  this.renderGrid(filteredPopular)
+                this.renderGrid(filteredPopular)
 
-                )}
+              ) : null}
 
-              </section>
-
-            )}
+            </section>
 
             <section id="live-all" className="scroll-mt-36">
 

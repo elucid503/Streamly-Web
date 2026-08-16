@@ -1,7 +1,7 @@
 import { cn } from "@/lib/utils";
 
 import { Component, type ReactNode } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 
 interface ModalProps {
@@ -18,68 +18,73 @@ interface ModalProps {
 
 export class Modal extends Component<ModalProps> {
 
+  private openedAt = 0;
+
+  componentDidMount() {
+
+    if (this.props.open) this.openedAt = Date.now();
+
+  }
+
+  componentDidUpdate(prev: ModalProps) {
+
+    if (this.props.open && !prev.open) this.openedAt = Date.now();
+
+  }
+
+  closeFromBackdrop = () => {
+
+    // The opening tap can land on this overlay once it mounts under the finger.
+    if (Date.now() - this.openedAt < 400) return;
+
+    this.props.onClose();
+
+  };
+
   render() {
 
     const { open, onClose, title, children, className } = this.props;
 
-    return (
+    if (!open || typeof document === "undefined") return null;
 
-      <AnimatePresence>
+    return createPortal(
 
-        {open && (
+      <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
 
-          <motion.div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+        <div className="absolute inset-0 bg-surface/60 backdrop-blur-md" onClick={this.closeFromBackdrop} />
 
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
+        <div className={cn(
 
-            exit={{ opacity: 0 }}
+            "relative z-10 w-full max-w-md rounded-xl border border-border bg-surface-raised p-6 shadow-2xl",
+            className
 
-          >
+          )}
 
-            <div className="absolute inset-0 bg-surface/60 backdrop-blur-md" onClick={onClose} />
+        >
 
-            <motion.div className={cn(
+          <div className="mb-5 flex items-center justify-between">
 
-                "relative z-10 w-full max-w-md rounded-xl border border-border bg-surface-raised p-6 shadow-2xl",
-                className
+            <h2 className="text-base font-semibold">
 
-              )}
+              {title}
 
-              initial={{ opacity: 0, scale: 0.96, y: 8 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
+            </h2>
 
-              exit={{ opacity: 0, scale: 0.96, y: 8 }}
+            <button onClick={onClose} className="rounded-md p-1.5 text-foreground-muted transition-colors hover:bg-surface-overlay hover:text-foreground" >
 
-              transition={{ type: "spring", stiffness: 400, damping: 30 }}
+              <X size={16} />
 
-            >
+            </button>
 
-              <div className="mb-5 flex items-center justify-between">
+          </div>
 
-                <h2 className="text-base font-semibold">
+          {children}
 
-                  {title}
+        </div>
 
-                </h2>
+      </div>,
 
-                <button onClick={onClose} className="rounded-md p-1.5 text-foreground-muted transition-colors hover:bg-surface-overlay hover:text-foreground" >
-
-                  <X size={16} />
-
-                </button>
-
-              </div>
-
-              {children}
-
-            </motion.div>
-
-          </motion.div>
-
-        )}
-
-      </AnimatePresence>
+      document.body,
 
     );
 

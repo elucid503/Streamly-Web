@@ -1,8 +1,9 @@
-import { cn } from "@/lib/utils";
-
-import { Component, createRef } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { Component, createRef, type CSSProperties } from "react";
+import { createPortal } from "react-dom";
+import { AnimatePresence, motion } from "framer-motion";
 import { Check, ChevronDown } from "lucide-react";
+
+import { cn } from "@/lib/utils";
 
 export interface SelectMenuOption {
 
@@ -29,17 +30,22 @@ interface SelectMenuState {
 
   open: boolean;
   openUpward: boolean;
+  menuStyle: CSSProperties;
 
 }
+
+const MENU_GAP = 6;
 
 export class SelectMenu extends Component<SelectMenuProps, SelectMenuState> {
 
   private rootRef = createRef<HTMLDivElement>();
+  private menuRef = createRef<HTMLDivElement>();
 
   state: SelectMenuState = {
 
     open: false,
     openUpward: false,
+    menuStyle: {},
 
   };
 
@@ -49,61 +55,104 @@ export class SelectMenu extends Component<SelectMenuProps, SelectMenuState> {
 
   }
 
-  componentWillUnmount() {
+  componentDidUpdate(_: SelectMenuProps, prev: SelectMenuState) {
 
-    document.removeEventListener("mousedown", this.handleDocumentMouseDown);
+    if (this.state.open && !prev.open) {
+
+      window.addEventListener("resize", this.close);
+      window.addEventListener("scroll", this.handleScroll, true);
+
+    } else if (!this.state.open && prev.open) {
+
+      this.unbindPositionListeners();
+
+    }
 
   }
 
-  resolveOpenUpward = (): boolean => {
+  componentWillUnmount() {
+
+    document.removeEventListener("mousedown", this.handleDocumentMouseDown);
+    this.unbindPositionListeners();
+
+  }
+
+  unbindPositionListeners = () => {
+
+    window.removeEventListener("resize", this.close);
+    window.removeEventListener("scroll", this.handleScroll, true);
+
+  };
+
+  close = () => this.setState({ open: false });
+
+  measure = (): Pick<SelectMenuState, "openUpward" | "menuStyle"> => {
 
     const { placement = "auto", options } = this.props;
-
-    if (placement === "top") return true;
-
-    if (placement === "bottom") return false;
-
     const root = this.rootRef.current;
 
-    if (!root) return false;
+    if (!root) return { openUpward: false, menuStyle: {} };
 
     const rect = root.getBoundingClientRect();
     const estimatedHeight = Math.min(options.length * 36 + 8, 272);
 
-    return window.innerHeight - rect.bottom < estimatedHeight + 12;
+    const openUpward = placement === "top"
+      || (placement === "auto" && window.innerHeight - rect.bottom < estimatedHeight + 12);
+
+    const minWidth = rect.width;
+    const left = Math.max(8, Math.min(rect.left, window.innerWidth - minWidth - 8));
+
+    return {
+
+      openUpward,
+      menuStyle: openUpward
+        ? { left, minWidth, bottom: window.innerHeight - rect.top + MENU_GAP }
+        : { left, minWidth, top: rect.bottom + MENU_GAP },
+
+    };
 
   };
 
   toggleOpen = () => {
 
-    const { open } = this.state;
+    if (this.state.open) {
 
-    if (open) {
-
-      this.setState({ open: false });
+      this.close();
 
       return;
 
     }
 
-    this.setState({ open: true, openUpward: this.resolveOpenUpward() });
+    this.setState({ open: true, ...this.measure() });
 
   };
 
   handleDocumentMouseDown = (event: MouseEvent) => {
 
-    const root = this.rootRef.current;
+    const target = event.target as Node;
 
-    if (!root || root.contains(event.target as Node)) return;
+    if (this.rootRef.current?.contains(target)) return;
 
-    this.setState({ open: false });
+    if (this.menuRef.current?.contains(target)) return;
+
+    this.close();
+
+  };
+
+  handleScroll = (event: Event) => {
+
+    const menu = this.menuRef.current;
+
+    if (menu && event.target instanceof Node && menu.contains(event.target)) return;
+
+    this.close();
 
   };
 
   render() {
 
     const { value, options, onChange, label, className } = this.props;
-    const { open, openUpward } = this.state;
+    const { open, openUpward, menuStyle } = this.state;
 
     const selected = options.find((option) => option.value === value) ?? options[0];
 
@@ -128,79 +177,77 @@ export class SelectMenu extends Component<SelectMenuProps, SelectMenuState> {
 
         </button>
 
-        <AnimatePresence>
+        {createPortal(
 
-          {open && (
+          <AnimatePresence>
 
-            <motion.div className={cn(
+            {open && (
 
-                "absolute left-0 z-50 min-w-full overflow-hidden rounded-md border border-border bg-surface-raised p-1 shadow-lg",
-                openUpward ? "bottom-[calc(100%+0.35rem)]" : "top-[calc(100%+0.35rem)]"
+              <motion.div
+                ref={this.menuRef}
+                className="fixed z-[100] overflow-hidden rounded-md border border-border bg-surface-raised p-1 shadow-lg"
+                initial={{ opacity: 0, scale: 0.96, y: openUpward ? 6 : -6 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.96, y: openUpward ? 6 : -6 }}
+                transition={{ type: "spring", stiffness: 500, damping: 32 }}
+                style={{ ...menuStyle, transformOrigin: openUpward ? "bottom center" : "top center" }}
+              >
 
-              )}
+                <div role="listbox" aria-label={label} className="flex max-h-64 flex-col gap-0.5 overflow-y-auto">
 
-              initial={{ opacity: 0, scale: 0.96, y: openUpward ? 6 : -6 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
+                  {options.map((option) => {
 
-              exit={{ opacity: 0, scale: 0.96, y: openUpward ? 6 : -6 }}
+                    const isSelected = option.value === value;
 
-              transition={{ type: "spring", stiffness: 500, damping: 32 }}
-              style={{ transformOrigin: openUpward ? "bottom center" : "top center" }}
+                    return (
 
-            >
+                      <button
+                        key={option.value}
+                        type="button"
+                        role="option"
+                        aria-selected={isSelected}
+                        className={cn(
+                          "flex w-full items-center justify-between gap-2 rounded-sm px-2 py-1.5 text-left text-sm transition-colors",
+                          isSelected
+                            ? "bg-surface-overlay text-foreground"
+                            : "text-foreground-muted hover:bg-surface-overlay/80 hover:text-foreground"
+                        )}
+                        onClick={() => {
 
-              <div role="listbox" aria-label={label} className="flex max-h-64 flex-col gap-0.5 overflow-y-auto">
+                          onChange(option.value);
+                          this.close();
 
-                {options.map((option) => {
+                        }}
+                      >
 
-                  const isSelected = option.value === value;
+                        <span className="truncate">{option.label}</span>
 
-                  return (
+                        {isSelected && (
 
-                    <button
-                      key={option.value}
-                      type="button"
-                      role="option"
-                      aria-selected={isSelected}
-                      className={cn(
-                        "flex w-full items-center justify-between gap-2 rounded-sm px-2 py-1.5 text-left text-sm transition-colors",
-                        isSelected
-                          ? "bg-surface-overlay text-foreground"
-                          : "text-foreground-muted hover:bg-surface-overlay/80 hover:text-foreground"
-                      )}
-                      onClick={() => {
+                          <span className="flex size-5 shrink-0 items-center justify-center rounded-md bg-foreground/10">
 
-                        onChange(option.value);
-                        this.setState({ open: false });
+                            <Check size={11} className="text-foreground" strokeWidth={2.5} />
 
-                      }}
-                    >
+                          </span>
 
-                      <span className="truncate">{option.label}</span>
+                        )}
 
-                      {isSelected && (
+                      </button>
 
-                        <span className="flex size-5 shrink-0 items-center justify-center rounded-md bg-foreground/10">
+                    );
 
-                          <Check size={11} className="text-foreground" strokeWidth={2.5} />
+                  })}
 
-                        </span>
+                </div>
 
-                      )}
+              </motion.div>
 
-                    </button>
+            )}
 
-                  );
+          </AnimatePresence>,
+          document.body
 
-                })}
-
-              </div>
-
-            </motion.div>
-
-          )}
-
-        </AnimatePresence>
+        )}
 
       </div>
 
