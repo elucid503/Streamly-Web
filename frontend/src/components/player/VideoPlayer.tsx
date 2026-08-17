@@ -2021,9 +2021,14 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
 
     const resolving = !!streamResolving;
     const portraitMobile = portrait && this.mobile;
+
+    // Mobile menus are full-screen sheets, so the chrome hides behind them; desktop menus sit inside the control bar and die with it.
     const menuOpen = showOptions || showMultiview || showEpisodes;
+    const overlayMenuOpen = this.mobile && menuOpen;
+    const anchoredMenuOpen = !this.mobile && menuOpen;
+
     const controlsPinned = resolving || loading || seeking;
-    const effectiveShowControls = (showControls || controlsPinned) && !menuOpen;
+    const effectiveShowControls = (showControls || controlsPinned || anchoredMenuOpen) && !overlayMenuOpen;
 
     const showPauseOverlay = !multiviewActive && !playing && !loading && !seeking && !holdPauseActive && !showEpisodes && !showOptions && !showMultiview && !resolving && playbackPrimed && !!this.props.src.trim() && store.settings?.disablePauseOverlay !== true;
 
