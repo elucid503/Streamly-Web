@@ -1251,7 +1251,11 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
 
     if (this.props.live) {
 
-      if (proxied) {
+      if (this.props.ambienceEnabled) {
+
+        video.crossOrigin = "anonymous";
+
+      } else if (proxied) {
 
         video.crossOrigin = "use-credentials";
 
@@ -2082,7 +2086,7 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
           <AmbienceLayer
 
             videoRef={this.videoRef as RefObject<HTMLVideoElement>}
-            enabled={!!ambienceEnabled && !live}
+            enabled={!!ambienceEnabled}
 
           />
 
@@ -2092,8 +2096,8 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
 
           <div className={cn(
 
-              "relative z-10 grid h-full w-full bg-black",
-              multiviewActive ? cn("gap-0.5", layout.className) : "grid-cols-1 grid-rows-1"
+              "relative z-10 grid h-full w-full",
+              multiviewActive ? cn("bg-black gap-0.5", layout.className) : "grid-cols-1 grid-rows-1"
 
             )}
 
@@ -2101,8 +2105,8 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
 
             <div className={cn(
 
-                "group relative flex min-h-0 min-w-0 items-center justify-center overflow-hidden bg-black",
-                multiviewActive && paneSpanClass(0, layout)
+                "group relative flex min-h-0 min-w-0 items-center justify-center overflow-hidden",
+                multiviewActive && cn("bg-black", paneSpanClass(0, layout))
 
               )}
 
@@ -2110,12 +2114,12 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
 
               <video
 
-                className="h-full w-full object-contain object-center"
+                className="relative z-10 h-full w-full object-contain object-center"
                 ref={this.videoRef}
                 playsInline
                 // Keep crossOrigin stable across multiview toggles — flipping it
                 // reloads the media element and kills the active live stream.
-                crossOrigin={isProxiedStream(this.props.src) ? "use-credentials" : undefined}
+                crossOrigin={ambienceEnabled ? "anonymous" : isProxiedStream(this.props.src) ? "use-credentials" : undefined}
                 {...videoHandlers}
 
               />
