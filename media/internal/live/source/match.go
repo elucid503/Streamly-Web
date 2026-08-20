@@ -45,12 +45,24 @@ func normalizeName(name string) string {
 			" network", " channel", " tv", " television",
 		} {
 
-			if strings.HasSuffix(name, suffix) && len(name) > len(suffix)+1 {
+			if !strings.HasSuffix(name, suffix) || len(name) <= len(suffix)+1 {
 
-				name = strings.TrimSpace(name[:len(name)-len(suffix)])
-				trimmed = true
+				continue
 
 			}
+
+			leftover := strings.TrimSpace(name[:len(name)-len(suffix)])
+
+			// Keep "YES Network" / "USA Network" intact — stripping to "yes"
+			// or "usa" collides with unrelated short tokens.
+			if isBrandSuffix(suffix) && len(leftover) < 4 {
+
+				continue
+
+			}
+
+			name = leftover
+			trimmed = true
 
 		}
 
@@ -82,6 +94,20 @@ func normalizeName(name string) string {
 	}
 
 	return strings.Join(strings.Fields(b.String()), " ")
+
+}
+
+func isBrandSuffix(suffix string) bool {
+
+	switch suffix {
+
+	case " network", " channel", " tv", " television":
+
+		return true
+
+	}
+
+	return false
 
 }
 

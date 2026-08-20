@@ -43,6 +43,20 @@ func (catalog *Catalog) FindByExactName(name string) (Channel, bool) {
 
 	}
 
+	for _, channel := range catalog.Channels {
+
+		for _, alt := range channel.AltNames {
+
+			if strings.ToLower(strings.TrimSpace(alt)) == name {
+
+				return channel, true
+
+			}
+
+		}
+
+	}
+
 	return Channel{}, false
 
 }
@@ -62,9 +76,7 @@ func (catalog *Catalog) Search(query string, limit int) []Channel {
 
 	for _, channel := range catalog.Channels {
 
-		if strings.Contains(strings.ToLower(channel.Name), query) ||
-			strings.Contains(strings.ToLower(channel.Slug), query) ||
-			strings.Contains(strings.ToLower(channel.Network), query) {
+		if channelMatchesQuery(channel, query) {
 
 			matches = append(matches, channel)
 
@@ -127,6 +139,30 @@ func (catalog *Catalog) Popular(limit int) []Channel {
 	}
 
 	return ranked
+
+}
+
+func channelMatchesQuery(channel Channel, query string) bool {
+
+	if strings.Contains(strings.ToLower(channel.Name), query) ||
+		strings.Contains(strings.ToLower(channel.Slug), query) ||
+		strings.Contains(strings.ToLower(channel.Network), query) {
+
+		return true
+
+	}
+
+	for _, alt := range channel.AltNames {
+
+		if strings.Contains(strings.ToLower(alt), query) {
+
+			return true
+
+		}
+
+	}
+
+	return false
 
 }
 

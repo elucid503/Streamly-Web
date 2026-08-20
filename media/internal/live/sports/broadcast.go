@@ -39,8 +39,10 @@ var skipBroadcasts = map[string]bool{
 	"disney+": true,
 	"fubo": true,
 	"mlb.tv": true,
+	"mlbtv": true,
 	"nba league pass": true,
 	"nhl.tv": true,
+	"nhltv": true,
 	"espn+": true,
 	"espn unlmtd": true,
 	"espn unlimited": true,
@@ -58,6 +60,8 @@ var broadcastAliases = map[string][]string{
 	"sportsnet new york": {"SportsNet New York", "SNY"},
 	"yes": {"YES Network", "YES"},
 	"yes network": {"YES Network", "YES"},
+	"yes 2": {"YES 2", "YES Network", "YES"},
+	"yes2": {"YES 2", "YES Network", "YES"},
 	"nesn": {"NESN"},
 	"nesn plus": {"NESN Plus", "NESN"},
 	"masn": {"MASN"},
@@ -66,8 +70,8 @@ var broadcastAliases = map[string][]string{
 	"marquee": {"Marquee Sports Network"},
 	"sportsnet la": {"Spectrum SportsNet LA", "SportsNet LA"},
 	"spectrum sportsnet la": {"Spectrum SportsNet LA"},
-	"spectrum sportsnet": {"Spectrum SportsNet LA"},
-	"spectrum sports net": {"Spectrum SportsNet LA"},
+	"spectrum sportsnet": {"Spectrum SportsNet", "Spectrum SportsNet LA"},
+	"spectrum sports net": {"Spectrum SportsNet", "Spectrum SportsNet LA"},
 	"nbc sports ba": {"NBC Sports Bay Area"},
 	"nbc sports bay area": {"NBC Sports Bay Area"},
 	"nbc sports ca": {"NBC Sports California"},
@@ -516,56 +520,7 @@ func findCatalogChannel(cat *catalog.Catalog, name string) *MatchedChannel {
 	for i := range hits {
 
 		ch := &hits[i]
-		cn := normalizeKey(ch.Name)
-		score := 0
-
-		if cn == norm {
-
-			score = 100
-
-		} else if strings.HasPrefix(cn, norm) && len(norm) >= 4 {
-
-			score = 85
-
-		} else if strings.HasPrefix(norm, cn) && len(cn) >= 5 {
-
-			score = 75
-
-		} else if strings.Contains(cn, norm) && len(norm) >= 5 {
-
-			// Avoid "Sportsnet" matching "SportsNet New York" / partial brand collisions.
-			qWords := len(strings.Fields(norm))
-			nWords := len(strings.Fields(cn))
-
-			if nWords > qWords+1 {
-
-				score = 40
-
-			} else {
-
-				score = 65
-
-			}
-
-		} else if strings.Contains(norm, cn) && len(cn) >= 6 {
-
-			score = 55
-
-		}
-
-		// Prefer sports-category channels when ambiguous (e.g. TBS vs local news).
-		if score > 0 && strings.EqualFold(ch.Category, "Sports") {
-
-			score += 8
-
-		}
-
-		// Prefer US feeds for US leagues.
-		if score > 0 && strings.EqualFold(ch.Country.Code, "us") {
-
-			score += 3
-
-		}
+		score := scoreChannelName(norm, ch)
 
 		if score > bestScore {
 
@@ -584,6 +539,136 @@ func findCatalogChannel(cat *catalog.Catalog, name string) *MatchedChannel {
 	}
 
 	return &MatchedChannel{ChannelID: best.ID, Name: best.Name, Logo: best.Logo}
+
+}
+
+func scoreChannelName(norm string, ch *catalog.Channel) int {
+
+	best := 0
+
+	for _, key := range channelNormKeys(ch) {
+
+		score := nameSimilarity(norm, key)
+
+		if score > best {
+
+			best = score
+
+		}
+
+	}
+
+	if best == 0 {
+
+		return 0
+
+	}
+
+	// Prefer sports-category channels when ambiguous (e.g. TBS vs local news).
+	if strings.EqualFold(ch.Category, "Sports") {
+
+		best += 8
+
+	}
+
+	// Prefer US feeds for US leagues.
+	if strings.EqualFold(ch.Country.Code, "us") {
+
+		best += 3
+
+	}
+
+	return best
+
+}
+
+func channelNormKeys(ch *catalog.Channel) []string {
+
+	seen := map[string]bool{}
+	keys := make([]string, 0, 1+len(ch.AltNames))
+
+	add := func(s string) {
+
+		k := normalizeKey(s)
+
+		if k == "" || seen[k] {
+
+			return
+
+		}
+
+		seen[k] = true
+		keys = append(keys, k)
+
+	}
+
+	add(ch.Name)
+
+	for _, alt := range ch.AltNames {
+
+		add(alt)
+
+	}
+
+	return keys
+
+}
+
+func nameSimilarity(norm, cn string) int {
+
+	if cn == norm {
+
+		return 100
+
+	}
+
+	qWords := len(strings.Fields(norm))
+	nWords := len(strings.Fields(cn))
+
+	if strings.HasPrefix(cn, norm) && len(norm) >= 4 {
+
+		// Avoid "Sportsnet" matching "SportsNet New York".
+		if nWords > qWords+1 {
+
+			return 40
+
+		}
+
+		return 85
+
+	}
+
+	if strings.HasPrefix(norm, cn) && len(cn) >= 5 {
+
+		if qWords > nWords+1 {
+
+			return 40
+
+		}
+
+		return 75
+
+	}
+
+	if strings.Contains(cn, norm) && len(norm) >= 5 {
+
+		if nWords > qWords+1 {
+
+			return 40
+
+		}
+
+		return 65
+
+	}
+
+	if strings.Contains(norm, cn) && len(cn) >= 6 {
+
+		return 55
+
+	}
+
+	return 0
 
 }
 
