@@ -387,7 +387,7 @@ export class HomePage extends Component<HomePageProps, HomePageState> {
     this.setState({
 
       searchQuery: query,
-      ...(jumpToVod ? { view: "vod" as const, contextLoading: null } : {}),
+      ...(jumpToVod ? { view: "vod" as const, contextLoading: null } : {} as any),
 
     });
 
