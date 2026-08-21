@@ -8,8 +8,8 @@ import { isMobile, shouldReduceMotion } from "@/lib/platform";
 import { PWAInstallDesktop } from "@/components/layout/PWAInstallDesktop";
 import { Button } from "@/components/ui/Button";
 
-import { Component, createRef, lazy, Suspense, type ReactNode } from "react";
-import { motion, MotionConfig, type PanInfo } from "framer-motion";
+import { Component, lazy, Suspense, type ReactNode } from "react";
+import { motion, MotionConfig } from "framer-motion";
 import type { Location } from "history";
 import { PWAInstallGate } from "./components/layout/PWAInstallGate";
 
@@ -26,7 +26,6 @@ interface AppState {
   booting: boolean; // Indicates whether the app is still booting (used to show a loading spinner).
   activeWatchPath: string | null;
   playerReady: boolean;
-  miniPlayerCorner: "top-left" | "top-right" | "bottom-left" | "bottom-right";
 
 }
 
@@ -43,8 +42,6 @@ function persistMiniPlayer(): boolean {
 export class App extends Component<object, AppState> {
 
   private unlisten = () => {};
-  private miniPlayerBounds = createRef<HTMLDivElement>();
-  private suppressMiniPlayerReturnUntil = 0;
 
   state: AppState = {
 
@@ -53,7 +50,6 @@ export class App extends Component<object, AppState> {
     booting: true,
     activeWatchPath: parseRoute(history.location).watchPath ?? null,
     playerReady: false,
-    miniPlayerCorner: "bottom-right",
 
   };
 
@@ -251,7 +247,7 @@ export class App extends Component<object, AppState> {
 
   renderPlayer() {
 
-    const { activeWatchPath, location, miniPlayerCorner, playerReady } = this.state;
+    const { activeWatchPath, location, playerReady } = this.state;
 
     if (!activeWatchPath || !store.isAuthenticated) return null;
 
@@ -259,77 +255,42 @@ export class App extends Component<object, AppState> {
     const minimized = route.name !== "watch";
 
     if (minimized && !persistMiniPlayer()) return null;
-    const verticalCorner = miniPlayerCorner.startsWith("top")
-      ? "top-0"
-      : "bottom-[calc(env(safe-area-inset-bottom,0px)+4.5rem)] sm:bottom-0";
-    const horizontalCorner = miniPlayerCorner.endsWith("left") ? "left-0" : "right-0";
-
-    const returnToPlayer = () => {
-
-      if (Date.now() < this.suppressMiniPlayerReturnUntil) return;
-
-      navigate(`/watch/${activeWatchPath}`);
-
-    };
-
-    const snapToCorner = (_event: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
-
-      this.suppressMiniPlayerReturnUntil = Date.now() + 300;
-
-      const vertical = info.point.y < window.innerHeight / 2 ? "top" : "bottom";
-      const horizontal = info.point.x < window.innerWidth / 2 ? "left" : "right";
-
-      this.setState({ miniPlayerCorner: `${vertical}-${horizontal}` as AppState["miniPlayerCorner"] });
-
-    };
 
     return (
 
-      <div ref={this.miniPlayerBounds} className={minimized ? "pointer-events-none fixed inset-3 z-[80] sm:inset-5" : "player-screen z-[80]"}>
+      <motion.div
+        layout={minimized}
+        transition={{ type: "spring", stiffness: 360, damping: 34 }}
+        className={minimized
+          ? `${playerReady ? "pointer-events-auto visible" : "pointer-events-none invisible"} fixed right-5 bottom-5 z-[80] w-[min(22rem,calc(100vw-2.5rem))] overflow-hidden rounded-xl border border-border-subtle bg-surface shadow-2xl`
+          : "player-screen z-[80] bg-black"}
+      >
 
-        <motion.div
-          layout={minimized}
-          drag={minimized ? true : false}
-          dragConstraints={this.miniPlayerBounds}
-          dragElastic={0.05}
-          dragMomentum={false}
-          dragSnapToOrigin
-          onDragStart={() => { this.suppressMiniPlayerReturnUntil = Number.POSITIVE_INFINITY; }}
-          onDragEnd={snapToCorner}
-          animate={minimized ? { x: 0, y: 0 } : undefined}
-          transition={{ type: "spring", stiffness: 360, damping: 34 }}
-          className={minimized
-            ? `${playerReady ? "pointer-events-auto visible" : "pointer-events-none invisible"} absolute ${verticalCorner} ${horizontalCorner} aspect-video w-[min(22rem,calc(100vw-1.5rem))] overflow-hidden rounded-xl border border-border-subtle bg-surface shadow-2xl`
-            : "absolute inset-0 h-full min-h-full w-full bg-black"}
-        >
+        {this.renderShell(
 
-          {this.renderShell(
+          <WatchPage
+            navigate={navigate}
+            watchPath={activeWatchPath}
+            minimized={minimized}
+            onMinimize={(path) => {
 
-            <WatchPage
-              navigate={navigate}
-              watchPath={activeWatchPath}
-              minimized={minimized}
-              onMinimize={(path) => {
+              if (!persistMiniPlayer()) {
 
-                if (!persistMiniPlayer()) {
+                this.setState({ activeWatchPath: null, playerReady: false });
 
-                  this.setState({ activeWatchPath: null, playerReady: false });
+              }
 
-                }
+              navigate(path);
 
-                navigate(path);
+            }}
+            onReturn={() => navigate(`/watch/${activeWatchPath}`)}
+            onDismiss={() => this.setState({ activeWatchPath: null, playerReady: false })}
+            onReadyChange={(ready) => this.setState({ playerReady: ready })}
+          />
 
-              }}
-              onReturn={returnToPlayer}
-              onDismiss={() => this.setState({ activeWatchPath: null, playerReady: false })}
-              onReadyChange={(ready) => this.setState({ playerReady: ready })}
-            />
+        )}
 
-          )}
-
-        </motion.div>
-
-      </div>
+      </motion.div>
 
     );
 

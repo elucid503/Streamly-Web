@@ -1431,7 +1431,7 @@ export class WatchPage extends Component<WatchPageProps, WatchPageState> {
 
     return (
 
-      <div className="relative h-full min-h-full overflow-hidden bg-black">
+      <div className={this.props.minimized ? "relative overflow-hidden bg-black" : "relative h-full min-h-full overflow-hidden bg-black"}>
 
         <VideoPlayer
 

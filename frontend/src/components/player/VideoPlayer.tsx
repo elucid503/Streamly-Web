@@ -210,6 +210,8 @@ interface VideoPlayerState {
 
 }
 
+const miniControlClass = "flex h-8 flex-1 items-center justify-center text-foreground-muted transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-accent/40";
+
 const readPortrait = (): boolean => {
 
   if (typeof window === "undefined") {
@@ -248,6 +250,7 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
   private videoRef = createRef<HTMLVideoElement>();
   private containerRef = createRef<HTMLDivElement>();
   private progressFillRef = createRef<HTMLDivElement>();
+  private miniProgressFillRef = createRef<HTMLDivElement>();
   private bufferFillRef = createRef<HTMLDivElement>();
   private timeLabelRef = createRef<HTMLSpanElement>();
   private seekPreviewRef = createRef<SeekPreview>();
@@ -676,10 +679,17 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
 
   updateProgressUI = (currentMs: number, durationMs: number) => {
 
+    const pct = durationMs > 0 ? (currentMs / durationMs) * 100 : 0;
+
     if (this.progressFillRef.current) {
 
-      const pct = durationMs > 0 ? (currentMs / durationMs) * 100 : 0;
       this.progressFillRef.current.style.width = `${pct}%`;
+
+    }
+
+    if (this.miniProgressFillRef.current) {
+
+      this.miniProgressFillRef.current.style.width = `${pct}%`;
 
     }
 
@@ -2040,6 +2050,34 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
     const sourceEnabled = !!live && (sourceProviders?.length ?? 0) > 0 && !!onSourceChange;
     const episodesEnabled = !live && !!onEpisodeSelect && !!onSeasonChange;
 
+    const episodePicker = episodesEnabled ? (
+
+      <EpisodePickerPanel
+
+        open={showEpisodes}
+        compact={this.mobile}
+        seasons={seasons ?? []}
+        episodes={episodes ?? []}
+
+        currentSeason={currentSeason}
+        currentEpisode={currentEpisode}
+        menuSeason={menuSeason ?? currentSeason ?? 1}
+        episodesLoading={episodesLoading}
+
+        onClose={() => this.setState({ showEpisodes: false })}
+        onSeasonChange={onSeasonChange}
+        onEpisodeSelect={(season, episode) => {
+
+          this.setState({ showEpisodes: false });
+
+          onEpisodeSelect(season, episode);
+
+        }}
+
+      />
+
+    ) : null;
+
     const pauseLayout = live ? "live" as const : episodeTitle ? "episode" as const : "movie" as const;
 
     const videoHandlers = {
@@ -2074,13 +2112,16 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
 
     return (
 
-      <div className={cn("player-portrait-band relative flex h-full min-h-full w-full flex-col bg-black", compact && "group/miniplayer")}
+      <div className={cn("relative flex w-full flex-col bg-black", !compact && "player-portrait-band h-full min-h-full")}
 
         ref={this.containerRef}
-        onMouseMove={this.showControlsTemporarily}
-        onClick={this.showControlsTemporarily}
+        onMouseMove={compact ? undefined : this.showControlsTemporarily}
+        onClick={compact ? undefined : this.showControlsTemporarily}
 
       >
+
+        <div className={cn("relative w-full", compact ? "aspect-video overflow-hidden" : "min-h-0 flex-1")}>
+
         {!multiviewActive && !compact && (
 
           <AmbienceLayer
@@ -2283,31 +2324,7 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
 
         {compact && (
 
-          <div className="absolute inset-0 z-50">
-
-            <button type="button" onClick={onReturn} className="absolute inset-0" aria-label="Return to full player" />
-
-            <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/55 opacity-0 transition-opacity duration-200 group-hover/miniplayer:opacity-100 group-focus-within/miniplayer:opacity-100">
-
-              <div className="pointer-events-auto flex items-center gap-2">
-
-                <button type="button" onClick={(event) => { event.stopPropagation(); this.togglePlay(); }} className="flex size-10 items-center justify-center rounded-full bg-white/95 text-black shadow-lg transition-transform hover:scale-105" aria-label={playing ? "Pause" : "Play"}>
-
-                  {playing ? <Pause size={18} fill="currentColor" /> : <Play size={18} fill="currentColor" className="translate-x-px" />}
-
-                </button>
-
-                <button type="button" onClick={(event) => { event.stopPropagation(); onDismiss?.(); }} className="flex size-10 items-center justify-center rounded-full border border-white/20 bg-surface/80 text-foreground shadow-lg backdrop-blur-md transition-colors hover:bg-surface-overlay" aria-label="Dismiss miniplayer">
-
-                  <X size={16} />
-
-                </button>
-
-              </div>
-
-            </div>
-
-          </div>
+          <button type="button" onClick={(event) => { event.stopPropagation(); onReturn?.(); }} className="absolute inset-0 z-40" aria-label="Return to full player" />
 
         )}
 
@@ -2398,7 +2415,7 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
 
         </div>}
 
-        {!live && showSkipIntro && !menuOpen && (
+        {!compact && !live && showSkipIntro && !menuOpen && (
 
           <button onClick={(e) => {
 
@@ -2421,7 +2438,7 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
 
         )}
 
-        {!live && showUpNextMini && !showUpNext && !menuOpen && nextEpisode && (
+        {!compact && !live && showUpNextMini && !showUpNext && !menuOpen && nextEpisode && (
 
           <button onClick={(e) => {
 
@@ -2444,7 +2461,7 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
 
         )}
 
-        {!live && showUpNext && !menuOpen && nextEpisode && (
+        {!compact && !live && showUpNext && !menuOpen && nextEpisode && (
 
           <div className={cn(
 
@@ -2492,52 +2509,50 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
 
         )}
 
-        {!compact && <div style={{ padding: "12px" }} className={cn(
+        {!compact && <div className={cn(
 
             // Outer shell is pointer-events-none so its padding doesn't block multiview pane chrome (audio/remove) under the bottom control band.
 
-            "player-chrome-safe pointer-events-none absolute inset-x-0 z-20 px-6 transition-opacity duration-300",
-            portraitMobile && !showEpisodes ? "player-bottom-portrait pb-[max(0.75rem,env(safe-area-inset-bottom,0px))]" : "bottom-0 pb-[max(1rem,env(safe-area-inset-bottom,0px))]",
-            showEpisodes ? "pt-2" : "pt-10",
+            "pointer-events-none absolute inset-x-0 z-20 transition-opacity duration-300",
+            this.mobile ? "player-bottom-chrome" : "px-6 pb-4",
+            portraitMobile && !showEpisodes ? "player-bottom-portrait" : "bottom-0",
+            this.mobile ? (showEpisodes ? "pt-2" : "pt-3") : "pt-10",
             effectiveShowControls || showEpisodes ? "opacity-100" : "opacity-0"
 
         )}
 
         >
 
-          {episodesEnabled && onSeasonChange && onEpisodeSelect && (
+          {this.mobile && (
 
             <div className={showEpisodes ? "pointer-events-auto" : undefined}>
 
-              <EpisodePickerPanel
-
-                open={showEpisodes}
-                compact={this.mobile}
-                seasons={seasons ?? []}
-                episodes={episodes ?? []}
-
-                currentSeason={currentSeason}
-                currentEpisode={currentEpisode}
-                menuSeason={menuSeason ?? currentSeason ?? 1}
-                episodesLoading={episodesLoading}
-
-                onClose={() => this.setState({ showEpisodes: false })}
-                onSeasonChange={onSeasonChange}
-                onEpisodeSelect={(season, episode) => {
-
-                  this.setState({ showEpisodes: false });
-
-                  onEpisodeSelect(season, episode);
-
-                }}
-
-              />
+              {episodePicker}
 
             </div>
 
           )}
 
           {!live && (
+
+            <div className="relative">
+
+              {!this.mobile && episodePicker && (
+
+                <div className={cn(
+
+                    "absolute bottom-full left-1/2 z-30 mb-5 w-[96vw] -translate-x-1/2",
+                    showEpisodes && "pointer-events-auto"
+
+                  )}
+
+                >
+
+                  {episodePicker}
+
+                </div>
+
+              )}
 
             <div className={cn(
 
@@ -2577,6 +2592,8 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
                 />
 
               </div>
+
+            </div>
 
             </div>
 
@@ -2778,6 +2795,81 @@ export class VideoPlayer extends Component<VideoPlayerProps, VideoPlayerState> {
           </div>
 
         </div>}
+
+        </div>
+
+        {compact && (
+
+          <div className={cn("relative z-10 flex shrink-0 py-2 flex-col bg-surface-raised", live && "border-t border-border-subtle")}>
+
+            {!live && (
+
+              <div
+                className="absolute inset-x-0 top-0 z-20 h-3 -translate-y-1/2 cursor-pointer"
+                onClick={(event) => {
+
+                  event.stopPropagation();
+
+                  this.seek(this.scrubberRatioFromEvent(event) * this.durationMs);
+
+                }}
+                aria-label="Seek"
+              >
+
+                <div className="absolute inset-x-0 top-1/2 h-[3px] -translate-y-1/2 overflow-hidden bg-white/20">
+
+                  <div className="h-full bg-foreground" ref={this.miniProgressFillRef} style={{ width: "0%" }} />
+
+                </div>
+
+              </div>
+
+            )}
+
+            <div className="flex h-8 items-center">
+
+              <button
+                type="button"
+                onClick={(event) => { event.stopPropagation(); onDismiss?.(); }}
+                className={miniControlClass}
+                aria-label="Close miniplayer"
+              >
+
+                <X size={20} />
+
+              </button>
+
+              <span className="h-[90%] w-px shrink-0 bg-white/10" aria-hidden />
+
+              <button
+                type="button"
+                onClick={(event) => { event.stopPropagation(); this.togglePlay(); }}
+                className={miniControlClass}
+                aria-label={playing ? "Pause" : "Play"}
+              >
+
+                {playing ? <Pause size={16} /> : <Play size={16} className="translate-x-px" />}
+
+              </button>
+
+              <span className="h-[90%] w-px shrink-0 bg-white/10" aria-hidden />
+
+              <button
+                type="button"
+                onClick={(event) => { event.stopPropagation(); onReturn?.(); }}
+                className={miniControlClass}
+                aria-label="Return to full player"
+              >
+
+                <Maximize size={16} />
+
+              </button>
+
+            </div>
+
+          </div>
+
+        )}
 
       </div>
 

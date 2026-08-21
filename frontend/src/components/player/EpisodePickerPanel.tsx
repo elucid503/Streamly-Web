@@ -592,7 +592,7 @@ export class EpisodePickerPanel extends Component<EpisodePickerPanelProps, Episo
       <>
         <div className="w-full animate-fade-in" onClick={(e) => e.stopPropagation()}>
 
-          <div className={cn("-mx-4 border-t border-border-subtle bg-surface/85 shadow-[0_-16px_48px_rgba(0,0,0,0.45)] backdrop-blur-xl", !compact && "sm:-mx-6")}>
+          <div className="overflow-hidden rounded-xl border border-border-subtle bg-surface/85 shadow-2xl shadow-black/40 backdrop-blur-xl">
 
             <div className={cn("flex items-center justify-between", compact ? "gap-2 px-2 py-1" : "gap-4 px-6 py-3")}>
 
