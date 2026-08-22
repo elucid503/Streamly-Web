@@ -629,7 +629,7 @@ func filterLiveChannels(channels []LiveChannelDTO, query string, limit int) []Li
 
 	for _, ch := range channels {
 
-		if !strings.Contains(strings.ToLower(ch.Name), query) {
+		if !liveChannelMatchesQuery(ch, query) {
 
 			continue
 
@@ -646,5 +646,29 @@ func filterLiveChannels(channels []LiveChannelDTO, query string, limit int) []Li
 	}
 
 	return out
+
+}
+
+func liveChannelMatchesQuery(ch LiveChannelDTO, query string) bool {
+
+	if strings.Contains(strings.ToLower(ch.Name), query) ||
+		strings.Contains(strings.ToLower(ch.Slug), query) ||
+		strings.Contains(strings.ToLower(ch.Network), query) {
+
+		return true
+
+	}
+
+	for _, alt := range ch.AltNames {
+
+		if strings.Contains(strings.ToLower(alt), query) {
+
+			return true
+
+		}
+
+	}
+
+	return false
 
 }

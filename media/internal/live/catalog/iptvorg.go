@@ -130,9 +130,9 @@ func fetchIPTVCatalog(httpClient *http.Client) ([]Channel, error) {
 
 		logo := logoByChannel[raw.ID]
 
-		// Require artwork for a polished catalog UI. Team RSNs may still
-		// enter without a logo so sports matching can find them.
-		if logo.URL == "" && !isTeamSportsChannel(raw) {
+		// Require artwork for a polished catalog UI. Team RSNs and branded
+		// extras (PIX 11) may still enter without a logo so matching can find them.
+		if logo.URL == "" && !isTeamSportsChannel(raw) && !hasChannelExtras(raw.ID) {
 
 			continue
 
@@ -195,6 +195,13 @@ func includeIPTVChannel(raw iptvChannel) bool {
 	// Team-specific RSNs (YES Network, FanDuel Sports Network *, MSG, …)
 	// even when iptv-org omits category/owner/network.
 	if isTeamSportsChannel(raw) {
+
+		return true
+
+	}
+
+	// Branded locals providers list under names iptv-org does not (PIX 11).
+	if hasChannelExtras(raw.ID) {
 
 		return true
 
@@ -282,7 +289,7 @@ func channelFromIPTV(raw iptvChannel, logoURL string) Channel {
 	primary := displayCategory(categories)
 	altNames := mergeAltNames(raw.AltNames, extraTeamAltNames(raw.Name), raw.Name)
 
-	return Channel{
+	ch := Channel{
 
 		ID: raw.ID,
 		Name: strings.TrimSpace(raw.Name),
@@ -308,6 +315,10 @@ func channelFromIPTV(raw iptvChannel, logoURL string) Channel {
 		Enriched: logoURL != "" || primary != "" || network != "",
 
 	}
+
+	applyChannelExtras(&ch)
+
+	return ch
 
 }
 

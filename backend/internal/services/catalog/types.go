@@ -37,6 +37,7 @@ type LiveChannelDTO struct {
 	Network string `json:"network,omitempty"`
 	Owners []string `json:"owners,omitempty"`
 	Website string `json:"website,omitempty"`
+	AltNames []string `json:"altNames,omitempty"`
 	Enriched bool `json:"enriched"`
 }
 

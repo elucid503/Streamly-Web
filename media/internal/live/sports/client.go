@@ -145,10 +145,30 @@ func (c *Client) attachChannels(matches []Match) {
 	for i := range matches {
 
 		if cat != nil {
-			matches[i].Channel = matchChannel(matches[i], cat)
+
+			matches[i].Channel = matchBroadcastChannel(matches[i], cat)
+
 		}
-		if matches[i].Channel == nil {
+
+		// Apple TV / Peacock / etc. are skipped for linear matching; try NTV
+		// team/OTT feeds before team RSN maps so exclusives do not wrongly
+		// open YES/SNY style networks.
+		if matches[i].Channel == nil && (broadcastsAreOTTOnly(matches[i].Broadcasts) || hasOTTBroadcast(matches[i].Broadcasts)) {
+
 			matches[i].Channel = c.matchNTVTeam(matches[i])
+
+		}
+
+		if matches[i].Channel == nil && cat != nil {
+
+			matches[i].Channel = matchTeamOrDefaultChannel(matches[i], cat)
+
+		}
+
+		if matches[i].Channel == nil {
+
+			matches[i].Channel = c.matchNTVTeam(matches[i])
+
 		}
 
 	}
@@ -158,25 +178,55 @@ func (c *Client) attachChannels(matches []Match) {
 func (c *Client) matchNTVTeam(match Match) *MatchedChannel {
 
 	if c.resolver == nil {
+
 		return nil
+
 	}
+
+	type candidate struct {
+
+		name string
+		logo string
+
+	}
+
+	var cands []candidate
 
 	// Prefer the home feed, then the away feed. NTV exposes many team-named
 	// channels rather than event or broadcast-network names.
 	for _, team := range []*Team{match.HomeTeam, match.AwayTeam} {
+
 		if team == nil || team.Name == "" {
+
 			continue
+
 		}
 
-		req := source.Request{Name: team.Name}
+		cands = append(cands, candidate{name: team.Name, logo: team.Logo})
+
+	}
+
+	for _, term := range ottSearchTerms(match.Broadcasts) {
+
+		cands = append(cands, candidate{name: term})
+
+	}
+
+	for _, cand := range cands {
+
+		req := source.Request{Name: cand.name}
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		ok := c.resolver.Matches(ctx, req, "s2")
 		cancel()
+
 		if !ok {
+
 			continue
+
 		}
 
-		return &MatchedChannel{ChannelID: EncodeChannelID(team.Name), Name: team.Name, Logo: team.Logo}
+		return &MatchedChannel{ChannelID: EncodeChannelID(cand.name), Name: cand.name, Logo: cand.logo}
+
 	}
 
 	return nil

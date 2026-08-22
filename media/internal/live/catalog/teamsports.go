@@ -138,6 +138,10 @@ func extraTeamAltNames(name string) []string {
 
 		return []string{"SportsNet LA", "Sportsnet LA"}
 
+	case "wpix-hd", "pix 11":
+
+		return []string{"PIX11", "CW PIX 11", "WPIX"}
+
 	}
 
 	return nil

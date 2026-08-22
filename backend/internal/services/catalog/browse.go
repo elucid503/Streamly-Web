@@ -301,6 +301,7 @@ func liveChannelFromChannel(ch mediakit.Channel) LiveChannelDTO {
 		Network: ch.Network,
 		Owners: append([]string(nil), ch.Owners...),
 		Website: ch.Website,
+		AltNames: append([]string(nil), ch.AltNames...),
 		Enriched: ch.Enriched,
 	}
 

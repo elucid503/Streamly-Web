@@ -62,6 +62,10 @@ var broadcastAliases = map[string][]string{
 	"yes network": {"YES Network", "YES"},
 	"yes 2": {"YES 2", "YES Network", "YES"},
 	"yes2": {"YES 2", "YES Network", "YES"},
+	"wpix": {"PIX 11", "PIX11", "WPIX", "CW PIX 11"},
+	"pix 11": {"PIX 11", "PIX11", "WPIX"},
+	"pix11": {"PIX 11", "PIX11", "WPIX"},
+	"cw pix 11": {"PIX 11", "PIX11", "WPIX"},
 	"nesn": {"NESN"},
 	"nesn plus": {"NESN Plus", "NESN"},
 	"masn": {"MASN"},
@@ -270,13 +274,24 @@ var categoryDefaultNetworks = map[string][]string{
 // broadcast data first, then team RSN maps, then national defaults.
 func matchChannel(m Match, cat *catalog.Catalog) *MatchedChannel {
 
+	if ch := matchBroadcastChannel(m, cat); ch != nil {
+
+		return ch
+
+	}
+
+	return matchTeamOrDefaultChannel(m, cat)
+
+}
+
+func matchBroadcastChannel(m Match, cat *catalog.Catalog) *MatchedChannel {
+
 	if cat == nil {
 
 		return nil
 
 	}
 
-	// 1) Live broadcast outlets from the scoreboard (ESPN), already preference-ordered.
 	for _, term := range expandBroadcastLabels(m.Broadcasts) {
 
 		if ch := findCatalogChannel(cat, term); ch != nil {
@@ -287,7 +302,18 @@ func matchChannel(m Match, cat *catalog.Catalog) *MatchedChannel {
 
 	}
 
-	// 2) Team-specific regional networks (home preferred, then away).
+	return nil
+
+}
+
+func matchTeamOrDefaultChannel(m Match, cat *catalog.Catalog) *MatchedChannel {
+
+	if cat == nil {
+
+		return nil
+
+	}
+
 	for _, term := range teamSearchTerms(m) {
 
 		if ch := findCatalogChannel(cat, term); ch != nil {
@@ -298,7 +324,6 @@ func matchChannel(m Match, cat *catalog.Catalog) *MatchedChannel {
 
 	}
 
-	// 3) League / category national defaults.
 	for _, name := range categoryDefaultNetworks[m.Category] {
 
 		if ch := findCatalogChannel(cat, name); ch != nil {
@@ -310,6 +335,65 @@ func matchChannel(m Match, cat *catalog.Catalog) *MatchedChannel {
 	}
 
 	return nil
+
+}
+
+func hasOTTBroadcast(names []string) bool {
+
+	for _, name := range names {
+
+		for _, part := range splitBroadcastName(name) {
+
+			if skipBroadcasts[normalizeKey(part)] {
+
+				return true
+
+			}
+
+		}
+
+	}
+
+	return false
+
+}
+
+// True when every named outlet is OTT/radio (or there are no names at all).
+func broadcastsAreOTTOnly(names []string) bool {
+
+	if len(names) == 0 {
+
+		return true
+
+	}
+
+	sawOutlet := false
+
+	for _, name := range names {
+
+		for _, part := range splitBroadcastName(name) {
+
+			key := normalizeKey(part)
+
+			if key == "" {
+
+				continue
+
+			}
+
+			sawOutlet = true
+
+			if !skipBroadcasts[key] {
+
+				return false
+
+			}
+
+		}
+
+	}
+
+	return sawOutlet || len(names) == 0
 
 }
 
