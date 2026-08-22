@@ -157,6 +157,13 @@ func (c *Cache) refreshSports() {
 
 }
 
+// RefreshSportsNow pulls a fresh scoreboard into the sports snapshot.
+func (c *Cache) RefreshSportsNow() {
+
+	c.refreshSports()
+
+}
+
 // SportsMatches returns the cached sports matches.
 func (c *Cache) SportsMatches() []SportsMatchDTO {
 

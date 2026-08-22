@@ -212,6 +212,13 @@ export interface MatchedChannel {
 
 }
 
+export interface SportsAlert {
+
+  matchId: string;
+  title: string;
+
+}
+
 export interface SportsMatch {
 
   id: string;

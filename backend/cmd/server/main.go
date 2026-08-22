@@ -104,6 +104,20 @@ func main() {
 
 	feedHandler := handlers.NewFeedHandler(feedSvc, historySvc, favoritesSvc)
 
+	pushSvc := services.NewPushService(db, cfg)
+
+	if !pushSvc.Configured() {
+
+		log.Println("warning: VAPID_PUBLIC_KEY / VAPID_PRIVATE_KEY unset; sports kickoff alerts disabled")
+
+	}
+
+	sportsAlertsSvc := services.NewSportsAlertsService(db, pushSvc, mediaSvc)
+	sportsAlertsSvc.Start(cacheCtx)
+	defer sportsAlertsSvc.Stop()
+
+	sportsAlertsHandler := handlers.NewSportsAlertsHandler(sportsAlertsSvc, pushSvc)
+
 	gin.SetMode(gin.ReleaseMode)
 
 	r := gin.New()
@@ -231,6 +245,14 @@ func main() {
 	live.GET("/providers", streamHandler.LiveProviders)
 	live.GET("/schedule", catalogHandler.LiveSchedule)
 	live.GET("/sports", catalogHandler.LiveSports)
+
+	protected.GET("/push/vapid", sportsAlertsHandler.VapidPublicKey)
+	protected.PUT("/push/subscription", sportsAlertsHandler.UpsertSubscription)
+	protected.DELETE("/push/subscription", sportsAlertsHandler.DeleteSubscription)
+
+	protected.GET("/sports/alerts", sportsAlertsHandler.List)
+	protected.PUT("/sports/alerts/:matchId", sportsAlertsHandler.Subscribe)
+	protected.DELETE("/sports/alerts/:matchId", sportsAlertsHandler.Unsubscribe)
 
 	// Admin
 

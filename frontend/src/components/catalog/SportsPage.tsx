@@ -1,15 +1,16 @@
 import { api } from "@/api/client";
 
-import { SportsRow, MatchTitle, condensedMatchTitle, matchedChannelToLiveChannel, prettyCategory } from "@/components/catalog/SportsCard";
+import { SportsRow, MatchTitle, condensedMatchTitle, matchedChannelToLiveChannel, prettyCategory, splitStart } from "@/components/catalog/SportsCard";
 import { Button } from "@/components/ui/Button";
 import { HScrollRow } from "@/components/ui/HScrollRow";
 
+import { hintCopy, subscribeToMatch, unsubscribeFromMatch, type AlertHint } from "@/lib/sportsAlerts";
 import { sportsBackgroundImage } from "@/lib/sportsBackgrounds";
-import type { LiveChannel, SportsMatch } from "@/lib/types";
+import type { LiveChannel, SportsAlert, SportsMatch } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 import { AnimatePresence, motion } from "framer-motion";
-import { Check, ChevronDown } from "lucide-react";
+import { Bell, Check, ChevronDown, X } from "lucide-react";
 import { Component, createRef } from "react";
 
 const STARTING_SOON_WINDOW_SECS = 3 * 60 * 60;
@@ -44,6 +45,10 @@ interface SportsPageState {
 
   /** Preferred team name from localStorage; applied only when still in Live Now. */
   featuredTeam: string;
+
+  alerts: SportsAlert[];
+  alertingId: string | null;
+  pushHint: AlertHint | null;
 
 }
 
@@ -335,16 +340,22 @@ export class SportsPage extends Component<SportsPageProps, SportsPageState> {
 
     featuredTeam: readFeaturedTeam(),
 
+    alerts: [],
+    alertingId: null,
+    pushHint: null,
+
   };
 
   async componentDidMount() {
 
     await this.loadMatches(true);
+    void this.loadAlerts();
 
     // Scores and live flags move quickly; poll while the page is mounted.
     this.refreshTimer = setInterval(() => {
 
       void this.loadMatches(false);
+      void this.loadAlerts();
 
     }, 60_000);
 
@@ -379,6 +390,72 @@ export class SportsPage extends Component<SportsPageProps, SportsPageState> {
 
   };
 
+  loadAlerts = async () => {
+
+    try {
+
+      const alerts = await api.listSportsAlerts();
+
+      this.setState({ alerts: alerts ?? [] });
+
+    } catch {
+
+      /* alerts are optional when push is unconfigured */
+
+    }
+
+  };
+
+  isSubscribed = (matchId: string) => {
+
+    return this.state.alerts.some((alert) => alert.matchId === matchId);
+
+  };
+
+  handleToggleAlert = async (match: SportsMatch) => {
+
+    if (this.state.alertingId) return;
+
+    this.setState({ alertingId: match.id, pushHint: null });
+
+    const subscribed = this.isSubscribed(match.id);
+
+    try {
+
+      if (subscribed) {
+
+        await unsubscribeFromMatch(match.id);
+
+        this.setState({ alerts: this.state.alerts.filter((alert) => alert.matchId !== match.id) });
+
+        return;
+
+      }
+
+      const result = await subscribeToMatch(match.id);
+
+      if (!result.ok) {
+
+        this.setState({ pushHint: result.hint });
+
+        return;
+
+      }
+
+      this.setState({ alerts: [{ matchId: match.id, title: match.title }, ...this.state.alerts.filter((alert) => alert.matchId !== match.id)] });
+
+    } catch {
+
+      this.setState({ pushHint: "unavailable" });
+
+    } finally {
+
+      this.setState({ alertingId: null });
+
+    }
+
+  };
+
   setFeaturedTeam = (team: string) => {
 
     writeFeaturedTeam(team);
@@ -402,6 +479,95 @@ export class SportsPage extends Component<SportsPageProps, SportsPageState> {
       return true;
 
     });
+
+  };
+
+  renderAlerts = (startingSoon: SportsMatch[], upcoming: SportsMatch[]) => {
+
+    const { alerts, pushHint } = this.state;
+
+    if (alerts.length === 0 && !pushHint) return null;
+
+    const byId = new Map([...startingSoon, ...upcoming].map((match) => [match.id, match]));
+
+    return (
+
+      <section className="mb-6 px-4 sm:px-8">
+
+        {pushHint && (
+
+          <p className="mb-3 text-xs text-foreground-muted">
+
+            {hintCopy(pushHint)}
+
+          </p>
+
+        )}
+
+        {alerts.length > 0 && (
+
+          <>
+
+            <h2 className="mb-3 text-sm font-semibold tracking-tight text-foreground">Your Alerts</h2>
+
+            <div className="flex flex-col gap-2">
+
+              {alerts.map((alert) => {
+
+                const match = byId.get(alert.matchId);
+                const when = match ? splitStart(match.startsAt) : null;
+
+                return (
+
+                  <div key={alert.matchId} className="flex items-center gap-3 rounded-lg border border-border-subtle bg-surface-raised px-3 py-2">
+
+                    <Bell className="size-3.5 shrink-0 fill-current text-foreground-muted" />
+
+                    <div className="min-w-0 flex-1">
+
+                      <p className="truncate text-sm font-medium text-foreground">{match?.title ?? alert.title}</p>
+
+                      {when && (
+
+                        <p className="text-[11px] text-foreground-faint">
+
+                          {when.day ? `${when.day} · ` : ""}{when.time}
+
+                        </p>
+
+                      )}
+
+                    </div>
+
+                    <button
+
+                      type="button"
+                      aria-label="Cancel kickoff alert"
+                      disabled={this.state.alertingId === alert.matchId}
+                      onClick={() => this.handleToggleAlert(match ?? { id: alert.matchId, title: alert.title, category: "", startsAt: 0, live: false })}
+                      className="flex size-8 items-center justify-center rounded-md text-foreground-muted hover:bg-surface-overlay hover:text-foreground"
+
+                    >
+
+                      <X className="size-3.5" />
+
+                    </button>
+
+                  </div>
+
+                );
+
+              })}
+
+            </div>
+
+          </>
+
+        )}
+
+      </section>
+
+    );
 
   };
 
@@ -452,7 +618,7 @@ export class SportsPage extends Component<SportsPageProps, SportsPageState> {
 
   };
 
-  renderSection = (title: string, matches: SportsMatch[], expanded: boolean, onToggle: () => void, previewCount = ROW_PREVIEW_COUNT) => {
+  renderSection = (title: string, matches: SportsMatch[], expanded: boolean, onToggle: () => void, previewCount = ROW_PREVIEW_COUNT, alertable = false) => {
 
     if (matches.length === 0) return null;
 
@@ -485,7 +651,15 @@ export class SportsPage extends Component<SportsPageProps, SportsPageState> {
 
             {visible.map((match) => (
 
-              <SportsRow key={match.id} match={match} onSelect={this.props.onSelectChannel} />
+              <SportsRow
+                key={match.id}
+                match={match}
+                onSelect={this.props.onSelectChannel}
+                alertable={alertable}
+                subscribed={this.isSubscribed(match.id)}
+                alerting={this.state.alertingId === match.id}
+                onToggleAlert={this.handleToggleAlert}
+              />
 
             ))}
 
@@ -590,6 +764,8 @@ export class SportsPage extends Component<SportsPageProps, SportsPageState> {
     }
 
     const featured = this.resolveFeatured(live, startingSoon, upcoming, past);
+    const featuredBucket = featured ? this.bucketFor(featured, nowSecs) : null;
+    const featuredAlertable = featuredBucket === "soon" || featuredBucket === "upcoming";
     const teamOptions = liveTeamOptions(live);
 
     if (loading) {
@@ -635,6 +811,9 @@ export class SportsPage extends Component<SportsPageProps, SportsPageState> {
       <div className="animate-fade-in py-8 pt-4">
 
         {this.renderFilters()}
+
+        {this.renderAlerts(startingSoon, upcoming)}
+
 
         {featured && (
 
@@ -736,6 +915,25 @@ export class SportsPage extends Component<SportsPageProps, SportsPageState> {
 
                   )}
 
+                  {featuredAlertable && (
+
+                    <button
+
+                      type="button"
+                      disabled={this.state.alertingId === featured.id}
+                      onClick={() => this.handleToggleAlert(featured)}
+                      className="flex h-9 items-center gap-2 rounded-md border border-white/20 bg-white/10 px-4 text-sm font-semibold text-white text-nowrap transition-opacity hover:bg-white/15"
+
+                    >
+
+                      <Bell className={cn("size-3.5", this.isSubscribed(featured.id) && "fill-current")} />
+
+                      {this.isSubscribed(featured.id) ? "Subscribed" : "Notify"}
+
+                    </button>
+
+                  )}
+
                   {teamOptions.length > 0 && (
 
                     <FeaturedTeamSelect
@@ -758,9 +956,9 @@ export class SportsPage extends Component<SportsPageProps, SportsPageState> {
 
         {this.renderSection("Live Now", live, showAllLive, () => this.setState({ showAllLive: !showAllLive }))}
 
-        {this.renderSection("Starting Soon", startingSoon, showAllSoon, () => this.setState({ showAllSoon: !showAllSoon }))}
+        {this.renderSection("Starting Soon", startingSoon, showAllSoon, () => this.setState({ showAllSoon: !showAllSoon }), ROW_PREVIEW_COUNT, true)}
 
-        {this.renderSection("Upcoming", upcoming, showAllUpcoming, () => this.setState({ showAllUpcoming: !showAllUpcoming }))}
+        {this.renderSection("Upcoming", upcoming, showAllUpcoming, () => this.setState({ showAllUpcoming: !showAllUpcoming }), ROW_PREVIEW_COUNT, true)}
 
         {this.renderSection("Past", past, true, () => {}, Number.MAX_SAFE_INTEGER)}
 

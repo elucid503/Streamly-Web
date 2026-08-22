@@ -142,3 +142,29 @@ type FriendRequest struct {
 	UpdatedAt time.Time `bson:"updatedAt" json:"updatedAt"`
 
 }
+
+type PushSubscription struct {
+
+	ID primitive.ObjectID `bson:"_id,omitempty" json:"id"`
+	UserID primitive.ObjectID `bson:"userId" json:"userId"`
+
+	Endpoint string `bson:"endpoint" json:"endpoint"`
+	P256dh string `bson:"p256dh" json:"p256dh"`
+	Auth string `bson:"auth" json:"auth"`
+
+	UpdatedAt time.Time `bson:"updatedAt" json:"updatedAt"`
+
+}
+
+type SportsAlert struct {
+
+	ID primitive.ObjectID `bson:"_id,omitempty" json:"id"`
+	UserID primitive.ObjectID `bson:"userId" json:"userId"`
+
+	MatchID string `bson:"matchId" json:"matchId"`
+	Title string `bson:"title" json:"title"`
+
+	CreatedAt time.Time `bson:"createdAt" json:"createdAt"`
+	FiredAt *time.Time `bson:"firedAt,omitempty" json:"firedAt,omitempty"`
+
+}

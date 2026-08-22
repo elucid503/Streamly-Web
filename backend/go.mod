@@ -14,6 +14,8 @@ require (
 
 require golang.org/x/time v0.12.0
 
+require github.com/SherClockHolmes/webpush-go v1.4.0
+
 require (
 	github.com/andybalholm/brotli v1.2.0 // indirect
 	github.com/bytedance/sonic v1.14.0 // indirect

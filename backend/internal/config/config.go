@@ -41,6 +41,10 @@ type Config struct {
 	SubtitleCacheTTL time.Duration
 
 	StaticDir string
+
+	VAPIDPublicKey string
+	VAPIDPrivateKey string
+	VAPIDSubject string
 }
 
 func Load() (*Config, error) {
@@ -77,6 +81,16 @@ func Load() (*Config, error) {
 		SubtitleCacheTTL: durationOr("SUBTITLE_CACHE_TTL", 15*time.Minute),
 
 		StaticDir: envOr("STATIC_DIR", "../frontend/dist"),
+
+		VAPIDPublicKey: envOr("VAPID_PUBLIC_KEY", ""),
+		VAPIDPrivateKey: envOr("VAPID_PRIVATE_KEY", ""),
+		VAPIDSubject: envOr("VAPID_SUBJECT", ""),
+	}
+
+	if cfg.VAPIDSubject == "" {
+
+		cfg.VAPIDSubject = cfg.FrontendOrigin
+
 	}
 
 	return cfg, nil

@@ -529,6 +529,15 @@ func (s *MediaService) LiveSports() ([]SportsMatchDTO, error) {
 
 }
 
+// RefreshLiveSports re-fetches the scoreboard so kickoff alerts use current startsAt and channel.
+func (s *MediaService) RefreshLiveSports() []SportsMatchDTO {
+
+	s.catalog.RefreshSportsNow()
+
+	return s.catalog.SportsMatches()
+
+}
+
 // LiveStreamRef is a resolved live TV stream (URL + optional playback headers).
 type LiveStreamRef struct {
 	URL     string

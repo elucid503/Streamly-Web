@@ -23,7 +23,29 @@ import type { FavoriteItem, LiveChannel, MainView, SearchHit, ServiceInterruptio
 
 import { Component } from "react";
 
+function viewFromQuery(): MainView | null {
+
+  if (typeof window === "undefined") return null;
+
+  const raw = new URLSearchParams(window.location.search).get("view");
+
+  if (raw === "vod" || raw === "live" || raw === "sports" || raw === "friends") return raw;
+
+  return null;
+
+}
+
 function initialView(): MainView {
+
+  const fromQuery = viewFromQuery();
+
+  if (fromQuery) {
+
+    localStorage.setItem("streamly:lastView", fromQuery);
+
+    return fromQuery;
+
+  }
 
   const raw = localStorage.getItem("streamly:lastView");
 

@@ -1,4 +1,4 @@
-import type { AccessCode, Category, ChannelGuideEntry, Episode, FavoriteItem, FriendRequestItem, FriendSummary, HomeFeed, IntroInfo, LiveChannel, LiveSourceProvider, NextEpisode, ProfileMedia, PublicProfile, ResolveResult, SearchHit, Season, ServiceInterruption, SportsMatch, StreamQuality, SubtitleTrack, TitleDetails, User, UserProfile, UserSettings, WatchHistoryItem, } from "@/lib/types";
+import type { AccessCode, Category, ChannelGuideEntry, Episode, FavoriteItem, FriendRequestItem, FriendSummary, HomeFeed, IntroInfo, LiveChannel, LiveSourceProvider, NextEpisode, ProfileMedia, PublicProfile, ResolveResult, SearchHit, Season, ServiceInterruption, SportsAlert, SportsMatch, StreamQuality, SubtitleTrack, TitleDetails, User, UserProfile, UserSettings, WatchHistoryItem, } from "@/lib/types";
 
 export class ApiError extends Error {
 
@@ -402,6 +402,60 @@ export const api = {
   liveSports() {
 
     return request<SportsMatch[]>("/api/live/sports");
+
+  },
+
+  pushVapidKey() {
+
+    return request<{ publicKey: string }>("/api/push/vapid");
+
+  },
+
+  upsertPushSubscription(subscription: { endpoint: string; keys: { p256dh: string; auth: string } }) {
+
+    return request<void>("/api/push/subscription", {
+
+      method: "PUT",
+      body: JSON.stringify(subscription),
+
+    });
+
+  },
+
+  deletePushSubscription(endpoint: string) {
+
+    return request<void>("/api/push/subscription", {
+
+      method: "DELETE",
+      body: JSON.stringify({ endpoint }),
+
+    });
+
+  },
+
+  listSportsAlerts() {
+
+    return request<SportsAlert[]>("/api/sports/alerts");
+
+  },
+
+  subscribeSportsAlert(matchId: string) {
+
+    return request<SportsAlert>(`/api/sports/alerts/${encodeURIComponent(matchId)}`, {
+
+      method: "PUT",
+
+    });
+
+  },
+
+  unsubscribeSportsAlert(matchId: string) {
+
+    return request<void>(`/api/sports/alerts/${encodeURIComponent(matchId)}`, {
+
+      method: "DELETE",
+
+    });
 
   },
 

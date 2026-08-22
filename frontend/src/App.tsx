@@ -1,6 +1,7 @@
 import { api } from "@/api/client";
 
 import { consumeReturnPath, currentPath, history, navigate, parseRoute, saveReturnPath, } from "@/lib/navigation";
+import { registerSportsWorker } from "@/lib/sportsAlerts";
 
 import { store } from "@/lib/store";
 import { isMobile, shouldReduceMotion } from "@/lib/platform";
@@ -60,6 +61,8 @@ export class App extends Component<object, AppState> {
     window.visualViewport?.addEventListener("resize", this.syncPlayerViewport);
     window.addEventListener("resize", this.syncPlayerViewport);
 
+    navigator.serviceWorker?.addEventListener("message", this.onWorkerMessage);
+
     this.unlisten = history.listen(({ location }) => {
 
       const route = parseRoute(location);
@@ -86,10 +89,22 @@ export class App extends Component<object, AppState> {
 
     this.unlisten();
 
+    navigator.serviceWorker?.removeEventListener("message", this.onWorkerMessage);
+
     window.visualViewport?.removeEventListener("resize", this.syncPlayerViewport);
     window.removeEventListener("resize", this.syncPlayerViewport);
 
   }
+
+  onWorkerMessage = (event: MessageEvent) => {
+
+    const url = event.data?.type === "navigate" ? event.data.url : null;
+
+    if (typeof url !== "string" || !url.startsWith("/")) return;
+
+    navigate(url);
+
+  };
 
   syncPlayerViewport = () => {
 
@@ -122,6 +137,8 @@ export class App extends Component<object, AppState> {
       store.setUser(user);
       store.setSettings(settings);
 
+      void registerSportsWorker();
+
     } catch {
 
       store.setUser(null);
@@ -146,6 +163,8 @@ export class App extends Component<object, AppState> {
     store.setUser(user);
 
     store.setSettings(settings);
+
+    void registerSportsWorker();
 
     navigate(consumeReturnPath("/"));
 

@@ -20,6 +20,34 @@ export function isIOS(): boolean {
 
 }
 
+export function isStandalone(): boolean {
+
+  if (typeof window === "undefined") {
+
+    return false;
+
+  }
+
+  return window.matchMedia("(display-mode: standalone)").matches ||
+    (navigator as Navigator & { standalone?: boolean }).standalone === true;
+
+}
+
+export function iosNeedsInstallForPush(): boolean {
+
+  return isIOS() && !isStandalone();
+
+}
+
+export function pushSupported(): boolean {
+
+  return typeof window !== "undefined" &&
+    "serviceWorker" in navigator &&
+    "PushManager" in window &&
+    "Notification" in window;
+
+}
+
 export function isMobile(): boolean {
 
   if (typeof navigator === "undefined") {

@@ -1,12 +1,17 @@
 import { cn } from "@/lib/utils";
 import type { LiveChannel, MatchedChannel, SportsMatch } from "@/lib/types";
 
-import { ChevronRight } from "lucide-react";
+import { Bell, ChevronRight } from "lucide-react";
 
 interface SportsRowProps {
 
   match: SportsMatch;
   onSelect: (channel: LiveChannel) => void;
+
+  alertable?: boolean;
+  subscribed?: boolean;
+  alerting?: boolean;
+  onToggleAlert?: (match: SportsMatch) => void;
 
 }
 
@@ -125,14 +130,28 @@ function Scoreline({ match, className }: { match: SportsMatch; className?: strin
 
 }
 
-export function SportsRow({ match, onSelect }: SportsRowProps) {
+export function SportsRow({ match, onSelect, alertable, subscribed, alerting, onToggleAlert }: SportsRowProps) {
 
   const channel = match.channel ? matchedChannelToLiveChannel(match.channel, match.category) : null;
 
-  const { day } = splitStart(match.startsAt);
+  const { day, time } = splitStart(match.startsAt);
   const scored = hasScore(match);
+  const isLive = match.live || match.status === "in";
+  const isFinished = match.status === "post";
+  const showKickoff = !isLive && !isFinished && match.startsAt > Date.now() / 1000;
 
   return (
+
+    <div
+
+      className={cn(
+
+        "flex w-full items-stretch rounded-xl border border-border-subtle bg-surface-raised text-left transition-colors",
+        channel ? "hover:border-border hover:bg-surface-overlay" : "opacity-70"
+
+      )}
+
+    >
 
     <button
 
@@ -142,8 +161,8 @@ export function SportsRow({ match, onSelect }: SportsRowProps) {
 
       className={cn(
 
-        "flex w-full items-center gap-4 rounded-xl border border-border-subtle bg-surface-raised px-4 py-3.5 text-left transition-colors",
-        channel ? "hover:border-border hover:bg-surface-overlay" : "cursor-default opacity-70"
+        "flex min-w-0 flex-1 items-center gap-4 px-4 py-3.5 text-left",
+        channel ? "cursor-pointer" : "cursor-default"
 
       )}
 
@@ -151,7 +170,7 @@ export function SportsRow({ match, onSelect }: SportsRowProps) {
 
       <div className="hidden md:flex w-[70px] flex-shrink-0 flex-col items-center justify-center overflow-hidden border-r border-border-subtle pr-4 text-center">
 
-        {(match.live || match.status === "in") ? (
+        {isLive ? (
 
           <>
 
@@ -165,21 +184,19 @@ export function SportsRow({ match, onSelect }: SportsRowProps) {
 
           </>
 
-        ) : scored || match.status === "post" ? (
-
-          <>
-
-            <Scoreline match={match} className="text-base text-foreground-muted" />
-
-          </>
-
-        ) : (
+        ) : showKickoff || !(scored || isFinished) ? (
 
           <>
 
             {day && <span className="text-xs text-foreground-faint">{day}</span>}
 
+            <span className="text-sm font-semibold text-foreground">{time}</span>
+
           </>
+
+        ) : (
+
+          <Scoreline match={match} className="text-base text-foreground-muted" />
 
         )}
 
@@ -205,11 +222,19 @@ export function SportsRow({ match, onSelect }: SportsRowProps) {
 
           </span>
 
-          {scored && (
+          {showKickoff ? (
+
+            <span className="md:hidden shrink-0 text-xs font-medium tabular-nums text-foreground">
+
+              {day ? `${day} · ${time}` : time}
+
+            </span>
+
+          ) : scored ? (
 
             <Scoreline match={match} className="md:hidden text-xs text-foreground" />
 
-          )}
+          ) : null}
 
         </div>
 
@@ -234,6 +259,38 @@ export function SportsRow({ match, onSelect }: SportsRowProps) {
       </div>
 
     </button>
+
+      {alertable && onToggleAlert && (
+
+        <div className="flex items-center border-l border-border-subtle pr-2 pl-1">
+
+          <button
+
+            type="button"
+            disabled={alerting}
+            aria-pressed={Boolean(subscribed)}
+            aria-label={subscribed ? "Cancel kickoff alert" : "Notify when this starts"}
+            title={subscribed ? "Cancel kickoff alert" : "Notify when this starts"}
+            onClick={() => onToggleAlert(match)}
+            className={cn(
+
+              "flex size-9 items-center justify-center rounded-md transition-colors",
+              subscribed ? "text-foreground" : "text-foreground-muted hover:bg-surface-overlay hover:text-foreground",
+              alerting && "pointer-events-none opacity-60"
+
+            )}
+
+          >
+
+            <Bell className={cn("size-4", subscribed && "fill-current")} />
+
+          </button>
+
+        </div>
+
+      )}
+
+    </div>
 
   );
 
