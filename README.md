@@ -13,7 +13,7 @@ A full-stack web application for streaming movies, TV shows, and live channels w
 ### Backend
 
 ```bash
-cd backend
+cd Backend
 go run ./cmd/server
 ```
 
@@ -22,13 +22,13 @@ Requires: `MONGO_URI`, `JWT_SECRET`, `FRONTEND_ORIGIN` in `.env`
 ### Frontend
 
 ```bash
-cd frontend
+cd Frontend
 npm install
 npm run dev
 ```
 
 ## Project Structure
 
-- `backend/` — Go API server with media catalog, streaming, and user management
-- `frontend/` — React SPA with video player and content browsing
+- `Backend/` — Go API server with media catalog, streaming, and user management
+- `Frontend/` — React SPA with video player and content browsing
 - `media/` — Shared media processing library
