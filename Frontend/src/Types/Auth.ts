@@ -16,5 +16,6 @@ export interface UserSettings {
   ambienceEnabled: boolean;
   subtitlesEnabled: boolean;
   proxyLiveStreams: boolean;
+  detectLiveAds?: boolean;
 
 }
