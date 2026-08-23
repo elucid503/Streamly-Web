@@ -16,13 +16,17 @@ import (
 )
 
 const (
+
 	openSubsBaseURL   = "https://api.opensubtitles.com/api/v1"
 	openSubsUserAgent = "Streamly-Web v1.0"
+
 )
 
 // OpenSubsOptions configures the OpenSubtitles client.
 type OpenSubsOptions struct {
+
 	APIKey string
+
 }
 
 // OpenSubsClient queries the OpenSubtitles REST API v3 for English subtitle tracks.

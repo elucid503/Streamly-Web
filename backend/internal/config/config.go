@@ -11,6 +11,7 @@ import (
 )
 
 type Config struct {
+
 	Port string
 
 	MongoURI string
@@ -45,6 +46,7 @@ type Config struct {
 	VAPIDPublicKey string
 	VAPIDPrivateKey string
 	VAPIDSubject string
+
 }
 
 func Load() (*Config, error) {
@@ -100,10 +102,12 @@ func Load() (*Config, error) {
 func loadDotEnv() {
 
 	candidates := []string{
+
 		".env",
 		"../.env",
 		"../../.env",
 		filepath.Join("backend", ".env"),
+
 	}
 
 	if exe, err := os.Executable(); err == nil {
@@ -111,9 +115,11 @@ func loadDotEnv() {
 		dir := filepath.Dir(exe)
 
 		candidates = append(candidates,
+
 			filepath.Join(dir, ".env"),
 			filepath.Join(dir, "..", ".env"),
 			filepath.Join(dir, "..", "..", ".env"),
+
 		)
 
 	}
