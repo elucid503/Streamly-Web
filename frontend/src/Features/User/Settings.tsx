@@ -91,7 +91,9 @@ export class SettingsPanel extends ModuleComponent<SettingsPanelProps, SettingsP
 
           <Switch
 
-            label="Ambience lighting"
+            label="Ambience Lighting"
+            description="Uses the current frame to fill empty space."
+
             checked={settings.ambienceEnabled}
 
             onChange={(v) => this.update({ ambienceEnabled: v })}
@@ -100,7 +102,9 @@ export class SettingsPanel extends ModuleComponent<SettingsPanelProps, SettingsP
 
           <Switch
 
-            label="Pause overlay"
+            label="Pause Overlay"
+            description="Show details when pausing the Player."
+
             checked={!settings.disablePauseOverlay}
 
             onChange={(v) => this.update({ disablePauseOverlay: !v })}
@@ -109,11 +113,21 @@ export class SettingsPanel extends ModuleComponent<SettingsPanelProps, SettingsP
 
           <Switch
 
-            label="Proxy Live TV streams"
-            description="Route Live TV through the server if streams are blocked."
+            label="Proxy Live TV"
+            description="Route Live TV through the server if you can't watch."
             checked={settings.proxyLiveStreams ?? false}
 
             onChange={(v) => this.update({ proxyLiveStreams: v })}
+
+          />
+
+          <Switch
+
+            label="Hide Ad Breaks"
+            description="Cover and mute most ad breaks on Live TV."
+            checked={settings.detectLiveAds ?? false}
+
+            onChange={(v) => this.update({ detectLiveAds: v })}
 
           />
 

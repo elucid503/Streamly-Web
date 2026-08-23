@@ -46,6 +46,7 @@ type UserSettings struct {
 	AmbienceEnabled  bool `bson:"ambienceEnabled" json:"ambienceEnabled"`
 	SubtitlesEnabled bool `bson:"subtitlesEnabled" json:"subtitlesEnabled"`
 	ProxyLiveStreams bool `bson:"proxyLiveStreams" json:"proxyLiveStreams"`
+	DetectLiveAds bool `bson:"detectLiveAds" json:"detectLiveAds"`
 
 	UpdatedAt time.Time `bson:"updatedAt" json:"updatedAt"`
 

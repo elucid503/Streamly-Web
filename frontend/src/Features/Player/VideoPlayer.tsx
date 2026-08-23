@@ -5,6 +5,7 @@ import { ArrowLeft, Clapperboard, FastForward, Maximize, Minimize, Pause, Play, 
 import { AmbienceLayer } from "@/Features/Player/AmbienceLayer";
 import { EpisodePickerPanel } from "@/Features/Player/EpisodePickerPanel";
 import { LiveStreamPane, multiviewLayout, paneSpanClass, type MultiviewStream, } from "@/Features/Player/LiveStreamPane";
+import { AdBreakOverlay } from "@/Features/Player/AdBreakOverlay";
 import { PauseOverlay } from "@/Features/Player/PauseOverlay";
 
 import { PlayerActionFeedbackOverlay, type PlayerActionFeedback, } from "@/Features/Player/PlayerActions";
@@ -17,6 +18,7 @@ import { ControlButton, VolumeControl } from "@/Features/Player/VolumeControl";
 import { ModuleComponent } from "@/Core/Store";
 import Stores from "@/Stores";
 import { navigate } from "@/Utils/Navigation";
+import { AdBreakDetector } from "@/Utils/Player/AdBreak";
 import { hasIntroWindow, isInIntroWindow } from "@/Utils/Player/Intro";
 import { isProxiedStream, isWebPlayableUrl } from "@/Utils/Player/StreamClient";
 import { isMobile } from "@/Utils/Platform";
@@ -210,6 +212,8 @@ interface VideoPlayerState {
 
   portrait: boolean;
 
+  adBreakOverlay: boolean;
+
 }
 
 const miniControlClass = "flex h-8 flex-1 items-center justify-center text-foreground-muted transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-accent/40";
@@ -258,6 +262,8 @@ export class VideoPlayer extends ModuleComponent<VideoPlayerProps, VideoPlayerSt
   private seekPreviewRef = createRef<SeekPreview>();
 
   private hls: HLS | null = null;
+  private adDetector = new AdBreakDetector();
+  private adDebugTimer: ReturnType<typeof setInterval> | null = null;
 
   private mobile = isMobile();
   private portraitQuery: MediaQueryList | null = null;
@@ -324,6 +330,8 @@ export class VideoPlayer extends ModuleComponent<VideoPlayerProps, VideoPlayerSt
     playbackPrimed: false,
 
     behindLive: false,
+
+    adBreakOverlay: false,
 
   };
 
@@ -414,6 +422,16 @@ export class VideoPlayer extends ModuleComponent<VideoPlayerProps, VideoPlayerSt
       this.syncPrimaryAudio();
 
     }
+
+    if (this.state.adBreakOverlay && !this.liveAdsEnabled()) {
+
+      this.adDetector.reset();
+
+      this.setState({ adBreakOverlay: false }, () => this.applyAdAudio());
+
+    }
+
+    this.syncAdDebugLog();
 
   }
 
@@ -890,6 +908,8 @@ export class VideoPlayer extends ModuleComponent<VideoPlayerProps, VideoPlayerSt
 
     if (!primaryHasAudio) return;
 
+    if (this.state.adBreakOverlay) return;
+
     try {
 
       localStorage.setItem("player:volume", String(video.volume));
@@ -914,7 +934,7 @@ export class VideoPlayer extends ModuleComponent<VideoPlayerProps, VideoPlayerSt
     const primaryId = this.props.primaryChannelId ?? null;
     const primaryHasAudio = this.state.audioChannelId === primaryId;
 
-    video.muted = !primaryHasAudio || this.state.muted;
+    video.muted = !primaryHasAudio || this.state.muted || this.state.adBreakOverlay;
     video.volume = primaryHasAudio ? this.state.volume : 0;
 
   };
@@ -954,6 +974,8 @@ export class VideoPlayer extends ModuleComponent<VideoPlayerProps, VideoPlayerSt
     if (this.audioProbeTimer) clearTimeout(this.audioProbeTimer);
     if (this.sourceReadyTimer) clearTimeout(this.sourceReadyTimer);
     if (this.holdPauseTimer) clearTimeout(this.holdPauseTimer);
+
+    this.stopAdDebugLog();
 
     this.waitingTimer = null;
     this.liveFailoverTimer = null;
@@ -1072,9 +1094,129 @@ export class VideoPlayer extends ModuleComponent<VideoPlayerProps, VideoPlayerSt
     if (this.hls) {
 
       this.hls.destroy();
-      this.hls = null
+      this.hls = null;
 
     }
+
+    this.adDetector.reset();
+
+  };
+
+  liveAdsEnabled = () => {
+
+    return !!this.props.live && Stores.Settings.settings?.detectLiveAds === true;
+
+  };
+
+  syncAdDebugLog = () => {
+
+    if (this.liveAdsEnabled()) {
+
+      this.startAdDebugLog();
+
+    } else {
+
+      this.stopAdDebugLog();
+
+    }
+
+  };
+
+  startAdDebugLog = () => {
+
+    if (this.adDebugTimer) {
+
+      return;
+
+    }
+
+    const log = () => {
+
+      console.log("[ad-detect]", this.adDetector.debugLine());
+
+    };
+
+    log();
+    this.adDebugTimer = setInterval(log, 5000);
+
+  };
+
+  stopAdDebugLog = () => {
+
+    if (!this.adDebugTimer) {
+
+      return;
+
+    }
+
+    clearInterval(this.adDebugTimer);
+    this.adDebugTimer = null;
+
+  };
+
+  applyAdAudio = () => {
+
+    const video = this.videoRef.current;
+
+    if (!video) {
+
+      return;
+
+    }
+
+    const adMute = this.state.adBreakOverlay;
+    const multiviewActive = (this.props.multiviewStreams?.length ?? 0) > 0;
+
+    if (this.props.live && multiviewActive) {
+
+      this.syncPrimaryAudio();
+
+      return;
+
+    }
+
+    video.muted = this.state.muted || adMute;
+
+  };
+
+  dismissAdBreak = () => {
+
+    this.adDetector.dismiss();
+
+    this.setState({ adBreakOverlay: false }, () => this.applyAdAudio());
+
+  };
+
+  onHlsFragLoaded = (_event: string, data: { frag?: { duration?: number; sn?: number | string; type?: string }; payload?: ArrayBuffer | Uint8Array }) => {
+
+    if (!this.liveAdsEnabled() || !data.payload) {
+
+      return;
+
+    }
+
+    const type = data.frag?.type;
+
+    if (type === "audio" || type === "subtitle") {
+
+      return;
+
+    }
+
+    const duration = data.frag?.duration ?? 0;
+    const overlay = this.adDetector.push(data.payload, duration, data.frag?.sn);
+
+    this.setState((prev) => {
+
+      if (overlay === prev.adBreakOverlay) {
+
+        return null;
+
+      }
+
+      return { adBreakOverlay: overlay };
+
+    }, () => this.applyAdAudio());
 
   };
 
@@ -1224,11 +1366,15 @@ export class VideoPlayer extends ModuleComponent<VideoPlayerProps, VideoPlayerSt
 
     this.hlsRecoveryAttempts = 0;
 
+    this.adDetector.reset();
+    this.syncAdDebugLog();
+
     this.setState({
 
       loading: true,
       playbackPrimed: false,
       behindLive: false,
+      adBreakOverlay: false,
 
       portrait: readPortrait(),
 
@@ -1298,7 +1444,7 @@ export class VideoPlayer extends ModuleComponent<VideoPlayerProps, VideoPlayerSt
       }
 
       video.volume = this.state.volume;
-      video.muted = this.state.muted;
+      video.muted = this.state.muted || this.state.adBreakOverlay;
       this.syncPrimaryAudio();
 
       // Don't mark loading:false here — onCanPlay/onPlaying handle that so the spinner stays visible through any initial seek without oscillating.
@@ -1350,6 +1496,8 @@ export class VideoPlayer extends ModuleComponent<VideoPlayerProps, VideoPlayerSt
         xhrSetup: proxied ? (xhr) => { xhr.withCredentials = true; } : undefined,
 
       });
+
+      this.hls.on(HlsConstructor.Events.FRAG_LOADED, this.onHlsFragLoaded);
 
       this.hls.loadSource(src);
 
@@ -1685,7 +1833,7 @@ export class VideoPlayer extends ModuleComponent<VideoPlayerProps, VideoPlayerSt
     if (video && primaryHasAudio) {
 
       video.volume = clamped;
-      video.muted = muted;
+      video.muted = muted || this.state.adBreakOverlay;
 
     }
 
@@ -2028,7 +2176,7 @@ export class VideoPlayer extends ModuleComponent<VideoPlayerProps, VideoPlayerSt
   render() {
 
     const { title, subtitle, episodeTitle, description, poster, qualities = [], selectedHeight = 1080, preferredHeight, nextEpisode, onBack, ambienceEnabled, live, compact, onReturn, onDismiss, onQualityChange, onOpenSettings, seasons, episodes, currentSeason, currentEpisode, menuSeason, episodesLoading, onSeasonChange, onEpisodeSelect, primaryChannelId, multiviewStreams = [], multiviewChannels, multiviewLoading, onMultiviewSearch, onMultiviewToggle, onMultiviewRemove, streamResolving, sourceProviders, selectedSourceKey, sourceSwitching, onSourceChange, } = this.props;
-    const { playing, muted, volume, showControls, showOptions, showMultiview, showEpisodes, showSkipIntro, showUpNext, showUpNextMini, upNextCountdown, fullscreen, loading, seeking, holdPauseActive, activeSubtitleId, actionFeedback, hdrHeights, audioChannelId, playbackPrimed, behindLive, portrait, } = this.state;
+    const { playing, muted, volume, showControls, showOptions, showMultiview, showEpisodes, showSkipIntro, showUpNext, showUpNextMini, upNextCountdown, fullscreen, loading, seeking, holdPauseActive, activeSubtitleId, actionFeedback, hdrHeights, audioChannelId, playbackPrimed, behindLive, portrait, adBreakOverlay, } = this.state;
 
     // Live always uses a stable grid shell so adding multiview panes does not remount
     // the primary <video> (which would tear down the HLS MediaSource attachment).
@@ -2048,7 +2196,8 @@ export class VideoPlayer extends ModuleComponent<VideoPlayerProps, VideoPlayerSt
     const controlsPinned = resolving || loading || seeking;
     const effectiveShowControls = (showControls || controlsPinned || anchoredMenuOpen) && !overlayMenuOpen;
 
-    const showPauseOverlay = !multiviewActive && !playing && !loading && !seeking && !holdPauseActive && !showEpisodes && !showOptions && !showMultiview && !resolving && playbackPrimed && !!this.props.src.trim() && Stores.Settings.settings?.disablePauseOverlay !== true;
+    const showAdBreakOverlay = !compact && !multiviewActive && adBreakOverlay && !!live;
+    const showPauseOverlay = !multiviewActive && !playing && !loading && !seeking && !holdPauseActive && !showEpisodes && !showOptions && !showMultiview && !resolving && playbackPrimed && !!this.props.src.trim() && Stores.Settings.settings?.disablePauseOverlay !== true && !showAdBreakOverlay;
 
     const qualityEnabled = !live && qualities.length > 0 && !!onQualityChange;
     const sourceEnabled = !!live && (sourceProviders?.length ?? 0) > 0 && !!onSourceChange;
@@ -2159,7 +2308,7 @@ export class VideoPlayer extends ModuleComponent<VideoPlayerProps, VideoPlayerSt
 
               <video
 
-                className="relative z-10 h-full w-full object-contain object-center"
+                className={cn("relative z-10 h-full w-full object-contain object-center", showAdBreakOverlay && "scale-105 blur-2xl")}
                 ref={this.videoRef}
                 playsInline
                 // Keep crossOrigin stable across multiview toggles — flipping it
@@ -2284,7 +2433,7 @@ export class VideoPlayer extends ModuleComponent<VideoPlayerProps, VideoPlayerSt
 
             videoRef={this.videoRef}
             compact={this.mobile}
-            track={showPauseOverlay || showEpisodes ? null : this.activeSubtitleTrack()}
+            track={showPauseOverlay || showAdBreakOverlay || showEpisodes ? null : this.activeSubtitleTrack()}
 
           />
 
@@ -2304,6 +2453,18 @@ export class VideoPlayer extends ModuleComponent<VideoPlayerProps, VideoPlayerSt
           onResume={this.togglePlay}
           pausedAt={this.videoRef.current ? this.videoRef.current.currentTime : 0}
           totalDuration={this.videoRef.current ? this.videoRef.current.duration : 0}
+          simplified={this.mobile}
+
+        />}
+
+        {!compact && <AdBreakOverlay
+
+          visible={showAdBreakOverlay}
+          poster={poster}
+          title={title}
+          subtitle={subtitle}
+
+          onDismiss={this.dismissAdBreak}
           simplified={this.mobile}
 
         />}
