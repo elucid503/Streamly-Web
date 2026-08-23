@@ -11,6 +11,7 @@ export default defineConfig({
     alias: {
 
       "@": path.resolve(__dirname, "./src"),
+      events: path.resolve(__dirname, "./node_modules/events/events.js"),
 
     },
 
@@ -20,7 +21,7 @@ export default defineConfig({
 
   optimizeDeps: {
 
-    include: ["react", "react-dom", "react-dom/client", "framer-motion"],
+    include: ["react", "react-dom", "react-dom/client", "framer-motion", "events", "tiny-typed-emitter"],
 
   },
 

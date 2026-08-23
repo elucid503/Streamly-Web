@@ -1,25 +1,24 @@
-import { api } from "@/api/client";
-
-import { consumeReturnPath, currentPath, history, navigate, parseRoute, saveReturnPath, } from "@/lib/navigation";
-import { registerSportsWorker } from "@/lib/sportsAlerts";
-
-import { store } from "@/lib/store";
-import { isMobile, shouldReduceMotion } from "@/lib/platform";
-
-import { PWAInstallDesktop } from "@/components/layout/PWAInstallDesktop";
-import { Button } from "@/components/ui/Button";
-
-import { Component, lazy, Suspense, type ReactNode } from "react";
+import { lazy, Suspense, type ReactNode } from "react";
 import { motion, MotionConfig } from "framer-motion";
 import type { Location } from "history";
-import { PWAInstallGate } from "./components/layout/PWAInstallGate";
+
+import { PWAInstallDesktop } from "@/Features/PWA/DesktopInstall";
+import { PWAInstallGate } from "@/Features/PWA/InstallGate";
+import { Button } from "@/UI/Button";
+
+import { ModuleComponent } from "@/Core/Store";
+import Net from "@/Net";
+import Stores from "@/Stores";
+import { consumeReturnPath, currentPath, history, navigate, parseRoute, saveReturnPath } from "@/Utils/Navigation";
+import { isMobile, shouldReduceMotion } from "@/Utils/Platform";
+import { registerSportsWorker } from "@/Utils/Sports/Alerts";
 
 // Lazy loads pages for better performance.
 
-const AuthPage = lazy(() => import("@/pages/AuthPage").then((m) => ({ default: m.AuthPage })));
-const DetailPage = lazy(() => import("@/pages/DetailPage").then((m) => ({ default: m.DetailPage })) );
-const HomePage = lazy(() => import("@/pages/HomePage").then((m) => ({ default: m.HomePage })));
-const WatchPage = lazy(() => import("@/pages/WatchPage").then((m) => ({ default: m.WatchPage })));
+const AuthPage = lazy(() => import("@/Features/Auth/AuthPage").then((m) => ({ default: m.AuthPage })));
+const DetailPage = lazy(() => import("@/Features/Content/Detail").then((m) => ({ default: m.DetailPage })) );
+const HomePage = lazy(() => import("@/Features/Browse/Home").then((m) => ({ default: m.HomePage })));
+const WatchPage = lazy(() => import("@/Features/Player/Watch").then((m) => ({ default: m.WatchPage })));
 
 interface AppState {
 
@@ -40,7 +39,7 @@ function persistMiniPlayer(): boolean {
 
 }
 
-export class App extends Component<object, AppState> {
+export class App extends ModuleComponent<object, AppState> {
 
   private unlisten = () => {};
 
@@ -55,6 +54,11 @@ export class App extends Component<object, AppState> {
   };
 
   async componentDidMount() {
+
+    Stores.ConfigureEmitters();
+
+    this.watch(Stores.Auth);
+    this.watch(Stores.Settings);
 
     this.syncPlayerViewport();
 
@@ -132,17 +136,17 @@ export class App extends Component<object, AppState> {
 
     try {
 
-      const [user, settings] = await Promise.all([api.me(), api.getSettings()]);
+      const [user, settings] = await Promise.all([Net.Auth.me(), Net.Settings.get()]);
 
-      store.setUser(user);
-      store.setSettings(settings);
+      Stores.Auth.setUser(user);
+      Stores.Settings.setSettings(settings);
 
       void registerSportsWorker();
 
     } catch {
 
-      store.setUser(null);
-      store.setSettings(null);
+      Stores.Auth.setUser(null);
+      Stores.Settings.setSettings(null);
 
       saveReturnPath(currentPath(history.location));
 
@@ -158,11 +162,11 @@ export class App extends Component<object, AppState> {
 
   onAuthSuccess = async () => {
 
-    const [user, settings] = await Promise.all([api.me(), api.getSettings()]);
+    const [user, settings] = await Promise.all([Net.Auth.me(), Net.Settings.get()]);
 
-    store.setUser(user);
+    Stores.Auth.setUser(user);
 
-    store.setSettings(settings);
+    Stores.Settings.setSettings(settings);
 
     void registerSportsWorker();
 
@@ -200,7 +204,7 @@ export class App extends Component<object, AppState> {
 
     const route = parseRoute(location);
 
-    if (!store.isAuthenticated && route.name !== "auth") {
+    if (!Stores.Auth.isAuthenticated && route.name !== "auth") {
 
       saveReturnPath(currentPath(location));
 
@@ -214,7 +218,7 @@ export class App extends Component<object, AppState> {
 
         return this.renderShell(
 
-          store.isAuthenticated ? (
+          Stores.Auth.isAuthenticated ? (
 
             <HomePage navigate={navigate} />
 
@@ -268,7 +272,7 @@ export class App extends Component<object, AppState> {
 
     const { activeWatchPath, location, playerReady } = this.state;
 
-    if (!activeWatchPath || !store.isAuthenticated) return null;
+    if (!activeWatchPath || !Stores.Auth.isAuthenticated) return null;
 
     const route = parseRoute(location);
     const minimized = route.name !== "watch";
