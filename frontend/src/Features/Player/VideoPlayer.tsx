@@ -665,7 +665,13 @@ export class VideoPlayer extends ModuleComponent<VideoPlayerProps, VideoPlayerSt
 
     if (!video || this.state.seeking) return;
 
-    if (this.props.live) return;
+    if (this.props.live) {
+
+      this.syncAdBreakOverlay();
+
+      return;
+
+    }
 
     const currentMs = video.currentTime * 1000;
 
@@ -795,7 +801,7 @@ export class VideoPlayer extends ModuleComponent<VideoPlayerProps, VideoPlayerSt
 
     }
 
-    this.setState({ seeking: false });
+    this.setState({ seeking: false }, () => this.syncAdBreakOverlay());
 
   };
 
@@ -872,6 +878,8 @@ export class VideoPlayer extends ModuleComponent<VideoPlayerProps, VideoPlayerSt
 
     this.clearBuffering();
     this.setState({ playing: true, playbackPrimed: true });
+
+    this.syncAdBreakOverlay();
 
     this.syncMediaSession();
 
@@ -1132,7 +1140,9 @@ export class VideoPlayer extends ModuleComponent<VideoPlayerProps, VideoPlayerSt
 
     const log = () => {
 
-      console.log("[ad-detect]", this.adDetector.debugLine());
+      const playhead = this.videoRef.current?.currentTime;
+
+      console.log("[ad-detect]", this.adDetector.debugLine(playhead));
 
     };
 
@@ -1187,7 +1197,7 @@ export class VideoPlayer extends ModuleComponent<VideoPlayerProps, VideoPlayerSt
 
   };
 
-  onHlsFragLoaded = (_event: string, data: { frag?: { duration?: number; sn?: number | string; type?: string }; payload?: ArrayBuffer | Uint8Array }) => {
+  onHlsFragLoaded = (_event: string, data: { frag?: { duration?: number; sn?: number | string; type?: string; start?: number }; payload?: ArrayBuffer | Uint8Array }) => {
 
     if (!this.liveAdsEnabled() || !data.payload) {
 
@@ -1204,7 +1214,23 @@ export class VideoPlayer extends ModuleComponent<VideoPlayerProps, VideoPlayerSt
     }
 
     const duration = data.frag?.duration ?? 0;
-    const overlay = this.adDetector.push(data.payload, duration, data.frag?.sn);
+    const start = data.frag?.start;
+
+    this.adDetector.push(data.payload, duration, data.frag?.sn, start);
+
+    this.syncAdBreakOverlay();
+
+  };
+
+  syncAdBreakOverlay = () => {
+
+    if (!this.liveAdsEnabled()) {
+
+      return;
+
+    }
+
+    const overlay = this.adDetector.overlayAt(this.videoRef.current?.currentTime ?? 0);
 
     this.setState((prev) => {
 
