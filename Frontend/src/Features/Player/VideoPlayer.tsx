@@ -262,7 +262,7 @@ export class VideoPlayer extends ModuleComponent<VideoPlayerProps, VideoPlayerSt
   private seekPreviewRef = createRef<SeekPreview>();
 
   private hls: HLS | null = null;
-  private adDetector = new AdBreakDetector();
+  private adBreaks = new AdBreakDetector();
   private adDebugTimer: ReturnType<typeof setInterval> | null = null;
 
   private mobile = isMobile();
@@ -425,7 +425,7 @@ export class VideoPlayer extends ModuleComponent<VideoPlayerProps, VideoPlayerSt
 
     if (this.state.adBreakOverlay && !this.liveAdsEnabled()) {
 
-      this.adDetector.reset();
+      this.adBreaks.reset();
 
       this.setState({ adBreakOverlay: false }, () => this.applyAdAudio());
 
@@ -1106,7 +1106,7 @@ export class VideoPlayer extends ModuleComponent<VideoPlayerProps, VideoPlayerSt
 
     }
 
-    this.adDetector.reset();
+    this.adBreaks.reset();
 
   };
 
@@ -1142,12 +1142,12 @@ export class VideoPlayer extends ModuleComponent<VideoPlayerProps, VideoPlayerSt
 
       const playhead = this.videoRef.current?.currentTime;
 
-      console.log("[ad-detect]", this.adDetector.debugLine(playhead));
+      console.log("[ad-break]", this.adBreaks.debugLine(playhead));
 
     };
 
     log();
-    this.adDebugTimer = setInterval(log, 5000);
+    this.adDebugTimer = setInterval(log, 15_000);
 
   };
 
@@ -1191,7 +1191,7 @@ export class VideoPlayer extends ModuleComponent<VideoPlayerProps, VideoPlayerSt
 
   dismissAdBreak = () => {
 
-    this.adDetector.dismiss();
+    this.adBreaks.dismiss();
 
     this.setState({ adBreakOverlay: false }, () => this.applyAdAudio());
 
@@ -1216,7 +1216,7 @@ export class VideoPlayer extends ModuleComponent<VideoPlayerProps, VideoPlayerSt
     const duration = data.frag?.duration ?? 0;
     const start = data.frag?.start;
 
-    this.adDetector.push(data.payload, duration, data.frag?.sn, start);
+    this.adBreaks.addFragment(data.payload, duration, data.frag?.sn, start);
 
     this.syncAdBreakOverlay();
 
@@ -1230,7 +1230,7 @@ export class VideoPlayer extends ModuleComponent<VideoPlayerProps, VideoPlayerSt
 
     }
 
-    const overlay = this.adDetector.overlayAt(this.videoRef.current?.currentTime ?? 0);
+    const overlay = this.adBreaks.visibleAt(this.videoRef.current?.currentTime ?? 0);
 
     this.setState((prev) => {
 
@@ -1392,7 +1392,7 @@ export class VideoPlayer extends ModuleComponent<VideoPlayerProps, VideoPlayerSt
 
     this.hlsRecoveryAttempts = 0;
 
-    this.adDetector.reset();
+    this.adBreaks.reset();
     this.syncAdDebugLog();
 
     this.setState({

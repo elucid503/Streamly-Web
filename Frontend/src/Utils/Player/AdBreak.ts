@@ -1,57 +1,55 @@
 // Fragments arrive ~10–15s ahead of the live playhead; confirm on the buffer, show on the playhead.
-export const AD_BREAK_THRESHOLD_SEC = 15;
-export const AD_BREAK_POPON_EXIT_SEC = 30;
+export const SILENCE_TO_START_BREAK_SEC = 15;
+export const SCRIPTED_CAPTIONS_TO_END_BREAK_SEC = 30;
 
-const MIN_POPON_COMMANDS = 3;
-const MIN_TALKING_LETTERS = 8;
+const MIN_SCRIPTED_COMMANDS = 3;
+const MIN_LIVE_CAPTION_LETTERS = 8;
 const TIMELINE_KEEP_SEC = 180;
 
-const GA94 = new Uint8Array([0x47, 0x41, 0x39, 0x34]); // GA94 is the "CC data" packet identifier in MPEG-TS streams.
+const GA94 = new Uint8Array([0x47, 0x41, 0x39, 0x34]);
 
-interface AdSample {
+interface Span {
 
   start: number;
   end: number;
-  inBreak: boolean;
+  commercial: boolean;
 
 }
 
 export class AdBreakDetector {
 
-  private quietSec = 0;
-  private popOnSec = 0;
+  private silenceSec = 0;
+  private scriptedSec = 0;
 
-  private inBreak = false;
-
+  private inCommercial = false;
   private dismissed = false;
-  private seenTalking = false;
-  private popOnLocked = false;
+
+  private seenLiveShow = false;
+  private inScriptedShow = false;
 
   private lastSn: number | string | null = null;
 
-  private lastFragAt = 0;
-  private lastFrag = "none";
+  private lastNote = "none";
 
-  private samples: AdSample[] = [];
+  private timeline: Span[] = [];
   private lastMediaEnd = 0;
 
   reset() {
 
-    this.quietSec = 0;
-    this.popOnSec = 0;
+    this.silenceSec = 0;
+    this.scriptedSec = 0;
 
-    this.inBreak = false;
-
+    this.inCommercial = false;
     this.dismissed = false;
-    this.seenTalking = false;
-    this.popOnLocked = false;
+
+    this.seenLiveShow = false;
+    this.inScriptedShow = false;
 
     this.lastSn = null;
 
-    this.lastFragAt = 0;
-    this.lastFrag = "none";
+    this.lastNote = "none";
 
-    this.samples = [];
+    this.timeline = [];
     this.lastMediaEnd = 0;
 
   }
@@ -62,9 +60,9 @@ export class AdBreakDetector {
 
   }
 
-  overlayAt(playheadSec: number) {
+  visibleAt(playheadSec: number) {
 
-    const idx = this.sampleIndexAt(playheadSec);
+    const idx = this.spanIndexAt(playheadSec);
 
     if (idx < 0) {
 
@@ -72,7 +70,7 @@ export class AdBreakDetector {
 
     }
 
-    if (!this.samples[idx].inBreak) {
+    if (!this.timeline[idx].commercial) {
 
       this.dismissed = false;
 
@@ -84,24 +82,16 @@ export class AdBreakDetector {
 
   }
 
-  debugLabel() {
-
-    return this.inBreak ? "ad" : "program";
-
-  }
-
   debugLine(playheadSec?: number) {
 
-    const age = this.lastFragAt ? ((Date.now() - this.lastFragAt) / 1000).toFixed(1) : "-";
-    const overlay = playheadSec == null ? "-" : String(this.overlayAt(playheadSec));
-    const play = playheadSec == null ? "-" : playheadSec.toFixed(1);
+    const overlay = playheadSec != null && this.visibleAt(playheadSec);
+    const ahead = this.inCommercial ? "commercial" : "show";
 
-    return `${this.debugLabel()} quiet=${this.quietSec.toFixed(1)}s hold=${this.popOnSec.toFixed(1)}s overlay=${overlay} play=${play}s primed=${this.seenTalking} last=${this.lastFrag} age=${age}s`;
+    return `${overlay ? "overlay on" : "overlay off"}; ${ahead}; ${this.lastNote}`;
 
   }
 
-  // Classifies a loaded fragment on the media timeline. Overlay visibility is overlayAt(playhead).
-  push(payload: ArrayBuffer | Uint8Array, durationSec: number, sn?: number | string, startSec?: number) {
+  addFragment(payload: ArrayBuffer | Uint8Array, durationSec: number, sn?: number | string, startSec?: number) {
 
     if (sn === "initSegment") {
 
@@ -116,17 +106,15 @@ export class AdBreakDetector {
     }
 
     const data = payload instanceof Uint8Array ? payload : new Uint8Array(payload);
-    const sample = extractCC608(data);
-
-    this.lastFragAt = Date.now();
+    const captions = extractCaptions(data);
 
     const duration = Number.isFinite(durationSec) && durationSec > 0 ? durationSec : 2;
     const start = Number.isFinite(startSec) ? startSec as number : this.lastMediaEnd;
     const end = start + duration;
 
-    if (sample.ga94 === 0) {
+    if (captions.packets === 0) {
 
-      this.lastFrag = `no-608 ts=${sample.tsPackets} bytes=${data.byteLength} dur=${duration.toFixed(2)}`;
+      this.lastNote = "no captions";
 
       return;
 
@@ -138,127 +126,101 @@ export class AdBreakDetector {
 
     }
 
-    // Roll-up keepalives (RU2/RU3 with no letters) ride through ads. Real program has roll-up plus CC1 text.
-    const cc1Junk = isRepeatedCaptionJunk(sample.cc1Text);
-    const talking = sample.rollup > 0 && sample.letters >= MIN_TALKING_LETTERS && !cc1Junk;
-    const popOnProgram = sample.popon + sample.painton >= MIN_POPON_COMMANDS;
+    const textJunk = isRepeatingJunk(captions.text);
+    const liveShow = captions.live > 0 && captions.letters >= MIN_LIVE_CAPTION_LETTERS && !textJunk;
+    const someLiveCaptions = captions.live > 0 && captions.letters > 0 && !textJunk;
+    const scriptedCaptions = captions.scripted >= MIN_SCRIPTED_COMMANDS;
+    const watermark = isRepeatingJunk(captions.extraText);
 
-    const watermark = isRepeatedCaptionJunk(sample.cc2Text);
-    const stats = `ru=${sample.rollup} pop=${sample.popon} let=${sample.letters} ga94=${sample.ga94} dur=${duration.toFixed(2)}`;
+    if (liveShow) {
 
-    if (talking) {
+      this.seenLiveShow = true;
+      this.inScriptedShow = false;
 
-      this.seenTalking = true;
-      this.popOnLocked = false;
-
-      this.quietSec = 0;
-      this.popOnSec = 0;
-
-      this.inBreak = false;
-
-      this.lastFrag = `talking ${stats}`;
-
-      this.record(start, end, false);
+      this.markShow(start, end, "live show");
 
       return;
 
     }
 
-    // Sparse roll-up text is sports commentary, not an ad keepalive — don't start a break on it.
-    if (!this.inBreak && sample.rollup > 0 && sample.letters > 0 && !cc1Junk) {
+    if (!this.inCommercial && someLiveCaptions) {
 
-      this.quietSec = 0;
-      this.popOnSec = 0;
-
-      this.lastFrag = `ru-text ${stats}`;
-
-      this.record(start, end, false);
+      this.markShow(start, end, "live captions");
 
       return;
 
     }
 
-    if (sample.rollup > 0) {
+    if (scriptedCaptions && this.inCommercial) {
 
-      this.lastFrag = `ru-hold ${stats}`;
+      this.scriptedSec += duration;
 
-    }
+      if (!this.seenLiveShow && this.scriptedSec >= SCRIPTED_CAPTIONS_TO_END_BREAK_SEC) {
 
-    // Scripted channels caption with pop-on; so do many ads. One pop-on fragment must not drop an in-progress break, so we require a long stretch.
-    if (popOnProgram && this.inBreak) {
+        this.inScriptedShow = true;
 
-      this.popOnSec += duration;
-      this.lastFrag = `pop-on-hold ${stats}`;
-
-      if (this.popOnSec >= AD_BREAK_POPON_EXIT_SEC) {
-
-        this.quietSec = 0;
-        this.popOnSec = 0;
-        this.popOnLocked = true;
-
-        this.inBreak = false;
-
-        this.lastFrag = `pop-on-exit ${stats}`;
-
-        this.record(start, end, false);
+        this.markShow(start, end, "scripted show");
 
         return;
 
       }
 
-      this.record(start, end, true);
+      this.lastNote = "scripted captions";
+
+      this.addSpan(start, end, true);
 
       return;
 
     }
 
-    // After pop-on-exit, scripted channels stay in program. News ads still enter on the first unprimed pop-on stretch.
-    if (!this.seenTalking && popOnProgram && this.popOnLocked) {
+    if (!this.seenLiveShow && scriptedCaptions && this.inScriptedShow) {
 
-      this.quietSec = 0;
-      this.popOnSec = 0;
-      this.lastFrag = `pop-on ${stats}`;
-
-      this.record(start, end, false);
+      this.markShow(start, end, "scripted show");
 
       return;
 
     }
 
-    // Cable watermarks (HDHDHD, "FX Movie") sit on CC2 and are not silence.
-    if (!this.seenTalking && watermark) {
+    if (!this.seenLiveShow && watermark) {
 
-      this.popOnSec = 0;
-      this.lastFrag = `watermark ${stats}`;
+      this.scriptedSec = 0;
+      this.lastNote = "watermark";
 
-      this.record(start, end, this.inBreak);
+      this.addSpan(start, end, this.inCommercial);
 
       return;
 
     }
 
-    this.popOnSec = 0;
-    this.quietSec += duration;
+    this.scriptedSec = 0;
+    this.silenceSec += duration;
 
-    if (!sample.rollup) {
+    this.lastNote = captions.live > 0 ? "empty live captions" : "silence";
 
-      this.lastFrag = `quiet ${stats}`;
+    if (this.silenceSec >= SILENCE_TO_START_BREAK_SEC) {
 
-    }
+      this.inCommercial = true;
 
-    if (this.quietSec >= AD_BREAK_THRESHOLD_SEC) {
-
-      this.inBreak = true;
-
-      this.backfillBreak(end - this.quietSec);
+      this.markCommercialFrom(end - this.silenceSec);
 
     }
 
-    this.record(start, end, this.inBreak);
+    this.addSpan(start, end, this.inCommercial);
 
   }
 
-  private record(start: number, end: number, inBreak: boolean) {
+  private markShow(start: number, end: number, note: string) {
+
+    this.silenceSec = 0;
+    this.scriptedSec = 0;
+    this.inCommercial = false;
+    this.lastNote = note;
+
+    this.addSpan(start, end, false);
+
+  }
+
+  private addSpan(start: number, end: number, commercial: boolean) {
 
     if (!(end > start)) {
 
@@ -266,17 +228,17 @@ export class AdBreakDetector {
 
     }
 
-    const sample: AdSample = { start, end, inBreak };
+    const span: Span = { start, end, commercial };
 
-    let i = this.samples.length;
+    let i = this.timeline.length;
 
-    while (i > 0 && this.samples[i - 1].start > start) {
+    while (i > 0 && this.timeline[i - 1].start > start) {
 
       i--;
 
     }
 
-    this.samples.splice(i, 0, sample);
+    this.timeline.splice(i, 0, span);
 
     this.lastMediaEnd = Math.max(this.lastMediaEnd, end);
 
@@ -284,13 +246,13 @@ export class AdBreakDetector {
 
   }
 
-  private backfillBreak(from: number) {
+  private markCommercialFrom(from: number) {
 
-    for (const sample of this.samples) {
+    for (const span of this.timeline) {
 
-      if (sample.start >= from - 0.05) {
+      if (span.start >= from - 0.05) {
 
-        sample.inBreak = true;
+        span.commercial = true;
 
       }
 
@@ -302,25 +264,25 @@ export class AdBreakDetector {
 
     const cutoff = this.lastMediaEnd - TIMELINE_KEEP_SEC;
 
-    while (this.samples.length > 2 && this.samples[0].end < cutoff) {
+    while (this.timeline.length > 2 && this.timeline[0].end < cutoff) {
 
-      this.samples.shift();
+      this.timeline.shift();
 
     }
 
   }
 
-  private sampleIndexAt(t: number) {
+  private spanIndexAt(t: number) {
 
-    if (this.samples.length === 0 || !Number.isFinite(t)) {
+    if (this.timeline.length === 0 || !Number.isFinite(t)) {
 
       return -1;
 
     }
 
-    for (let i = this.samples.length - 1; i >= 0; i--) {
+    for (let i = this.timeline.length - 1; i >= 0; i--) {
 
-      if (t >= this.samples[i].start) {
+      if (t >= this.timeline[i].start) {
 
         return i;
 
@@ -334,21 +296,18 @@ export class AdBreakDetector {
 
 }
 
-// Extracts CC608 caption data from a MPEG-TS stream.
-function extractCC608(data: Uint8Array) {
+function extractCaptions(data: Uint8Array) {
 
-  let ga94 = 0;
+  let packets = 0;
 
-  let rollup = 0;
-  let popon = 0;
-
-  let painton = 0;
+  let live = 0;
+  let scripted = 0;
 
   let letters = 0;
   let tsPackets = 0;
 
-  let cc1Text = "";
-  let cc2Text = "";
+  let text = "";
+  let extraText = "";
 
   let i = 0;
 
@@ -373,7 +332,7 @@ function extractCC608(data: Uint8Array) {
     }
 
     i = hit + 4;
-    ga94++;
+    packets++;
 
     if (i >= data.length || data[i] !== 0x03) {
 
@@ -409,9 +368,9 @@ function extractCC608(data: Uint8Array) {
       i += 3;
 
       const valid = (marker & 0x04) !== 0;
-      const ccType = marker & 0x03;
+      const field = marker & 0x03;
 
-      if (!valid || ccType > 1) {
+      if (!valid || field > 1) {
 
         continue;
 
@@ -419,19 +378,16 @@ function extractCC608(data: Uint8Array) {
 
       if (b1 >= 0x10 && b1 <= 0x1f) {
 
-        if (ccType === 0 && (b1 === 0x14 || b1 === 0x15)) {
+        if (field === 0 && (b1 === 0x14 || b1 === 0x15)) {
 
+          // 0x25–0x27 live scrolling captions; 0x20/0x2f/0x29 pre-written caption blocks.
           if (b2 === 0x25 || b2 === 0x26 || b2 === 0x27) {
 
-            rollup++;
+            live++;
 
-          } else if (b2 === 0x20 || b2 === 0x2f) {
+          } else if (b2 === 0x20 || b2 === 0x2f || b2 === 0x29) {
 
-            popon++;
-
-          } else if (b2 === 0x29) {
-
-            painton++;
+            scripted++;
 
           }
 
@@ -447,16 +403,16 @@ function extractCC608(data: Uint8Array) {
 
       }
 
-      const chunk = printable608(b1) + printable608(b2);
+      const chunk = printableCaptionByte(b1) + printableCaptionByte(b2);
 
-      if (ccType === 0) {
+      if (field === 0) {
 
         letters += letterCount(b1) + letterCount(b2);
-        cc1Text += chunk;
+        text += chunk;
 
       } else {
 
-        cc2Text += chunk;
+        extraText += chunk;
 
       }
 
@@ -464,11 +420,11 @@ function extractCC608(data: Uint8Array) {
 
   }
 
-  return { ga94, rollup, popon, painton, letters, tsPackets, cc1Text, cc2Text };
+  return { packets, live, scripted, letters, tsPackets, text, extraText };
 
 }
 
-function isRepeatedCaptionJunk(text: string) {
+function isRepeatingJunk(text: string) {
 
   const s = text.replace(/\s+/g, " ").trim();
 
@@ -555,7 +511,7 @@ function isRepeatedCaptionJunk(text: string) {
 
 }
 
-function printable608(b: number) {
+function printableCaptionByte(b: number) {
 
   if (b < 0x20 || b === 0x7f) {
 
