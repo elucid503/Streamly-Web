@@ -1,16 +1,17 @@
 import Net from "@/Net";
-import { SportsRow, MatchTitle, condensedMatchTitle, matchedChannelToLiveChannel, prettyCategory, splitStart } from "@/Cards/SportsCard";
+import { SportsRow, MatchTitle, condensedMatchTitle, DateSeparator, matchedChannelToLiveChannel, prettyCategory, splitStart, startDayKey, startDayLabel } from "@/Cards/SportsCard";
 import { Button } from "@/UI/Button";
 import { HScrollRow } from "@/UI/HScrollRow";
+import { TeamChipRow, TeamFollowModal, matchHasTeam, teamOptionsFromMatches, teamsForMatch } from "@/Features/Browse/TeamFollow";
 
-import { hintCopy, subscribeToMatch, unsubscribeFromMatch, type AlertHint } from "@/Utils/Sports/Alerts";
+import { hintCopy, subscribeToMatch, subscribeToTeam, unsubscribeFromMatch, unsubscribeFromTeam, type AlertHint } from "@/Utils/Sports/Alerts";
 import { sportsBackgroundImage } from "@/Utils/Sports/Backgrounds";
-import type { LiveChannel, SportsAlert, SportsMatch } from "@/Types";
+import type { LiveChannel, SportsAlert, SportsMatch, SportsTeamAlert } from "@/Types";
 import { cn } from "@/Utils/ClassNames";
 
 import { AnimatePresence, motion } from "framer-motion";
-import { Bell, Check, ChevronDown, X } from "lucide-react";
-import { Component, createRef } from "react";
+import { Bell, BellPlus, Check, ChevronDown, X } from "lucide-react";
+import { Component, Fragment, createRef } from "react";
 
 const STARTING_SOON_WINDOW_SECS = 3 * 60 * 60;
 const ROW_PREVIEW_COUNT = 5;
@@ -46,8 +47,11 @@ interface SportsPageState {
   featuredTeam: string;
 
   alerts: SportsAlert[];
+  teamAlerts: SportsTeamAlert[];
   alertingId: string | null;
+  alertingTeam: string | null;
   pushHint: AlertHint | null;
+  teamPickerOpen: boolean;
 
 }
 
@@ -77,35 +81,6 @@ function writeFeaturedTeam(team: string) {
     // ignore quota / private mode
 
   }
-
-}
-
-/** Team names for a match — prefers structured fields, falls back to "A vs B" title. */
-function teamsForMatch(match: SportsMatch): string[] {
-
-  const teams: string[] = [];
-
-  if (match.homeTeam) teams.push(match.homeTeam);
-
-  if (match.awayTeam) teams.push(match.awayTeam);
-
-  if (teams.length > 0) return teams;
-
-  const parsed = match.title.match(/^(.*?)\s+vs\.?\s+(.*)$/i);
-
-  if (parsed) return [parsed[1].trim(), parsed[2].trim()].filter(Boolean);
-
-  return match.title.trim() ? [match.title.trim()] : [];
-
-}
-
-function matchHasTeam(match: SportsMatch, team: string): boolean {
-
-  const needle = team.trim().toLowerCase();
-
-  if (!needle) return false;
-
-  return teamsForMatch(match).some((t) => t.toLowerCase() === needle);
 
 }
 
@@ -340,8 +315,11 @@ export class SportsPage extends Component<SportsPageProps, SportsPageState> {
     featuredTeam: readFeaturedTeam(),
 
     alerts: [],
+    teamAlerts: [],
     alertingId: null,
+    alertingTeam: null,
     pushHint: null,
+    teamPickerOpen: false,
 
   };
 
@@ -395,7 +373,7 @@ export class SportsPage extends Component<SportsPageProps, SportsPageState> {
 
       const alerts = await Net.Sports.listAlerts();
 
-      this.setState({ alerts: alerts ?? [] });
+      this.setState({ alerts: alerts?.matches ?? [], teamAlerts: alerts?.teams ?? [] });
 
     } catch {
 
@@ -405,9 +383,21 @@ export class SportsPage extends Component<SportsPageProps, SportsPageState> {
 
   };
 
-  isSubscribed = (matchId: string) => {
+  isCoveredByTeam = (match: SportsMatch) => {
+
+    return this.state.teamAlerts.some((alert) => matchHasTeam(match, alert.team));
+
+  };
+
+  isMatchAlerted = (matchId: string) => {
 
     return this.state.alerts.some((alert) => alert.matchId === matchId);
+
+  };
+
+  isSubscribed = (match: SportsMatch) => {
+
+    return this.isMatchAlerted(match.id) || this.isCoveredByTeam(match);
 
   };
 
@@ -415,13 +405,16 @@ export class SportsPage extends Component<SportsPageProps, SportsPageState> {
 
     if (this.state.alertingId) return;
 
-    this.setState({ alertingId: match.id, pushHint: null });
+    const subscribed = this.isSubscribed(match);
+    const coveredByTeam = this.isCoveredByTeam(match);
 
-    const subscribed = this.isSubscribed(match.id);
+    if (subscribed && coveredByTeam && !this.isMatchAlerted(match.id)) return;
+
+    this.setState({ alertingId: match.id, pushHint: null });
 
     try {
 
-      if (subscribed) {
+      if (this.isMatchAlerted(match.id)) {
 
         await unsubscribeFromMatch(match.id);
 
@@ -455,6 +448,47 @@ export class SportsPage extends Component<SportsPageProps, SportsPageState> {
 
   };
 
+  handleToggleTeam = async (team: string, following: boolean) => {
+
+    if (this.state.alertingTeam) return;
+
+    this.setState({ alertingTeam: team, pushHint: null });
+
+    try {
+
+      if (following) {
+
+        await unsubscribeFromTeam(team);
+        await this.loadAlerts();
+
+        return;
+
+      }
+
+      const result = await subscribeToTeam(team);
+
+      if (!result.ok) {
+
+        this.setState({ pushHint: result.hint });
+
+        return;
+
+      }
+
+      await this.loadAlerts();
+
+    } catch {
+
+      this.setState({ pushHint: "unavailable" });
+
+    } finally {
+
+      this.setState({ alertingTeam: null });
+
+    }
+
+  };
+
   setFeaturedTeam = (team: string) => {
 
     writeFeaturedTeam(team);
@@ -483,15 +517,33 @@ export class SportsPage extends Component<SportsPageProps, SportsPageState> {
 
   renderAlerts = (startingSoon: SportsMatch[], upcoming: SportsMatch[]) => {
 
-    const { alerts, pushHint } = this.state;
-
-    if (alerts.length === 0 && !pushHint) return null;
+    const { alerts, teamAlerts, pushHint, teamPickerOpen, alertingTeam, matches } = this.state;
 
     const byId = new Map([...startingSoon, ...upcoming].map((match) => [match.id, match]));
+    const teamOptions = teamOptionsFromMatches(matches);
 
     return (
 
       <section className="mb-6 px-4 sm:px-8">
+
+        <div className="mb-3 flex items-center justify-between gap-3">
+
+          <div className="min-w-0">
+
+            <h2 className="text-sm font-semibold tracking-tight text-foreground">Your Alerts</h2>
+
+            <p className="text-[11px] text-foreground-faint">Follow a team, or tap the bell on a game.</p>
+
+          </div>
+
+          <Button type="button" variant="secondary" size="sm" className="shrink-0" onClick={() => this.setState({ teamPickerOpen: true })}>
+
+            <BellPlus className="size-3.5" />
+            Follow teams
+
+          </Button>
+
+        </div>
 
         {pushHint && (
 
@@ -503,66 +555,79 @@ export class SportsPage extends Component<SportsPageProps, SportsPageState> {
 
         )}
 
+        {teamAlerts.length > 0 && (
+
+          <div className="mb-3">
+
+            <TeamChipRow teams={teamAlerts} busyTeam={alertingTeam} onRemove={(team) => void this.handleToggleTeam(team, true)} />
+
+          </div>
+
+        )}
+
         {alerts.length > 0 && (
 
-          <>
+          <div className="flex flex-col gap-2">
 
-            <h2 className="mb-3 text-sm font-semibold tracking-tight text-foreground">Your Alerts</h2>
+            {alerts.map((alert) => {
 
-            <div className="flex flex-col gap-2">
+              const match = byId.get(alert.matchId);
+              const when = match ? splitStart(match.startsAt) : null;
 
-              {alerts.map((alert) => {
+              return (
 
-                const match = byId.get(alert.matchId);
-                const when = match ? splitStart(match.startsAt) : null;
+                <div key={alert.matchId} className="flex items-center gap-3 rounded-lg border border-border-subtle bg-surface-raised px-3 py-2">
 
-                return (
+                  <Bell className="size-3.5 shrink-0 fill-current text-foreground-muted" />
 
-                  <div key={alert.matchId} className="flex items-center gap-3 rounded-lg border border-border-subtle bg-surface-raised px-3 py-2">
+                  <div className="min-w-0 flex-1">
 
-                    <Bell className="size-3.5 shrink-0 fill-current text-foreground-muted" />
+                    <p className="truncate text-sm font-medium text-foreground">{match?.title ?? alert.title}</p>
 
-                    <div className="min-w-0 flex-1">
+                    {when && (
 
-                      <p className="truncate text-sm font-medium text-foreground">{match?.title ?? alert.title}</p>
+                      <p className="text-[11px] text-foreground-faint">
 
-                      {when && (
+                        {when.day ? `${when.day} · ` : ""}{when.time}
 
-                        <p className="text-[11px] text-foreground-faint">
+                      </p>
 
-                          {when.day ? `${when.day} · ` : ""}{when.time}
-
-                        </p>
-
-                      )}
-
-                    </div>
-
-                    <button
-
-                      type="button"
-                      aria-label="Cancel kickoff alert"
-                      disabled={this.state.alertingId === alert.matchId}
-                      onClick={() => this.handleToggleAlert(match ?? { id: alert.matchId, title: alert.title, category: "", startsAt: 0, live: false })}
-                      className="flex size-8 items-center justify-center rounded-md text-foreground-muted hover:bg-surface-overlay hover:text-foreground"
-
-                    >
-
-                      <X className="size-3.5" />
-
-                    </button>
+                    )}
 
                   </div>
 
-                );
+                  <button
 
-              })}
+                    type="button"
+                    aria-label="Cancel kickoff alert"
+                    disabled={this.state.alertingId === alert.matchId}
+                    onClick={() => this.handleToggleAlert(match ?? { id: alert.matchId, title: alert.title, category: "", startsAt: 0, live: false })}
+                    className="flex size-8 items-center justify-center rounded-md text-foreground-muted hover:bg-surface-overlay hover:text-foreground"
 
-            </div>
+                  >
 
-          </>
+                    <X className="size-3.5" />
+
+                  </button>
+
+                </div>
+
+              );
+
+            })}
+
+          </div>
 
         )}
+
+        <TeamFollowModal
+          open={teamPickerOpen}
+          options={teamOptions}
+          followed={teamAlerts.map((alert) => alert.team)}
+          busyTeam={alertingTeam}
+          onClose={() => this.setState({ teamPickerOpen: false })}
+          onToggle={(team, following) => void this.handleToggleTeam(team, following)}
+        />
 
       </section>
 
@@ -648,19 +713,32 @@ export class SportsPage extends Component<SportsPageProps, SportsPageState> {
 
           <div className="flex flex-col gap-3">
 
-            {visible.map((match) => (
+            {visible.map((match, index) => {
 
-              <SportsRow
-                key={match.id}
-                match={match}
-                onSelect={this.props.onSelectChannel}
-                alertable={alertable}
-                subscribed={this.isSubscribed(match.id)}
-                alerting={this.state.alertingId === match.id}
-                onToggleAlert={this.handleToggleAlert}
-              />
+              const prev = index > 0 ? visible[index - 1] : null;
+              const showSeparator = Boolean(prev) && startDayKey(match.startsAt) !== startDayKey(prev!.startsAt);
 
-            ))}
+              return (
+
+                <Fragment key={match.id}>
+
+                  {showSeparator && <DateSeparator label={startDayLabel(match.startsAt)} />}
+
+                  <SportsRow
+                    match={match}
+                    onSelect={this.props.onSelectChannel}
+                    alertable={alertable}
+                    subscribed={this.isSubscribed(match)}
+                    teamFollowed={this.isCoveredByTeam(match)}
+                    alerting={this.state.alertingId === match.id}
+                    onToggleAlert={this.handleToggleAlert}
+                  />
+
+                </Fragment>
+
+              );
+
+            })}
 
           </div>
 
@@ -842,7 +920,17 @@ export class SportsPage extends Component<SportsPageProps, SportsPageState> {
 
                   <div className="flex items-center gap-2">
 
-                    {(featured.live || featured.status === "in") && (
+                    {featured.delayed && (
+
+                      <span className="flex flex-shrink-0 items-center rounded-md bg-amber-400/90 px-2 py-0.5 text-[11px] font-semibold text-black">
+
+                        Rain Delay
+
+                      </span>
+
+                    )}
+
+                    {!featured.delayed && (featured.live || featured.status === "in") && (
 
                       <span className="flex flex-shrink-0 items-center gap-1 rounded-md bg-red-500/90 px-2 py-0.5 text-[11px] font-semibold text-white">
 
@@ -925,9 +1013,9 @@ export class SportsPage extends Component<SportsPageProps, SportsPageState> {
 
                     >
 
-                      <Bell className={cn("size-3.5", this.isSubscribed(featured.id) && "fill-current")} />
+                      <Bell className={cn("size-3.5", this.isSubscribed(featured) && "fill-current")} />
 
-                      {this.isSubscribed(featured.id) ? "Subscribed" : "Notify"}
+                      {this.isSubscribed(featured) ? "Subscribed" : "Notify"}
 
                     </button>
 

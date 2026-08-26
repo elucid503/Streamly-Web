@@ -105,6 +105,7 @@ type espnStatus struct {
 }
 
 type espnStatusType struct {
+	Name        string `json:"name"`
 	State       string `json:"state"`
 	Completed   bool   `json:"completed"`
 	Detail      string `json:"detail"`
@@ -372,6 +373,7 @@ func matchFromEvent(event espnEvent, category, label string) (Match, bool) {
 	}
 
 	live := state == StatusIn
+	delayed := espnIsDelayed(status.Type.Name, statusDetail, status.Type.Detail, status.Type.Description)
 
 	var broadcasts []broadcastCandidate
 
@@ -412,6 +414,7 @@ func matchFromEvent(event espnEvent, category, label string) (Match, bool) {
 		Broadcast:    primaryBroadcastLabel(broadcasts),
 		StatusDetail: statusDetail,
 		Status:       normalizeStatus(state, live),
+		Delayed:      delayed,
 	}, true
 
 }
@@ -567,6 +570,22 @@ func parseESPNBroadcasts(comp espnCompetition) []broadcastCandidate {
 	}
 
 	return out
+
+}
+
+func espnIsDelayed(name, shortDetail, detail, description string) bool {
+
+	switch strings.ToLower(strings.TrimSpace(name)) {
+
+	case "status_delayed", "status_rain_delay", "status_suspended":
+
+		return true
+
+	}
+
+	blob := strings.ToLower(shortDetail + " " + detail + " " + description)
+
+	return strings.Contains(blob, "rain delay")
 
 }
 

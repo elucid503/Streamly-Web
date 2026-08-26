@@ -165,7 +165,22 @@ type SportsAlert struct {
 	MatchID string `bson:"matchId" json:"matchId"`
 	Title string `bson:"title" json:"title"`
 
+	// FromTeam is the normalized team key when this row was created by a team follow.
+	FromTeam string `bson:"fromTeam,omitempty" json:"fromTeam,omitempty"`
+
 	CreatedAt time.Time `bson:"createdAt" json:"createdAt"`
 	FiredAt *time.Time `bson:"firedAt,omitempty" json:"firedAt,omitempty"`
+
+}
+
+type SportsTeamAlert struct {
+
+	ID primitive.ObjectID `bson:"_id,omitempty" json:"id"`
+	UserID primitive.ObjectID `bson:"userId" json:"userId"`
+
+	Team string `bson:"team" json:"team"`
+	TeamKey string `bson:"teamKey" json:"teamKey"`
+
+	CreatedAt time.Time `bson:"createdAt" json:"createdAt"`
 
 }

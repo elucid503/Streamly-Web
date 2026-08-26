@@ -11,6 +11,7 @@ interface SportsRowProps {
   alertable?: boolean;
   subscribed?: boolean;
   alerting?: boolean;
+  teamFollowed?: boolean;
   onToggleAlert?: (match: SportsMatch) => void;
 
 }
@@ -32,6 +33,46 @@ export function splitStart(unixSecs: number): { day: string | null; time: string
   if (isToday) return { day: null, time };
 
   return { day: date.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" }), time };
+
+}
+
+export function startDayKey(unixSecs: number): string {
+
+  const date = new Date(unixSecs * 1000);
+
+  return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
+
+}
+
+export function startDayLabel(unixSecs: number): string {
+
+  return new Date(unixSecs * 1000).toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" });
+
+}
+
+export function DateSeparator({ label }: { label: string }) {
+
+  return (
+
+    <div className="flex items-center justify-center py-1">
+
+      <div className="flex w-full items-center gap-3">
+
+        <span className="h-px min-w-0 flex-1 bg-border" />
+
+        <span className="shrink-0 text-[12px] font-medium tracking-wide text-foreground-muted">
+
+          {label}
+
+        </span>
+
+        <span className="h-px min-w-0 flex-1 bg-border" />
+
+      </div>
+
+    </div>
+
+  );
 
 }
 
@@ -130,16 +171,17 @@ function Scoreline({ match, className }: { match: SportsMatch; className?: strin
 
 }
 
-export function SportsRow({ match, onSelect, alertable, subscribed, alerting, onToggleAlert }: SportsRowProps) {
+export function SportsRow({ match, onSelect, alertable, subscribed, alerting, teamFollowed, onToggleAlert }: SportsRowProps) {
 
   const channel = match.channel ? matchedChannelToLiveChannel(match.channel, match.category) : null;
 
-  const { day, time } = splitStart(match.startsAt);
+  const { time } = splitStart(match.startsAt);
 
   const scored = hasScore(match);
 
   const isLive = match.live || match.status === "in";
   const isFinished = match.status === "post";
+  const delayed = Boolean(match.delayed);
 
   const showKickoff = !isLive && !isFinished && match.startsAt > Date.now() / 1000;
 
@@ -171,9 +213,19 @@ export function SportsRow({ match, onSelect, alertable, subscribed, alerting, on
 
     >
 
-      <div className="hidden md:flex w-[70px] flex-shrink-0 flex-col items-center justify-center overflow-hidden border-r border-border-subtle pr-4 text-center">
+      <div className="hidden md:flex w-[80px] flex-shrink-0 flex-col items-center justify-center overflow-hidden border-r border-border-subtle pr-4 text-center">
 
-        {isLive ? (
+        {delayed && !isFinished ? (
+
+          <>
+
+            <span className="text-[11px] font-semibold uppercase tracking-wide text-amber-400">Delay</span>
+
+            {showKickoff && <span className="mt-0.5 text-xs font-medium tabular-nums text-foreground-muted">{time}</span>}
+
+          </>
+
+        ) : isLive ? (
 
           <>
 
@@ -189,13 +241,7 @@ export function SportsRow({ match, onSelect, alertable, subscribed, alerting, on
 
         ) : showKickoff || !(scored || isFinished) ? (
 
-          <>
-
-            {day && <span className="text-xs text-foreground-faint">{day}</span>}
-
-            <span className="text-sm font-semibold text-foreground">{time}</span>
-
-          </>
+          <span className="text-sm font-semibold tabular-nums text-foreground">{time}</span>
 
         ) : (
 
@@ -225,11 +271,21 @@ export function SportsRow({ match, onSelect, alertable, subscribed, alerting, on
 
           </span>
 
+          {delayed && !isFinished && (
+
+            <span className="shrink-0 rounded-md bg-amber-400/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-400">
+
+              Delay
+
+            </span>
+
+          )}
+
           {showKickoff ? (
 
             <span className="md:hidden shrink-0 text-xs font-medium tabular-nums text-foreground">
 
-              {day ? `${day} · ${time}` : time}
+              {time}
 
             </span>
 
@@ -273,8 +329,8 @@ export function SportsRow({ match, onSelect, alertable, subscribed, alerting, on
             disabled={alerting}
 
             aria-pressed={Boolean(subscribed)}
-            aria-label={subscribed ? "Cancel kickoff alert" : "Notify when this starts"}
-            title={subscribed ? "Cancel kickoff alert" : "Notify when this starts"}
+            aria-label={teamFollowed ? "Following this team" : subscribed ? "Cancel alert" : "Notify when this starts"}
+            title={teamFollowed ? "Following this team" : subscribed ? "Cancel alert" : "Notify when this starts"}
 
             onClick={() => onToggleAlert(match)}
 

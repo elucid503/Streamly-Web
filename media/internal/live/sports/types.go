@@ -41,6 +41,9 @@ type Match struct {
 	StatusDetail string
 	// Status is lifecycle state: pre / in / post.
 	Status string
+	// Delayed is true when ESPN currently lists the event as delayed
+	// (rain delay, weather delay, suspended).
+	Delayed bool
 
 	// Broadcasts are live TV/stream outlets from ESPN for this event
 	// (e.g. "SNY", "ESPN", "NBC"), ordered by preference.

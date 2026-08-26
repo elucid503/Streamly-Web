@@ -20,7 +20,9 @@ export type {
   MatchedChannel,
   ProgramEntry,
   SportsAlert,
+  SportsAlertsList,
   SportsMatch,
+  SportsTeamAlert,
 } from "./Live";
 export type { IntroInfo, NextEpisode, StreamInfo, StreamQuality, SubtitleTrack } from "./Player";
 export type {

@@ -251,6 +251,8 @@ func main() {
 	protected.DELETE("/push/subscription", sportsAlertsHandler.DeleteSubscription)
 
 	protected.GET("/sports/alerts", sportsAlertsHandler.List)
+	protected.PUT("/sports/alerts/teams", sportsAlertsHandler.SubscribeTeam)
+	protected.DELETE("/sports/alerts/teams", sportsAlertsHandler.UnsubscribeTeam)
 	protected.PUT("/sports/alerts/:matchId", sportsAlertsHandler.Subscribe)
 	protected.DELETE("/sports/alerts/:matchId", sportsAlertsHandler.Unsubscribe)
 

@@ -204,25 +204,90 @@ export async function unsubscribeFromMatch(matchId: string): Promise<void> {
 
 }
 
+export async function subscribeToTeam(team: string): Promise<SubscribeResult> {
+
+  if (iosNeedsInstallForPush()) {
+
+    return { ok: false, hint: "install" };
+
+  }
+
+  if (!pushSupported()) {
+
+    return { ok: false, hint: "unsupported" };
+
+  }
+
+  if (Notification.permission === "denied") {
+
+    return { ok: false, hint: "denied" };
+
+  }
+
+  if (Notification.permission !== "granted") {
+
+    const permission = await Notification.requestPermission();
+
+    if (permission !== "granted") {
+
+      return { ok: false, hint: permission === "denied" ? "denied" : "unsupported" };
+
+    }
+
+  }
+
+  try {
+
+    await ensurePushSubscription();
+    await Net.Sports.subscribeTeam(team);
+
+    return { ok: true };
+
+  } catch (err) {
+
+    if (err instanceof ApiError && err.status === 503) {
+
+      return { ok: false, hint: "unavailable" };
+
+    }
+
+    if (err instanceof Error && err.message === "unsupported") {
+
+      return { ok: false, hint: "unsupported" };
+
+    }
+
+    throw err;
+
+  }
+
+}
+
+export async function unsubscribeFromTeam(team: string): Promise<void> {
+
+  await Net.Sports.unsubscribeTeam(team);
+
+}
+
 export function hintCopy(hint: AlertHint): string {
 
   switch (hint) {
 
     case "install":
 
-      return "Add Streamly to your Home Screen to get kickoff alerts on iPhone.";
+      return "Add Streamly to your Home Screen to get alerts on iPhone.";
 
     case "denied":
 
-      return "Notifications are blocked for this site. Enable them in the browser to get kickoff alerts.";
+      return "Notifications are blocked for this site. Enable them in the browser to get alerts.";
 
     case "unsupported":
 
-      return "This browser cannot receive kickoff alerts.";
+      return "This browser cannot receive alerts.";
 
     case "unavailable":
 
-      return "Kickoff alerts are not configured on the server yet.";
+      return "Alerts are not configured on the server yet.";
 
   }
 

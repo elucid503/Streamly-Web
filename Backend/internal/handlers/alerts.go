@@ -103,7 +103,17 @@ func (h *SportsAlertsHandler) List(c *gin.Context) {
 
 	}
 
-	c.JSON(http.StatusOK, jsonSlice(items))
+	matches := []services.SportsAlertDTO{}
+	teams := []services.SportsTeamAlertDTO{}
+
+	if items != nil {
+
+		matches = jsonSlice(items.Matches)
+		teams = jsonSlice(items.Teams)
+
+	}
+
+	c.JSON(http.StatusOK, gin.H{"matches": matches, "teams": teams})
 
 }
 
@@ -139,6 +149,62 @@ func (h *SportsAlertsHandler) Unsubscribe(c *gin.Context) {
 
 }
 
+type teamAlertRequest struct {
+
+	Team string `json:"team"`
+
+}
+
+func (h *SportsAlertsHandler) SubscribeTeam(c *gin.Context) {
+
+	userID := c.GetString(middleware.UserIDKey)
+
+	var input teamAlertRequest
+
+	if err := c.ShouldBindJSON(&input); err != nil {
+
+		writeError(c, http.StatusBadRequest, "invalid request")
+		return
+
+	}
+
+	item, err := h.alerts.SubscribeTeam(c.Request.Context(), userID, input.Team)
+
+	if err != nil {
+
+		handleSportsAlertError(c, err)
+		return
+
+	}
+
+	c.JSON(http.StatusOK, item)
+
+}
+
+func (h *SportsAlertsHandler) UnsubscribeTeam(c *gin.Context) {
+
+	userID := c.GetString(middleware.UserIDKey)
+
+	var input teamAlertRequest
+
+	if err := c.ShouldBindJSON(&input); err != nil {
+
+		writeError(c, http.StatusBadRequest, "invalid request")
+		return
+
+	}
+
+	if err := h.alerts.UnsubscribeTeam(c.Request.Context(), userID, input.Team); err != nil {
+
+		handleSportsAlertError(c, err)
+		return
+
+	}
+
+	c.Status(http.StatusNoContent)
+
+}
+
 func handleSportsAlertError(c *gin.Context, err error) {
 
 	switch {
@@ -154,6 +220,10 @@ func handleSportsAlertError(c *gin.Context, err error) {
 	case errors.Is(err, services.ErrSportsAlertMatch):
 
 		writeError(c, http.StatusNotFound, "match not found")
+
+	case errors.Is(err, services.ErrSportsAlertTeam):
+
+		writeError(c, http.StatusBadRequest, "team required")
 
 	default:
 

@@ -115,6 +115,12 @@ func (d *DB) SportsAlerts() *mongo.Collection {
 
 }
 
+func (d *DB) SportsTeamAlerts() *mongo.Collection {
+
+	return d.db.Collection("sports_team_alerts")
+
+}
+
 func (d *DB) ensureIndexes(ctx context.Context) error {
 
 	indexes := []struct {
@@ -148,6 +154,8 @@ func (d *DB) ensureIndexes(ctx context.Context) error {
 		{d.PushSubscriptions(), bson.D{{Key: "endpoint", Value: 1}}, false},
 
 		{d.SportsAlerts(), bson.D{{Key: "userId", Value: 1}, {Key: "matchId", Value: 1}}, true},
+
+		{d.SportsTeamAlerts(), bson.D{{Key: "userId", Value: 1}, {Key: "teamKey", Value: 1}}, true},
 
 	}
 

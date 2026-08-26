@@ -18,11 +18,11 @@ import (
 )
 
 var ErrSportsAlertMatch = errors.New("match not found")
+var ErrSportsAlertTeam = errors.New("team required")
 
 const (
 
 	sportsAlertTick = 30 * time.Second
-	kickoffLead = 90 * time.Second
 	sportsAlertRefreshLead = 3 * time.Minute
 
 )
@@ -73,7 +73,21 @@ type SportsAlertDTO struct {
 
 }
 
-func (s *SportsAlertsService) List(ctx context.Context, userID string) ([]SportsAlertDTO, error) {
+type SportsTeamAlertDTO struct {
+
+	Team string `json:"team"`
+	Logo string `json:"logo,omitempty"`
+
+}
+
+type SportsAlertsListDTO struct {
+
+	Matches []SportsAlertDTO `json:"matches"`
+	Teams []SportsTeamAlertDTO `json:"teams"`
+
+}
+
+func (s *SportsAlertsService) List(ctx context.Context, userID string) (*SportsAlertsListDTO, error) {
 
 	oid, err := primitive.ObjectIDFromHex(userID)
 
@@ -106,11 +120,58 @@ func (s *SportsAlertsService) List(ctx context.Context, userID string) ([]Sports
 
 	}
 
-	out := make([]SportsAlertDTO, 0, len(rows))
+	teamCur, err := s.db.SportsTeamAlerts().Find(ctx, bson.M{
+
+		"userId": oid,
+
+	}, options.Find().SetSort(bson.D{{Key: "createdAt", Value: -1}}))
+
+	if err != nil {
+
+		return nil, err
+
+	}
+
+	defer teamCur.Close(ctx)
+
+	var teamRows []models.SportsTeamAlert
+
+	if err := teamCur.All(ctx, &teamRows); err != nil {
+
+		return nil, err
+
+	}
+
+	matches, _ := s.matches.LiveSports()
+	logos := teamLogosFromMatches(matches)
+
+	out := &SportsAlertsListDTO{
+
+		Matches: make([]SportsAlertDTO, 0, len(rows)),
+		Teams: make([]SportsTeamAlertDTO, 0, len(teamRows)),
+
+	}
 
 	for _, row := range rows {
 
-		out = append(out, SportsAlertDTO{MatchID: row.MatchID, Title: row.Title})
+		if strings.TrimSpace(row.FromTeam) != "" {
+
+			continue
+
+		}
+
+		out.Matches = append(out.Matches, SportsAlertDTO{MatchID: row.MatchID, Title: row.Title})
+
+	}
+
+	for _, row := range teamRows {
+
+		out.Teams = append(out.Teams, SportsTeamAlertDTO{
+
+			Team: row.Team,
+			Logo: logos[row.TeamKey],
+
+		})
 
 	}
 
@@ -180,6 +241,7 @@ func (s *SportsAlertsService) Subscribe(ctx context.Context, userID, matchID str
 		"$unset": bson.M{
 
 			"firedAt": "",
+			"fromTeam": "",
 
 		},
 
@@ -214,6 +276,113 @@ func (s *SportsAlertsService) Unsubscribe(ctx context.Context, userID, matchID s
 	}
 
 	_, err = s.db.SportsAlerts().DeleteOne(ctx, bson.M{"userId": oid, "matchId": matchID})
+
+	return err
+
+}
+
+func (s *SportsAlertsService) SubscribeTeam(ctx context.Context, userID, team string) (*SportsTeamAlertDTO, error) {
+
+	if !s.push.Configured() {
+
+		return nil, ErrPushNotConfigured
+
+	}
+
+	oid, err := primitive.ObjectIDFromHex(userID)
+
+	if err != nil {
+
+		return nil, err
+
+	}
+
+	matches, _ := s.matches.LiveSports()
+	display, key, ok := canonicalTeam(team, matches)
+
+	if !ok {
+
+		return nil, ErrSportsAlertTeam
+
+	}
+
+	now := time.Now()
+
+	_, err = s.db.SportsTeamAlerts().UpdateOne(ctx, bson.M{
+
+		"userId": oid,
+		"teamKey": key,
+
+	}, bson.M{
+
+		"$set": bson.M{
+
+			"team": display,
+
+		},
+		"$setOnInsert": bson.M{
+
+			"userId": oid,
+			"teamKey": key,
+			"createdAt": now,
+
+		},
+
+	}, options.Update().SetUpsert(true))
+
+	if err != nil {
+
+		return nil, err
+
+	}
+
+	s.materializeTeamAlerts(ctx, []models.SportsTeamAlert{{
+
+		UserID: oid,
+		Team: display,
+		TeamKey: key,
+
+	}}, matches)
+
+	logos := teamLogosFromMatches(matches)
+
+	return &SportsTeamAlertDTO{Team: display, Logo: logos[key]}, nil
+
+}
+
+func (s *SportsAlertsService) UnsubscribeTeam(ctx context.Context, userID, team string) error {
+
+	oid, err := primitive.ObjectIDFromHex(userID)
+
+	if err != nil {
+
+		return err
+
+	}
+
+	key := normalizeTeamKey(team)
+
+	if key == "" {
+
+		return ErrSportsAlertTeam
+
+	}
+
+	_, err = s.db.SportsTeamAlerts().DeleteOne(ctx, bson.M{"userId": oid, "teamKey": key})
+
+	if err != nil {
+
+		return err
+
+	}
+
+	_, err = s.db.SportsAlerts().DeleteMany(ctx, bson.M{
+
+		"userId": oid,
+		"fromTeam": key,
+		"firedAt": bson.M{"$exists": false},
+
+	})
 
 	return err
 
@@ -295,6 +464,17 @@ func (s *SportsAlertsService) tick(ctx context.Context) {
 
 	}
 
+	matches, err := s.matches.LiveSports()
+
+	if err != nil {
+
+		log.Printf("sports-alerts: matches: %v", err)
+		return
+
+	}
+
+	s.expandTeamAlerts(ctx, matches)
+
 	cur, err := s.db.SportsAlerts().Find(ctx, bson.M{"firedAt": bson.M{"$exists": false}})
 
 	if err != nil {
@@ -318,15 +498,6 @@ func (s *SportsAlertsService) tick(ctx context.Context) {
 
 	if len(pending) == 0 {
 
-		return
-
-	}
-
-	matches, err := s.matches.LiveSports()
-
-	if err != nil {
-
-		log.Printf("sports-alerts: matches: %v", err)
 		return
 
 	}
@@ -377,23 +548,128 @@ func (s *SportsAlertsService) tick(ctx context.Context) {
 
 }
 
+func (s *SportsAlertsService) expandTeamAlerts(ctx context.Context, matches []catalog.SportsMatchDTO) {
+
+	cur, err := s.db.SportsTeamAlerts().Find(ctx, bson.M{})
+
+	if err != nil {
+
+		log.Printf("sports-alerts: list teams: %v", err)
+		return
+
+	}
+
+	var teams []models.SportsTeamAlert
+
+	if err := cur.All(ctx, &teams); err != nil {
+
+		_ = cur.Close(ctx)
+		log.Printf("sports-alerts: decode teams: %v", err)
+		return
+
+	}
+
+	_ = cur.Close(ctx)
+
+	s.materializeTeamAlerts(ctx, teams, matches)
+
+}
+
+func (s *SportsAlertsService) materializeTeamAlerts(ctx context.Context, teams []models.SportsTeamAlert, matches []catalog.SportsMatchDTO) {
+
+	if len(teams) == 0 || len(matches) == 0 {
+
+		return
+
+	}
+
+	now := time.Now()
+
+	for _, team := range teams {
+
+		if team.TeamKey == "" {
+
+			continue
+
+		}
+
+		for _, match := range matches {
+
+			if strings.EqualFold(strings.TrimSpace(match.Status), "post") {
+
+				continue
+
+			}
+
+			if !matchInvolvesTeam(match, team.TeamKey) {
+
+				continue
+
+			}
+
+			_, err := s.db.SportsAlerts().UpdateOne(ctx, bson.M{
+
+				"userId": team.UserID,
+				"matchId": match.ID,
+
+			}, bson.M{
+
+				"$setOnInsert": bson.M{
+
+					"userId": team.UserID,
+					"matchId": match.ID,
+					"title": match.Title,
+					"fromTeam": team.TeamKey,
+					"createdAt": now,
+
+				},
+
+			}, options.Update().SetUpsert(true))
+
+			if err != nil {
+
+				log.Printf("sports-alerts: materialize %s %s: %v", team.TeamKey, match.ID, err)
+
+			}
+
+		}
+
+	}
+
+}
+
 func (s *SportsAlertsService) fire(ctx context.Context, alert models.SportsAlert, match catalog.SportsMatchDTO) error {
 
-	channelName := match.Channel.Name
+	title := match.Title
+
+	if strings.TrimSpace(title) == "" {
+
+		title = alert.Title
+
+	}
+
 	body := "Starting now"
+	target := "/"
+	tag := "sports-" + alert.MatchID
 
-	if channelName != "" {
+	if match.Channel != nil && strings.TrimSpace(match.Channel.ID) != "" {
 
-		body = "Starting now · Watch on " + channelName
+		target = "/live/" + url.PathEscape(match.Channel.ID)
+
+		if name := strings.TrimSpace(match.Channel.Name); name != "" {
+
+			body = "Starting now · Watch on " + name
+
+		}
 
 	}
 
 	err := s.push.SendToUser(ctx, alert.UserID, SportsPushPayload{
 
-		Title: match.Title,
+		Title: title,
 		Body: body,
-		URL: "/live/" + url.PathEscape(match.Channel.ID),
-		Tag: "sports-" + match.ID,
+		URL: target,
+		Tag: tag,
 
 	})
 
@@ -448,6 +724,12 @@ func shouldRefreshSports(pending []models.SportsAlert, byID map[string]catalog.S
 
 		}
 
+		if match.Delayed {
+
+			return true
+
+		}
+
 		if match.Live || strings.EqualFold(match.Status, "in") {
 
 			return true
@@ -480,15 +762,17 @@ func decideSportsAlert(match catalog.SportsMatchDTO, found bool, now time.Time) 
 
 	}
 
-	if match.Channel == nil || strings.TrimSpace(match.Channel.ID) == "" {
+	if sportsAlertCanceled(match.StatusDetail) {
 
-		return sportsAlertWait
+		return sportsAlertDrop
 
 	}
 
-	if match.Live || strings.EqualFold(strings.TrimSpace(match.Status), "in") {
+	// Rain delay / weather hold: keep the default scheduled-minute path intact
+	// by waiting until ESPN clears the delay, then fire as usual.
+	if match.Delayed {
 
-		return sportsAlertFire
+		return sportsAlertWait
 
 	}
 
@@ -498,14 +782,191 @@ func decideSportsAlert(match catalog.SportsMatchDTO, found bool, now time.Time) 
 
 	}
 
-	start := time.Unix(match.StartsAt, 0)
+	start := time.Unix(match.StartsAt, 0).In(now.Location()).Truncate(time.Minute)
 
-	if !start.After(now.Add(kickoffLead)) {
+	if !now.Before(start) {
 
 		return sportsAlertFire
 
 	}
 
 	return sportsAlertWait
+
+}
+
+func sportsAlertCanceled(detail string) bool {
+
+	blob := strings.ToLower(detail)
+
+	return strings.Contains(blob, "postpon") || strings.Contains(blob, "cancel")
+
+}
+
+func normalizeTeamKey(name string) string {
+
+	return strings.ToLower(strings.TrimSpace(name))
+
+}
+
+func canonicalTeam(name string, matches []catalog.SportsMatchDTO) (display, key string, ok bool) {
+
+	key = normalizeTeamKey(name)
+
+	if key == "" {
+
+		return "", "", false
+
+	}
+
+	display = strings.TrimSpace(name)
+
+	for _, match := range matches {
+
+		for _, team := range teamNames(match) {
+
+			if normalizeTeamKey(team) == key {
+
+				return team, key, true
+
+			}
+
+		}
+
+	}
+
+	return display, key, true
+
+}
+
+func teamNames(match catalog.SportsMatchDTO) []string {
+
+	names := make([]string, 0, 4)
+
+	add := func(value string) {
+
+		value = strings.TrimSpace(value)
+
+		if value == "" {
+
+			return
+
+		}
+
+		names = append(names, value)
+
+	}
+
+	add(match.HomeTeam)
+	add(match.AwayTeam)
+	add(match.HomeShortName)
+	add(match.AwayShortName)
+
+	if match.HomeTeam == "" && match.AwayTeam == "" {
+
+		for _, team := range titleTeams(match.Title) {
+
+			add(team)
+
+		}
+
+	}
+
+	return names
+
+}
+
+func titleTeams(title string) []string {
+
+	title = strings.TrimSpace(title)
+	lower := strings.ToLower(title)
+
+	for _, sep := range []string{" vs. ", " vs ", " at "} {
+
+		i := strings.Index(lower, sep)
+
+		if i < 0 {
+
+			continue
+
+		}
+
+		left := strings.TrimSpace(title[:i])
+		right := strings.TrimSpace(title[i+len(sep):])
+
+		if left != "" && right != "" {
+
+			return []string{left, right}
+
+		}
+
+	}
+
+	return nil
+
+}
+
+func matchInvolvesTeam(match catalog.SportsMatchDTO, teamKey string) bool {
+
+	if teamKey == "" {
+
+		return false
+
+	}
+
+	for _, name := range teamNames(match) {
+
+		if normalizeTeamKey(name) == teamKey {
+
+			return true
+
+		}
+
+	}
+
+	return false
+
+}
+
+func teamLogosFromMatches(matches []catalog.SportsMatchDTO) map[string]string {
+
+	logos := map[string]string{}
+
+	for _, match := range matches {
+
+		if match.HomeTeam != "" && match.HomeLogo != "" {
+
+			logos[normalizeTeamKey(match.HomeTeam)] = match.HomeLogo
+
+		}
+
+		if match.AwayTeam != "" && match.AwayLogo != "" {
+
+			logos[normalizeTeamKey(match.AwayTeam)] = match.AwayLogo
+
+		}
+
+		if match.HomeShortName != "" && match.HomeLogo != "" {
+
+			if _, ok := logos[normalizeTeamKey(match.HomeShortName)]; !ok {
+
+				logos[normalizeTeamKey(match.HomeShortName)] = match.HomeLogo
+
+			}
+
+		}
+
+		if match.AwayShortName != "" && match.AwayLogo != "" {
+
+			if _, ok := logos[normalizeTeamKey(match.AwayShortName)]; !ok {
+
+				logos[normalizeTeamKey(match.AwayShortName)] = match.AwayLogo
+
+			}
+
+		}
+
+	}
+
+	return logos
 
 }

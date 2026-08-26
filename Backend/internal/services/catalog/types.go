@@ -67,6 +67,7 @@ type SportsMatchDTO struct {
 	StatusDetail string `json:"statusDetail,omitempty"`
 	// Status is scoreboard lifecycle when known: pre / in / post.
 	Status string `json:"status,omitempty"`
+	Delayed bool `json:"delayed,omitempty"`
 
 	StartsAt int64 `json:"startsAt"`
 	Live     bool  `json:"live"`

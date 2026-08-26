@@ -41,6 +41,20 @@ export interface SportsAlert {
 
 }
 
+export interface SportsTeamAlert {
+
+  team: string;
+  logo?: string;
+
+}
+
+export interface SportsAlertsList {
+
+  matches: SportsAlert[];
+  teams: SportsTeamAlert[];
+
+}
+
 export interface SportsMatch {
 
   id: string;
@@ -60,6 +74,7 @@ export interface SportsMatch {
   statusDetail?: string;
   /** Scoreboard lifecycle when known: pre / in / post. */
   status?: "pre" | "in" | "post" | string;
+  delayed?: boolean;
 
   startsAt: number;
   live: boolean;
