@@ -103,28 +103,15 @@ type FavoriteItem struct {
 
 }
 
-type ProfileMedia struct {
-
-	MediaID int    `bson:"mediaId" json:"mediaId"`
-	Title   string `bson:"title" json:"title"`
-	Poster  string `bson:"poster" json:"poster"`
-	Year    int    `bson:"year,omitempty" json:"year,omitempty"`
-	Kind    string `bson:"kind" json:"kind"`
-
-}
-
 type UserProfile struct {
 
 	ID      primitive.ObjectID `bson:"_id,omitempty" json:"id"`
 	UserID  primitive.ObjectID `bson:"userId" json:"userId"`
 
-	DisplayName    string         `bson:"displayName" json:"displayName"`
-	Bio            string         `bson:"bio" json:"bio"`
-	AccentColor    string         `bson:"accentColor" json:"accentColor"`
-	Banner         string         `bson:"banner" json:"banner"`
-	FavoriteMovies []ProfileMedia `bson:"favoriteMovies" json:"favoriteMovies"`
-	FavoriteShows  []ProfileMedia `bson:"favoriteShows" json:"favoriteShows"`
-	HistoryVisible  bool  `bson:"historyVisible" json:"historyVisible"`
+	DisplayName string `bson:"displayName" json:"displayName"`
+	Bio string `bson:"bio" json:"bio"`
+	AccentColor string `bson:"accentColor" json:"accentColor"`
+	HistoryVisible bool `bson:"historyVisible" json:"historyVisible"`
 	DiscoverVisible *bool `bson:"discoverVisible,omitempty" json:"discoverVisible,omitempty"`
 
 	UpdatedAt time.Time `bson:"updatedAt" json:"updatedAt"`

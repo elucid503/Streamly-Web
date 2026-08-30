@@ -275,7 +275,7 @@ export class SearchChrome extends ModuleComponent<SearchChromeProps, SearchChrom
 
       <>
 
-        <div className={cn("flex flex-col gap-3 px-4 pt-[max(1rem,env(safe-area-inset-top))] sm:px-6 sm:pt-6 lg:px-8 lg:pt-8", view === "friends" && "lg:mx-auto lg:w-full lg:max-w-3xl")}>
+        <div className="flex flex-col gap-3 px-4 pt-[max(1rem,env(safe-area-inset-top))] sm:px-6 sm:pt-6 lg:px-8 lg:pt-8">
 
           <div className="flex items-center gap-2">
 
@@ -335,7 +335,7 @@ export class SearchChrome extends ModuleComponent<SearchChromeProps, SearchChrom
 
               )}
 
-              <Button variant="secondary" size="icon-sm" onClick={this.openMenu} title="Menu" aria-label="Menu">
+              <Button variant="secondary" size="icon" onClick={this.openMenu} title="Menu" aria-label="Menu">
 
                 <Menu size={16} />
 

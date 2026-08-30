@@ -28,7 +28,6 @@ export type { IntroInfo, NextEpisode, StreamInfo, StreamQuality, SubtitleTrack }
 export type {
   FriendRequestItem,
   FriendSummary,
-  ProfileMedia,
   PublicProfile,
   UserProfile,
 } from "./Social";

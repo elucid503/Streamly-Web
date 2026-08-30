@@ -380,6 +380,7 @@ export class SeekPreview extends Component<SeekPreviewProps> {
               className="aspect-video h-[90px] w-full bg-black object-contain opacity-0"
               muted
               playsInline
+              disablePictureInPicture
               preload="none"
               tabIndex={-1}
             />

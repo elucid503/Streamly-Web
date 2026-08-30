@@ -3,7 +3,6 @@ interface MediaSessionInfo {
   title: string;
   artist?: string;
   album?: string;
-  artwork?: string;
 
 }
 
@@ -25,8 +24,6 @@ interface AudioSessionNavigator extends Navigator {
 
 }
 
-const ARTWORK_SIZES = ["256x256", "384x384", "512x512"];
-
 function available(): boolean {
 
   return typeof navigator !== "undefined" && "mediaSession" in navigator;
@@ -41,10 +38,6 @@ export function setMediaSessionMetadata(info: MediaSessionInfo): void {
 
   }
 
-  const poster = info.artwork;
-
-  const artwork = poster ? ARTWORK_SIZES.map((sizes) => ({ src: poster, sizes, type: "image/jpeg" })) : [];
-
   try {
 
     navigator.mediaSession.metadata = new MediaMetadata({
@@ -52,8 +45,6 @@ export function setMediaSessionMetadata(info: MediaSessionInfo): void {
       title: info.title || "Streamly",
       artist: info.artist || "",
       album: info.album || "",
-
-      artwork,
 
     });
 

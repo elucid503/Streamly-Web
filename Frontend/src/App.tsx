@@ -60,11 +60,6 @@ export class App extends ModuleComponent<object, AppState> {
     this.watch(Stores.Auth);
     this.watch(Stores.Settings);
 
-    this.syncPlayerViewport();
-
-    window.visualViewport?.addEventListener("resize", this.syncPlayerViewport);
-    window.addEventListener("resize", this.syncPlayerViewport);
-
     navigator.serviceWorker?.addEventListener("message", this.onWorkerMessage);
 
     this.unlisten = history.listen(({ location }) => {
@@ -95,9 +90,6 @@ export class App extends ModuleComponent<object, AppState> {
 
     navigator.serviceWorker?.removeEventListener("message", this.onWorkerMessage);
 
-    window.visualViewport?.removeEventListener("resize", this.syncPlayerViewport);
-    window.removeEventListener("resize", this.syncPlayerViewport);
-
   }
 
   onWorkerMessage = (event: MessageEvent) => {
@@ -107,18 +99,6 @@ export class App extends ModuleComponent<object, AppState> {
     if (typeof url !== "string" || !url.startsWith("/")) return;
 
     navigate(url);
-
-  };
-
-  syncPlayerViewport = () => {
-
-    const height = Math.max(
-      window.innerHeight,
-      window.visualViewport?.height ?? 0,
-      document.documentElement.clientHeight,
-    );
-
-    document.documentElement.style.setProperty("--player-vvh", `${Math.round(height)}px`);
 
   };
 

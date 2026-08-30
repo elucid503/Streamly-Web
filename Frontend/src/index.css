@@ -105,17 +105,12 @@
 
 @layer utilities {
 
-  /* Fill the real device screen — 100dvh is short on iOS when the URL bar hides. */
+  /* Fixed edges avoid mismatched layout/visual viewport heights in iOS PWAs. */
   .player-screen {
 
     position: fixed;
-    top: 0;
-    right: 0;
-    left: 0;
+    inset: 0;
     width: 100%;
-    height: var(--player-vvh, 100lvh);
-    min-height: 100%;
-    min-height: -webkit-fill-available;
 
   }
 

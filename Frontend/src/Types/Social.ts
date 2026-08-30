@@ -1,15 +1,5 @@
 import type { WatchHistoryItem } from "./Library";
 
-export interface ProfileMedia {
-
-  mediaId: number;
-  title: string;
-  poster: string;
-  year?: number;
-  kind: "movie" | "show";
-
-}
-
 export interface UserProfile {
 
   id: string;
@@ -18,10 +8,6 @@ export interface UserProfile {
   displayName: string;
   bio: string;
   accentColor: string;
-  banner: string;
-
-  favoriteMovies: ProfileMedia[];
-  favoriteShows: ProfileMedia[];
   historyVisible: boolean;
   discoverVisible?: boolean;
 
@@ -35,7 +21,7 @@ export interface FriendSummary {
   email: string;
   displayName: string;
   accentColor: string;
-  banner: string;
+  recentActivity: WatchHistoryItem[];
   friendStatus: "none" | "pending_sent" | "pending_received" | "friends";
 
 }
@@ -47,10 +33,6 @@ export interface PublicProfile {
   displayName: string;
   bio: string;
   accentColor: string;
-  banner: string;
-
-  favoriteMovies: ProfileMedia[];
-  favoriteShows: ProfileMedia[];
   recentHistory: WatchHistoryItem[];
 
   friendStatus: "none" | "pending_sent" | "pending_received" | "friends";
@@ -64,7 +46,6 @@ export interface FriendRequestItem {
   email: string;
   displayName: string;
   accentColor: string;
-  banner: string;
   createdAt: string;
   direction: "incoming" | "outgoing";
 

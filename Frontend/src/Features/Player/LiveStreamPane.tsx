@@ -244,6 +244,7 @@ export class LiveStreamPane extends Component<LiveStreamPaneProps, LiveStreamPan
           ref={this.videoRef}
           className="h-full w-full object-contain object-center"
           playsInline
+          disablePictureInPicture
           muted={!audioActive}
 
         />

@@ -390,7 +390,7 @@ export class VideoPlayer extends ModuleComponent<VideoPlayerProps, VideoPlayerSt
 
     }
 
-    if (prev.title !== this.props.title || prev.subtitle !== this.props.subtitle || prev.episodeTitle !== this.props.episodeTitle || prev.poster !== this.props.poster) {
+    if (prev.title !== this.props.title || prev.subtitle !== this.props.subtitle || prev.episodeTitle !== this.props.episodeTitle) {
 
       this.syncMediaSession();
 
@@ -449,10 +449,6 @@ export class VideoPlayer extends ModuleComponent<VideoPlayerProps, VideoPlayerSt
 
     this.portraitQuery?.removeEventListener("change", this.onOrientationChange);
 
-    window.visualViewport?.removeEventListener("resize", this.syncViewportHeight);
-    window.visualViewport?.removeEventListener("scroll", this.syncViewportHeight);
-    window.removeEventListener("resize", this.syncViewportHeight);
-
     clearMediaSession();
 
   }
@@ -466,24 +462,6 @@ export class VideoPlayer extends ModuleComponent<VideoPlayerProps, VideoPlayerSt
     this.setState({ portrait: this.portraitQuery.matches });
 
     this.portraitQuery.addEventListener("change", this.onOrientationChange);
-
-    this.syncViewportHeight();
-
-    window.visualViewport?.addEventListener("resize", this.syncViewportHeight);
-    window.visualViewport?.addEventListener("scroll", this.syncViewportHeight);
-    window.addEventListener("resize", this.syncViewportHeight);
-
-  };
-
-  syncViewportHeight = () => {
-
-    const height = Math.max(
-      window.innerHeight,
-      window.visualViewport?.height ?? 0,
-      document.documentElement.clientHeight,
-    );
-
-    document.documentElement.style.setProperty("--player-vvh", `${Math.round(height)}px`);
 
   };
 
@@ -520,6 +498,8 @@ export class VideoPlayer extends ModuleComponent<VideoPlayerProps, VideoPlayerSt
 
     const video = this.videoRef.current;
 
+    enableBackgroundAudio();
+
     if (video) void video.play().catch(() => {});
 
   };
@@ -532,15 +512,13 @@ export class VideoPlayer extends ModuleComponent<VideoPlayerProps, VideoPlayerSt
 
   syncMediaSession = () => {
 
-    const { title, subtitle, episodeTitle, poster, live, nextEpisode } = this.props;
+    const { title, subtitle, episodeTitle, live, nextEpisode } = this.props;
 
     setMediaSessionMetadata({
 
       title: episodeTitle || title,
       artist: episodeTitle ? title : subtitle ?? "",
       album: live ? "Live TV" : subtitle ?? "",
-
-      artwork: poster,
 
     });
 
@@ -875,6 +853,8 @@ export class VideoPlayer extends ModuleComponent<VideoPlayerProps, VideoPlayerSt
   };
 
   onPlaying = () => {
+
+    enableBackgroundAudio();
 
     this.clearBuffering();
     this.setState({ playing: true, playbackPrimed: true });
@@ -2337,6 +2317,7 @@ export class VideoPlayer extends ModuleComponent<VideoPlayerProps, VideoPlayerSt
                 className={cn("relative z-10 h-full w-full object-contain object-center", showAdBreakOverlay && "scale-105 blur-2xl")}
                 ref={this.videoRef}
                 playsInline
+                disablePictureInPicture
                 // Keep crossOrigin stable across multiview toggles — flipping it
                 // reloads the media element and kills the active live stream.
                 crossOrigin={ambienceEnabled ? "anonymous" : isProxiedStream(this.props.src) ? "use-credentials" : undefined}
@@ -2446,6 +2427,7 @@ export class VideoPlayer extends ModuleComponent<VideoPlayerProps, VideoPlayerSt
             className="relative z-10 h-full w-full object-contain object-center"
             ref={this.videoRef}
             playsInline
+            disablePictureInPicture
             crossOrigin={ambienceEnabled ? "anonymous" : undefined}
             {...videoHandlers}
 

@@ -1,4 +1,4 @@
-import type { FriendRequestItem, FriendSummary, ProfileMedia, PublicProfile, UserProfile } from "@/Types";
+import type { FriendRequestItem, FriendSummary, PublicProfile, UserProfile } from "@/Types";
 
 import { request } from "./Request";
 
@@ -16,10 +16,6 @@ export const socialAPI = {
     bio?: string;
 
     accentColor?: string;
-    banner?: string;
-
-    favoriteMovies?: ProfileMedia[];
-    favoriteShows?: ProfileMedia[];
 
     historyVisible?: boolean;
     discoverVisible?: boolean;

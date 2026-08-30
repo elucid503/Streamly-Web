@@ -121,60 +121,40 @@ const (
 
 )
 
-var validBanners = map[string]bool{
-
-	"aurora":   true,
-	"sunset":   true,
-	"ocean":    true,
-	"forest":   true,
-	"midnight": true,
-	"rose":     true,
-	"ember":    true,
-	"slate":    true,
-	"nebula":   true,
-	"cosmos":   true,
-
-}
-
 var hexColorRe = regexp.MustCompile(`^#[0-9a-fA-F]{6}$`)
 
 func boolPtr(b bool) *bool { return &b }
 
 type ProfileUpdate struct {
 
-	DisplayName    string               `json:"displayName"`
-	Bio            string               `json:"bio"`
-	AccentColor    string               `json:"accentColor"`
-	Banner         string               `json:"banner"`
-	FavoriteMovies []models.ProfileMedia `json:"favoriteMovies"`
-	FavoriteShows  []models.ProfileMedia `json:"favoriteShows"`
-	HistoryVisible  *bool `json:"historyVisible"`
+	DisplayName string `json:"displayName"`
+	Bio string `json:"bio"`
+	AccentColor string `json:"accentColor"`
+	HistoryVisible *bool `json:"historyVisible"`
 	DiscoverVisible *bool `json:"discoverVisible"`
+
 }
 
 type UserSummary struct {
 
-	UserID       string `json:"userId"`
-	Email        string `json:"email"`
-	DisplayName  string `json:"displayName"`
-	AccentColor  string `json:"accentColor"`
-	Banner       string `json:"banner"`
+	UserID string `json:"userId"`
+	Email string `json:"email"`
+	DisplayName string `json:"displayName"`
+	AccentColor string `json:"accentColor"`
+	RecentActivity []models.WatchHistoryItem `json:"recentActivity"`
 	FriendStatus string `json:"friendStatus"`
 
 }
 
 type PublicProfileResponse struct {
 
-	UserID         string                    `json:"userId"`
-	Email          string                    `json:"email"`
-	DisplayName    string                    `json:"displayName"`
-	Bio            string                    `json:"bio"`
-	AccentColor    string                    `json:"accentColor"`
-	Banner         string                    `json:"banner"`
-	FavoriteMovies []models.ProfileMedia     `json:"favoriteMovies"`
-	FavoriteShows  []models.ProfileMedia     `json:"favoriteShows"`
-	RecentHistory  []models.WatchHistoryItem `json:"recentHistory"`
-	FriendStatus   string                    `json:"friendStatus"`
+	UserID string `json:"userId"`
+	Email string `json:"email"`
+	DisplayName string `json:"displayName"`
+	Bio string `json:"bio"`
+	AccentColor string `json:"accentColor"`
+	RecentHistory []models.WatchHistoryItem `json:"recentHistory"`
+	FriendStatus string `json:"friendStatus"`
 
 }
 
@@ -185,7 +165,6 @@ type FriendRequestResponse struct {
 	Email       string    `json:"email"`
 	DisplayName string    `json:"displayName"`
 	AccentColor string    `json:"accentColor"`
-	Banner      string    `json:"banner"`
 	CreatedAt   time.Time `json:"createdAt"`
 	Direction   string    `json:"direction"`
 
@@ -250,10 +229,6 @@ func (s *SocialService) getOrCreateProfile(ctx context.Context, userOID primitiv
 		Bio:            "",
 
 		AccentColor:    "#6366f1",
-		Banner:         "aurora",
-
-		FavoriteMovies:  []models.ProfileMedia{},
-		FavoriteShows:   []models.ProfileMedia{},
 
 		HistoryVisible:  true,
 		DiscoverVisible: boolPtr(true),
@@ -422,18 +397,6 @@ func (s *SocialService) UpdateProfile(ctx context.Context, userID string, input 
 
 	}
 
-	if input.Banner != "" {
-
-		if !validBanners[input.Banner] {
-
-			return nil, ErrSocialBadInput
-
-		}
-
-		set["banner"] = input.Banner
-
-	}
-
 	if input.HistoryVisible != nil {
 
 		set["historyVisible"] = *input.HistoryVisible
@@ -445,38 +408,6 @@ func (s *SocialService) UpdateProfile(ctx context.Context, userID string, input 
 		set["discoverVisible"] = *input.DiscoverVisible
 
 	}
-
-	movies := input.FavoriteMovies
-
-	if movies == nil {
-
-		movies = []models.ProfileMedia{}
-
-	}
-
-	if len(movies) > 3 {
-
-		movies = movies[:3]
-
-	}
-
-	set["favoriteMovies"] = movies
-
-	shows := input.FavoriteShows
-
-	if shows == nil {
-
-		shows = []models.ProfileMedia{}
-
-	}
-
-	if len(shows) > 3 {
-
-		shows = shows[:3]
-
-	}
-
-	set["favoriteShows"] = shows
 
 	opts := options.FindOneAndUpdate().SetReturnDocument(options.After)
 
@@ -540,33 +471,17 @@ func (s *SocialService) GetPublicProfile(ctx context.Context, viewerID, targetID
 
 	resp := &PublicProfileResponse{
 
-		UserID:         targetUser.ID.Hex(),
+		UserID: targetUser.ID.Hex(),
 
-		Email:          targetUser.Email,
-		DisplayName:    profile.DisplayName,
-		Bio:            profile.Bio,
+		Email:       targetUser.Email,
+		DisplayName: profile.DisplayName,
+		Bio:         profile.Bio,
 
-		AccentColor:    profile.AccentColor,
-		Banner:         profile.Banner,
+		AccentColor: profile.AccentColor,
 
-		FavoriteMovies: profile.FavoriteMovies,
-		FavoriteShows:  profile.FavoriteShows,
+		RecentHistory: []models.WatchHistoryItem{},
 
-		RecentHistory:  []models.WatchHistoryItem{},
-
-		FriendStatus:   status,
-
-	}
-
-	if profile.FavoriteMovies == nil {
-
-		resp.FavoriteMovies = []models.ProfileMedia{}
-
-	}
-
-	if profile.FavoriteShows == nil {
-
-		resp.FavoriteShows = []models.ProfileMedia{}
+		FriendStatus: status,
 
 	}
 
@@ -749,25 +664,22 @@ func (s *SocialService) SearchUsers(ctx context.Context, viewerID, query string)
 
 		displayName := defaultDisplayName(u.Email)
 		accentColor := "#6366f1"
-		banner := "aurora"
-
 		if p != nil {
 
 			displayName = p.DisplayName
 			accentColor = p.AccentColor
-			banner = p.Banner
 
 		}
 
 		summaries = append(summaries, UserSummary{
 
-			UserID:       u.ID.Hex(),
+			UserID: u.ID.Hex(),
 
-			Email:        u.Email,
-			DisplayName:  displayName,
+			Email:       u.Email,
+			DisplayName: displayName,
 
-			AccentColor:  accentColor,
-			Banner:       banner,
+			AccentColor:    accentColor,
+			RecentActivity: []models.WatchHistoryItem{},
 
 			FriendStatus: statusFor(u.ID),
 
@@ -878,6 +790,65 @@ func (s *SocialService) ListFriends(ctx context.Context, userID string) ([]UserS
 
 	}
 
+	visibleFriendIDs := make([]primitive.ObjectID, 0, len(friendIDs))
+
+	for _, friendID := range friendIDs {
+
+		profile := profileMap[friendID]
+
+		if profile == nil || profile.HistoryVisible {
+
+			visibleFriendIDs = append(visibleFriendIDs, friendID)
+
+		}
+
+	}
+
+	activityMap := make(map[primitive.ObjectID][]models.WatchHistoryItem)
+
+	if len(visibleFriendIDs) > 0 {
+
+		limit := int64(len(visibleFriendIDs) * 6)
+
+		if limit < 60 {
+
+			limit = 60
+
+		}
+
+		if limit > 180 {
+
+			limit = 180
+
+		}
+
+		activityCur, activityErr := s.db.History().Find(ctx, bson.M{"userId": bson.M{"$in": visibleFriendIDs}},
+			options.Find().SetSort(bson.D{{Key: "updatedAt", Value: -1}}).SetLimit(limit))
+
+		if activityErr == nil {
+
+			defer activityCur.Close(ctx)
+
+			var activity []models.WatchHistoryItem
+
+			if activityCur.All(ctx, &activity) == nil {
+
+				for _, item := range activity {
+
+					if len(activityMap[item.UserID]) < 6 {
+
+						activityMap[item.UserID] = append(activityMap[item.UserID], item)
+
+					}
+
+				}
+
+			}
+
+		}
+
+	}
+
 	summaries := make([]UserSummary, 0, len(users))
 
 	for _, u := range users {
@@ -886,25 +857,30 @@ func (s *SocialService) ListFriends(ctx context.Context, userID string) ([]UserS
 
 		displayName := defaultDisplayName(u.Email)
 		accentColor := "#6366f1"
-		banner := "aurora"
-
 		if p != nil {
 
 			displayName = p.DisplayName
 			accentColor = p.AccentColor
-			banner = p.Banner
+
+		}
+
+		activity := activityMap[u.ID]
+
+		if activity == nil {
+
+			activity = []models.WatchHistoryItem{}
 
 		}
 
 		summaries = append(summaries, UserSummary{
 
-			UserID:       u.ID.Hex(),
+			UserID: u.ID.Hex(),
 
-			Email:        u.Email,
-			DisplayName:  displayName,
+			Email:       u.Email,
+			DisplayName: displayName,
 
-			AccentColor:  accentColor,
-			Banner:       banner,
+			AccentColor:    accentColor,
+			RecentActivity: activity,
 
 			FriendStatus: FriendStatusFriends,
 
@@ -1050,13 +1026,10 @@ func (s *SocialService) ListRequests(ctx context.Context, userID string) ([]Frie
 
 		displayName := defaultDisplayName(u.Email)
 		accentColor := "#6366f1"
-		banner := "aurora"
-
 		if p != nil {
 
 			displayName = p.DisplayName
 			accentColor = p.AccentColor
-			banner = p.Banner
 
 		}
 
@@ -1067,7 +1040,6 @@ func (s *SocialService) ListRequests(ctx context.Context, userID string) ([]Frie
 			Email:       u.Email,
 			DisplayName: displayName,
 			AccentColor: accentColor,
-			Banner:      banner,
 			CreatedAt:   r.CreatedAt,
 			Direction:   direction,
 
