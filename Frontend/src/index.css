@@ -105,12 +105,14 @@
 
 @layer utilities {
 
-  /* Fixed edges avoid mismatched layout/visual viewport heights in iOS PWAs. */
+  /* iOS standalone mode can expose a layout viewport that stops above the
+     physical display edge; App supplies the full screen height in that mode. */
   .player-screen {
 
     position: fixed;
     inset: 0;
     width: 100%;
+    height: var(--player-vvh, 100lvh);
 
   }
 

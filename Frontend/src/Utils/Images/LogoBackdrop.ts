@@ -6,6 +6,7 @@ export interface LogoBackdrop {
 }
 
 const cache = new Map<string, Promise<LogoBackdrop>>();
+const mediaArtworkCache = new Map<string, Promise<string>>();
 
 const fallbackBackdrop: LogoBackdrop = {
 
@@ -37,6 +38,73 @@ export function getLogoBackdrop(src: string): Promise<LogoBackdrop> {
   cache.set(key, promise);
 
   return promise;
+
+}
+
+export function getLiveMediaArtwork(src: string, name: string): Promise<string> {
+
+  const key = `${src.trim()}\n${name.trim()}`;
+  const cached = mediaArtworkCache.get(key);
+
+  if (cached) {
+
+    return cached;
+
+  }
+
+  const artwork = renderLiveMediaArtwork(src.trim(), name.trim());
+
+  mediaArtworkCache.set(key, artwork);
+
+  return artwork;
+
+}
+
+async function renderLiveMediaArtwork(src: string, name: string): Promise<string> {
+
+  const size = 512;
+  const canvas = document.createElement("canvas");
+
+  canvas.width = size;
+  canvas.height = size;
+
+  const ctx = canvas.getContext("2d");
+
+  if (!ctx) {
+
+    return src;
+
+  }
+
+  const backdrop = await getLogoBackdrop(src);
+
+  ctx.fillStyle = backdrop.backgroundColor;
+  ctx.fillRect(0, 0, size, size);
+
+  try {
+
+    const image = await loadImage(src);
+    const maxWidth = size * 0.62;
+    const maxHeight = size * 0.42;
+    const scale = Math.min(maxWidth / image.naturalWidth, maxHeight / image.naturalHeight);
+    const width = image.naturalWidth * scale;
+    const height = image.naturalHeight * scale;
+
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = "high";
+    ctx.drawImage(image, (size - width) / 2, (size - height) / 2, width, height);
+
+  } catch {
+
+    ctx.fillStyle = backdrop.primaryColor;
+    ctx.font = "600 168px system-ui, sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(name.slice(0, 1).toUpperCase() || "?", size / 2, size / 2 + 6);
+
+  }
+
+  return canvas.toDataURL("image/png");
 
 }
 

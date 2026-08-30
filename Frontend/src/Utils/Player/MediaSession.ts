@@ -3,6 +3,7 @@ interface MediaSessionInfo {
   title: string;
   artist?: string;
   album?: string;
+  artwork?: string;
 
 }
 
@@ -45,6 +46,7 @@ export function setMediaSessionMetadata(info: MediaSessionInfo): void {
       title: info.title || "Streamly",
       artist: info.artist || "",
       album: info.album || "",
+      artwork: info.artwork ? [{ src: info.artwork }] : [],
 
     });
 

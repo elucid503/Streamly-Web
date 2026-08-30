@@ -23,6 +23,7 @@ import { hasIntroWindow, isInIntroWindow } from "@/Utils/Player/Intro";
 import { isProxiedStream, isWebPlayableUrl } from "@/Utils/Player/StreamClient";
 import { isMobile } from "@/Utils/Platform";
 import { clearMediaSession, enableBackgroundAudio, setMediaSessionHandlers, setMediaSessionMetadata, setMediaSessionPlaybackState, setMediaSessionPosition } from "@/Utils/Player/MediaSession";
+import { getLiveMediaArtwork } from "@/Utils/Images/LogoBackdrop";
 import { cn } from "@/Utils/ClassNames";
 import { formatDuration } from "@/Utils/Time";
 import type { Episode, IntroInfo, LiveChannel, LiveSourceProvider, NextEpisode, Season, StreamQuality, SubtitleTrack, } from "@/Types";
@@ -286,6 +287,7 @@ export class VideoPlayer extends ModuleComponent<VideoPlayerProps, VideoPlayerSt
   private durationReported = false;
   private playbackErrorReported = false;
   private hlsRecoveryAttempts = 0;
+  private mediaSessionArtworkRequest = 0;
 
   private static readonly MAX_HLS_RECOVERIES = 1;
   private static readonly MAX_LIVE_HLS_RECOVERIES = 8;
@@ -390,7 +392,7 @@ export class VideoPlayer extends ModuleComponent<VideoPlayerProps, VideoPlayerSt
 
     }
 
-    if (prev.title !== this.props.title || prev.subtitle !== this.props.subtitle || prev.episodeTitle !== this.props.episodeTitle) {
+    if (prev.title !== this.props.title || prev.subtitle !== this.props.subtitle || prev.episodeTitle !== this.props.episodeTitle || prev.poster !== this.props.poster) {
 
       this.syncMediaSession();
 
@@ -449,6 +451,7 @@ export class VideoPlayer extends ModuleComponent<VideoPlayerProps, VideoPlayerSt
 
     this.portraitQuery?.removeEventListener("change", this.onOrientationChange);
 
+    this.mediaSessionArtworkRequest += 1;
     clearMediaSession();
 
   }
@@ -512,15 +515,34 @@ export class VideoPlayer extends ModuleComponent<VideoPlayerProps, VideoPlayerSt
 
   syncMediaSession = () => {
 
-    const { title, subtitle, episodeTitle, live, nextEpisode } = this.props;
-
-    setMediaSessionMetadata({
+    const { title, subtitle, episodeTitle, poster, live, nextEpisode } = this.props;
+    const artworkRequest = ++this.mediaSessionArtworkRequest;
+    const metadata = {
 
       title: episodeTitle || title,
       artist: episodeTitle ? title : subtitle ?? "",
       album: live ? "Live TV" : subtitle ?? "",
 
+    };
+
+    setMediaSessionMetadata({
+
+      ...metadata,
+      artwork: live ? undefined : poster,
+
     });
+
+    if (live && poster) {
+
+      void getLiveMediaArtwork(poster, title).then((artwork) => {
+
+        if (artworkRequest !== this.mediaSessionArtworkRequest) return;
+
+        setMediaSessionMetadata({ ...metadata, artwork });
+
+      });
+
+    }
 
     setMediaSessionHandlers({
 
