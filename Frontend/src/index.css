@@ -105,8 +105,8 @@
 
 @layer utilities {
 
-  /* iOS standalone mode can expose a layout viewport that stops above the
-     physical display edge; App supplies the full screen height in that mode. */
+  /* Player controls stay inside WebKit's usable viewport. The ambience layer
+     paints the remaining standalone-PWA canvas without moving the controls. */
   .player-screen {
 
     position: fixed;

@@ -118,17 +118,7 @@ export class App extends ModuleComponent<object, AppState> {
       document.documentElement.clientHeight,
     );
 
-    const standalone = window.matchMedia("(display-mode: standalone)").matches
-      || (navigator as Navigator & { standalone?: boolean }).standalone === true;
-
-    const portrait = window.matchMedia("(orientation: portrait)").matches;
-    const screenHeight = portrait
-      ? Math.max(window.screen.width, window.screen.height)
-      : Math.min(window.screen.width, window.screen.height);
-
-    const height = standalone ? Math.max(viewportHeight, screenHeight) : viewportHeight;
-
-    document.documentElement.style.setProperty("--player-vvh", `${Math.round(height)}px`);
+    document.documentElement.style.setProperty("--player-vvh", `${Math.round(viewportHeight)}px`);
 
   };
 
