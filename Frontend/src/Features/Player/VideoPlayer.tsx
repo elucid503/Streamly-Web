@@ -3047,7 +3047,15 @@ export class VideoPlayer extends ModuleComponent<VideoPlayerProps, VideoPlayerSt
 
               )}
 
-              {!this.mobile && (
+              {this.mobile ? (
+
+                <ControlButton onClick={this.enterNativeFullscreen} aria-label="Full screen">
+
+                  <Expand size={20} />
+
+                </ControlButton>
+
+              ) : (
 
                 <ControlButton onClick={this.toggleFullscreen}>
 
@@ -3132,28 +3140,7 @@ export class VideoPlayer extends ModuleComponent<VideoPlayerProps, VideoPlayerSt
 
               </button>
 
-              {this.mobile && (
-
-                <>
-
-                  <span className="h-[90%] w-px shrink-0 bg-white/10" aria-hidden />
-
-                  <button
-                    type="button"
-                    onClick={(event) => { event.stopPropagation(); this.enterNativeFullscreen(); }}
-                    className={miniControlClass}
-                    aria-label="Full screen"
-                  >
-
-                    <Expand size={16} />
-
-                  </button>
-
-                </>
-
-              )}
-
-            </div>
+              </div>
 
           </div>
 
