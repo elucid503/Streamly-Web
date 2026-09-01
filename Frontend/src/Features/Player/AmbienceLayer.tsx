@@ -30,12 +30,8 @@ interface Rgb {
 const DEFAULT_PRIMARY: Rgb = { r: 36, g: 34, b: 44 };
 
 const DEFAULT_SECONDARY: Rgb = { r: 28, g: 36, b: 42 };
-const BLACK: Rgb = { r: 0, g: 0, b: 0 };
 
 const toRgba = (color: Rgb, alpha: number) => `rgba(${Math.round(color.r)}, ${Math.round(color.g)}, ${Math.round(color.b)}, ${alpha})`;
-const toHex = (color: Rgb) => `#${[color.r, color.g, color.b]
-  .map((channel) => Math.round(channel).toString(16).padStart(2, "0"))
-  .join("")}`;
 
 const lerp = (from: number, to: number, t: number) => from + (to - from) * t;
 
@@ -105,13 +101,6 @@ export class AmbienceLayer extends Component<AmbienceLayerProps> {
   private targetSecondary = DEFAULT_SECONDARY;
 
   private lastRenderedGradient = "";
-  private documentAppearance: {
-
-    rootBackground: string;
-    bodyBackground: string;
-    themeColor: string | null;
-
-  } | null = null;
 
   componentDidMount() {
 
@@ -153,7 +142,6 @@ export class AmbienceLayer extends Component<AmbienceLayerProps> {
 
   activate = () => {
 
-    this.captureDocumentAppearance();
     this.renderGradient(this.displayPrimary, this.displaySecondary);
 
     this.bindVideoEvents();
@@ -172,52 +160,6 @@ export class AmbienceLayer extends Component<AmbienceLayerProps> {
 
     this.stopSampling();
     this.stopAnimation();
-
-    this.restoreDocumentAppearance();
-    this.lastRenderedGradient = "";
-
-  };
-
-  captureDocumentAppearance = () => {
-
-    if (this.documentAppearance) return;
-
-    const theme = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]');
-
-    this.documentAppearance = {
-
-      rootBackground: document.documentElement.style.background,
-      bodyBackground: document.body.style.background,
-      themeColor: theme?.getAttribute("content") ?? null,
-
-    };
-
-  };
-
-  restoreDocumentAppearance = () => {
-
-    if (!this.documentAppearance) return;
-
-    const theme = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]');
-
-    document.documentElement.style.background = this.documentAppearance.rootBackground;
-    document.body.style.background = this.documentAppearance.bodyBackground;
-
-    if (theme) {
-
-      if (this.documentAppearance.themeColor === null) {
-
-        theme.removeAttribute("content");
-
-      } else {
-
-        theme.setAttribute("content", this.documentAppearance.themeColor);
-
-      }
-
-    }
-
-    this.documentAppearance = null;
 
   };
 
@@ -434,14 +376,6 @@ export class AmbienceLayer extends Component<AmbienceLayerProps> {
       this.layerRef.current.style.background = gradient;
 
     }
-
-    const canvasGradient = `${gradient}, #000`;
-    const themeColor = toHex(lerpRgb(BLACK, lerpRgb(primary, secondary, 0.5), 0.48));
-    const theme = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]');
-
-    document.documentElement.style.background = canvasGradient;
-    document.body.style.background = canvasGradient;
-    theme?.setAttribute("content", themeColor);
 
   };
 

@@ -1,6 +1,6 @@
 import type HLS from "hls.js";
 import { createRef, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type RefObject } from "react";
-import { ArrowLeft, Clapperboard, FastForward, Maximize, Minimize, Pause, Play, Rewind, SkipForward, Volume2, VolumeX, X } from "lucide-react";
+import { ArrowLeft, Clapperboard, Expand, FastForward, Maximize, Minimize, Pause, Play, Rewind, SkipForward, Volume2, VolumeX, X } from "lucide-react";
 
 import { AmbienceLayer } from "@/Features/Player/AmbienceLayer";
 import { EpisodePickerPanel } from "@/Features/Player/EpisodePickerPanel";
@@ -218,6 +218,21 @@ interface VideoPlayerState {
 }
 
 const miniControlClass = "flex h-8 flex-1 items-center justify-center text-foreground-muted transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-accent/40";
+
+type NativeFullscreenVideo = HTMLVideoElement & {
+
+  webkitSupportsFullscreen?: boolean;
+  webkitEnterFullscreen?: () => void;
+
+};
+
+const nativeFullscreenVideo = (video: HTMLVideoElement | null): NativeFullscreenVideo | null => {
+
+  const el = video as NativeFullscreenVideo | null;
+
+  return el && typeof el.webkitEnterFullscreen === "function" ? el : null;
+
+};
 
 const readPortrait = (): boolean => {
 
@@ -451,6 +466,10 @@ export class VideoPlayer extends ModuleComponent<VideoPlayerProps, VideoPlayerSt
 
     this.portraitQuery?.removeEventListener("change", this.onOrientationChange);
 
+    window.visualViewport?.removeEventListener("resize", this.syncViewportHeight);
+    window.visualViewport?.removeEventListener("scroll", this.syncViewportHeight);
+    window.removeEventListener("resize", this.syncViewportHeight);
+
     this.mediaSessionArtworkRequest += 1;
     clearMediaSession();
 
@@ -465,6 +484,24 @@ export class VideoPlayer extends ModuleComponent<VideoPlayerProps, VideoPlayerSt
     this.setState({ portrait: this.portraitQuery.matches });
 
     this.portraitQuery.addEventListener("change", this.onOrientationChange);
+
+    this.syncViewportHeight();
+
+    window.visualViewport?.addEventListener("resize", this.syncViewportHeight);
+    window.visualViewport?.addEventListener("scroll", this.syncViewportHeight);
+    window.addEventListener("resize", this.syncViewportHeight);
+
+  };
+
+  syncViewportHeight = () => {
+
+    const height = Math.max(
+      window.innerHeight,
+      window.visualViewport?.height ?? 0,
+      document.documentElement.clientHeight,
+    );
+
+    document.documentElement.style.setProperty("--player-vvh", `${Math.round(height)}px`);
 
   };
 
@@ -2121,6 +2158,41 @@ export class VideoPlayer extends ModuleComponent<VideoPlayerProps, VideoPlayerSt
 
   };
 
+  enterNativeFullscreen = () => {
+
+    const video = this.videoRef.current;
+
+    if (!video) return;
+
+    const native = nativeFullscreenVideo(video);
+
+    if (!native) {
+
+      if (typeof video.requestFullscreen === "function") void video.requestFullscreen().catch(() => {});
+
+      return;
+
+    }
+
+    // iOS refuses the call until metadata lands, which is a beat after hls.js attaches the manifest.
+    if (native.readyState < HTMLMediaElement.HAVE_METADATA) {
+
+      native.addEventListener("loadedmetadata", this.openNativeFullscreen, { once: true });
+
+      return;
+
+    }
+
+    this.openNativeFullscreen();
+
+  };
+
+  openNativeFullscreen = () => {
+
+    nativeFullscreenVideo(this.videoRef.current)?.webkitEnterFullscreen?.();
+
+  };
+
   showControlsTemporarily = () => {
 
     this.setState({ showControls: true });
@@ -3059,6 +3131,27 @@ export class VideoPlayer extends ModuleComponent<VideoPlayerProps, VideoPlayerSt
                 <Maximize size={16} />
 
               </button>
+
+              {this.mobile && (
+
+                <>
+
+                  <span className="h-[90%] w-px shrink-0 bg-white/10" aria-hidden />
+
+                  <button
+                    type="button"
+                    onClick={(event) => { event.stopPropagation(); this.enterNativeFullscreen(); }}
+                    className={miniControlClass}
+                    aria-label="Full screen"
+                  >
+
+                    <Expand size={16} />
+
+                  </button>
+
+                </>
+
+              )}
 
             </div>
 

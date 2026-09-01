@@ -105,14 +105,17 @@
 
 @layer utilities {
 
-  /* Player controls stay inside WebKit's usable viewport. The ambience layer
-     paints the remaining standalone-PWA canvas without moving the controls. */
+  /* Fill the real device screen — 100dvh is short on iOS when the URL bar hides. */
   .player-screen {
 
     position: fixed;
-    inset: 0;
+    top: 0;
+    right: 0;
+    left: 0;
     width: 100%;
     height: var(--player-vvh, 100lvh);
+    min-height: 100%;
+    min-height: -webkit-fill-available;
 
   }
 

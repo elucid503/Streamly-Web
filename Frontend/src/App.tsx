@@ -112,13 +112,13 @@ export class App extends ModuleComponent<object, AppState> {
 
   syncPlayerViewport = () => {
 
-    const viewportHeight = Math.max(
+    const height = Math.max(
       window.innerHeight,
       window.visualViewport?.height ?? 0,
       document.documentElement.clientHeight,
     );
 
-    document.documentElement.style.setProperty("--player-vvh", `${Math.round(viewportHeight)}px`);
+    document.documentElement.style.setProperty("--player-vvh", `${Math.round(height)}px`);
 
   };
 
