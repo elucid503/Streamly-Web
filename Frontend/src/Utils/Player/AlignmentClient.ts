@@ -1,4 +1,5 @@
 import type { AlignedWordTiming } from "@/Utils/Player/CtcAlign";
+import { isIOS, isTV, supportsOnnxWasm } from "@/Utils/Platform";
 
 interface PendingRequest {
 
@@ -9,22 +10,7 @@ interface PendingRequest {
 
 const hasBrowserApis = () => typeof window !== "undefined" && typeof navigator !== "undefined";
 
-const isIos = () => {
-
-  if (!hasBrowserApis()) return false;
-
-  const ua = navigator.userAgent;
-
-  if (/iPhone|iPad|iPod/i.test(ua)) return true;
-
-  // iPadOS 13+ reports as MacIntel in desktop mode.
-  return navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1;
-
-};
-
 const hasAudioContext = () => hasBrowserApis() && (typeof AudioContext !== "undefined" || typeof window.webkitAudioContext !== "undefined");
-
-const hasModelRuntime = () => hasBrowserApis() && typeof Worker !== "undefined" && typeof WebAssembly !== "undefined" && typeof fetch !== "undefined";
 
 let unsupportedReason: string | null | undefined;
 
@@ -38,9 +24,11 @@ const detectUnsupportedReason = () => {
 
   if (!hasBrowserApis()) return "browser lacks alignment runtime";
 
-  if (isIos()) return "iOS audio routing";
+  if (isTV()) return "tv wasm runtime";
 
-  if (!hasModelRuntime()) return "browser lacks alignment runtime";
+  if (isIOS()) return "iOS audio routing";
+
+  if (!supportsOnnxWasm()) return "browser lacks alignment runtime";
 
   if (!hasAudioContext()) return "AudioContext not supported";
 
@@ -59,6 +47,7 @@ export const alignmentUnsupportedReason = () => {
 export const isAlignmentSupported = () => alignmentUnsupportedReason() === null;
 
 let worker: Worker | null = null;
+let workerPromise: Promise<Worker | null> | null = null;
 
 let requestId = 0;
 const pending = new Map<number, PendingRequest>();
@@ -78,29 +67,9 @@ const notifyReady = () => {
 
 };
 
-const getWorker = () => {
+const attachWorker = (instance: Worker) => {
 
-  if (!isAlignmentSupported()) return null;
-
-  if (worker) return worker;
-
-  try {
-
-    worker = new Worker(new URL("../../Workers/alignment.worker.ts", import.meta.url), {
-
-      type: "module",
-
-    });
-
-  } catch {
-
-    markUnsupported("module workers not supported");
-
-    return null;
-
-  }
-
-  worker.onmessage = (event: MessageEvent) => {
+  instance.onmessage = (event: MessageEvent) => {
 
     const { id, type, words, error } = event.data ?? {};
 
@@ -124,33 +93,62 @@ const getWorker = () => {
 
   };
 
-  return worker;
+  worker = instance;
+
+  return instance;
+
+};
+
+const ensureWorker = () => {
+
+  if (!isAlignmentSupported()) return Promise.resolve(null);
+
+  if (worker) return Promise.resolve(worker);
+
+  if (!workerPromise) {
+
+    workerPromise = import("./createAlignmentWorker")
+      .then((mod) => attachWorker(mod.createAlignmentWorker()))
+      .catch(() => {
+
+        workerPromise = null;
+        markUnsupported("module workers not supported");
+
+        return null;
+
+      });
+
+  }
+
+  return workerPromise;
 
 };
 
 export function warmupAligner() {
 
-  getWorker()?.postMessage({ type: "warmup" });
+  void ensureWorker().then((instance) => instance?.postMessage({ type: "warmup" }));
 
 }
 
 export function alignWords(input: { audio: Float32Array; words: string[]; start: number; end: number; }) {
 
-  const workerInstance = getWorker();
+  return ensureWorker().then((workerInstance) => {
 
-  if (!workerInstance) {
+    if (!workerInstance) {
 
-    return Promise.reject(new Error(alignmentUnsupportedReason() ?? "alignment not supported"));
+      return Promise.reject(new Error(alignmentUnsupportedReason() ?? "alignment not supported"));
 
-  }
+    }
 
-  const id = ++requestId;
+    const id = ++requestId;
 
-  return new Promise<AlignedWordTiming[]>((resolve, reject) => {
+    return new Promise<AlignedWordTiming[]>((resolve, reject) => {
 
-    pending.set(id, { resolve, reject });
+      pending.set(id, { resolve, reject });
 
-    workerInstance.postMessage({ id, type: "align", ...input }, [input.audio.buffer]);
+      workerInstance.postMessage({ id, type: "align", ...input }, [input.audio.buffer]);
+
+    });
 
   });
 
