@@ -48,6 +48,18 @@ export function pushSupported(): boolean {
 
 }
 
+export function isTV(): boolean {
+
+  if (typeof navigator === "undefined") {
+
+    return false;
+
+  }
+
+  return /Web0S|WebOS|SmartTV|SMART-TV|Tizen|NetCast|VIDAA|Viera|Bravia|Roku|AppleTV|PlayStation|Xbox/i.test(navigator.userAgent);
+
+}
+
 export function isMobile(): boolean {
 
   if (typeof navigator === "undefined") {
@@ -93,6 +105,6 @@ export function prefersReducedMotion(): boolean {
 // Phones drop frames on spring and layout animations regardless of OS, so mobile takes the reduced-motion path whether or not the system setting is on.
 export function shouldReduceMotion(): boolean {
 
-  return isMobile() || prefersReducedMotion();
+  return isMobile() || isTV() || prefersReducedMotion();
 
 }
