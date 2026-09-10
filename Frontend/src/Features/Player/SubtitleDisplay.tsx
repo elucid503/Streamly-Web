@@ -1,6 +1,7 @@
 import { activeWordIndex, alignCue, mergeModelTimings, type AlignedSubtitleCue, } from "@/Utils/Player/SubtitleAlignment";
 import { alignWords, alignmentUnsupportedReason, isAlignmentSupported, isModelReady, warmupAligner, } from "@/Utils/Player/AlignmentClient";
 
+import { shouldUseNativeHls } from "@/Utils/Player/AirPlay";
 import { AudioTap } from "@/Utils/Player/AudioTap";
 
 import { loadSubtitleCues } from "@/Utils/Player/Vtt";
@@ -244,7 +245,8 @@ export class SubtitleDisplay extends Component<SubtitleDisplayProps, SubtitleDis
 
   private maybeRefine(index: number, force = false) {
 
-    if (this.modelDisabled || !isAlignmentSupported() || this.aligning) return;
+    // captureStream / MediaElementSource makes the video ineligible for AirPlay.
+    if (this.modelDisabled || !isAlignmentSupported() || this.aligning || shouldUseNativeHls()) return;
 
     if (this.refined.get(index)?.final) return;
 

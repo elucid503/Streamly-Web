@@ -72,6 +72,11 @@ export function prepareVideoForAirPlay(video: HTMLVideoElement | null): void {
 
   const el = video as AirPlayVideoElement;
 
+  // Credentialed/CORS media is not AirPlay-eligible; Safari then opens the
+  // audio route sheet (iPhone Speaker) instead of listing Apple TVs.
+  el.removeAttribute("crossorigin");
+  el.removeAttribute("crossOrigin");
+
   el.setAttribute("x-webkit-airplay", "allow");
   el.disableRemotePlayback = false;
 
@@ -85,6 +90,11 @@ export function isAirPlayActive(video: HTMLVideoElement | null): boolean {
 
 export function showAirPlayPicker(video: HTMLVideoElement | null): void {
 
-  (video as AirPlayVideoElement | null)?.webkitShowPlaybackTargetPicker?.();
+  const el = video as AirPlayVideoElement | null;
+
+  if (!el || typeof el.webkitShowPlaybackTargetPicker !== "function") return;
+
+  prepareVideoForAirPlay(el);
+  el.webkitShowPlaybackTargetPicker();
 
 }

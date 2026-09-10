@@ -286,6 +286,7 @@ export class VideoPlayer extends ModuleComponent<VideoPlayerProps, VideoPlayerSt
   private adDebugTimer: ReturnType<typeof setInterval> | null = null;
 
   private mobile = isMobile();
+  private nativeAirPlay = shouldUseNativeHls();
   private portraitQuery: MediaQueryList | null = null;
 
   private controlsTimer: ReturnType<typeof setTimeout> | null = null;
@@ -354,7 +355,7 @@ export class VideoPlayer extends ModuleComponent<VideoPlayerProps, VideoPlayerSt
 
     adBreakOverlay: false,
 
-    airplayAvailable: shouldUseNativeHls() && supportsAirPlayPicker(),
+    airplayAvailable: this.nativeAirPlay && supportsAirPlayPicker(),
     airplayActive: false,
 
   };
@@ -666,7 +667,7 @@ export class VideoPlayer extends ModuleComponent<VideoPlayerProps, VideoPlayerSt
 
     this.setState({
 
-      airplayAvailable: availability === "available" || (shouldUseNativeHls() && supportsAirPlayPicker()),
+      airplayAvailable: availability === "available" || (this.nativeAirPlay && supportsAirPlayPicker()),
       airplayActive: isAirPlayActive(this.videoRef.current),
 
     });
@@ -682,6 +683,18 @@ export class VideoPlayer extends ModuleComponent<VideoPlayerProps, VideoPlayerSt
   openAirPlayPicker = () => {
 
     showAirPlayPicker(this.videoRef.current);
+
+  };
+
+  videoCrossOrigin = (): "anonymous" | "use-credentials" | undefined => {
+
+    if (this.nativeAirPlay) return undefined;
+
+    if (this.props.ambienceEnabled) return "anonymous";
+
+    if (this.props.live && isProxiedStream(this.props.src)) return "use-credentials";
+
+    return undefined;
 
   };
 
@@ -1516,7 +1529,11 @@ export class VideoPlayer extends ModuleComponent<VideoPlayerProps, VideoPlayerSt
 
     const proxied = isProxiedStream(src);
 
-    if (this.props.live) {
+    if (this.nativeAirPlay) {
+
+      video.removeAttribute("crossorigin");
+
+    } else if (this.props.live) {
 
       if (this.props.ambienceEnabled) {
 
@@ -1566,7 +1583,7 @@ export class VideoPlayer extends ModuleComponent<VideoPlayerProps, VideoPlayerSt
 
       prepareVideoForAirPlay(video);
 
-      if (shouldUseNativeHls(video)) {
+      if (this.nativeAirPlay || shouldUseNativeHls(video)) {
 
         video.src = src;
         video.addEventListener("loadedmetadata", onReady, { once: true });
@@ -2433,7 +2450,7 @@ export class VideoPlayer extends ModuleComponent<VideoPlayerProps, VideoPlayerSt
           <AmbienceLayer
 
             videoRef={this.videoRef as RefObject<HTMLVideoElement>}
-            enabled={!!ambienceEnabled && !airplayActive}
+            enabled={!!ambienceEnabled && !airplayActive && !this.nativeAirPlay}
 
           />
 
@@ -2466,9 +2483,11 @@ export class VideoPlayer extends ModuleComponent<VideoPlayerProps, VideoPlayerSt
                 playsInline
                 disablePictureInPicture
                 disableRemotePlayback={false}
+                poster={poster}
                 // Keep crossOrigin stable across multiview toggles — flipping it
                 // reloads the media element and kills the active live stream.
-                crossOrigin={ambienceEnabled ? "anonymous" : isProxiedStream(this.props.src) ? "use-credentials" : undefined}
+                // iOS AirPlay cannot take over CORS-credentialed media.
+                crossOrigin={this.videoCrossOrigin()}
                 {...videoHandlers}
 
               />
@@ -2577,7 +2596,8 @@ export class VideoPlayer extends ModuleComponent<VideoPlayerProps, VideoPlayerSt
             playsInline
             disablePictureInPicture
             disableRemotePlayback={false}
-            crossOrigin={ambienceEnabled ? "anonymous" : undefined}
+            poster={poster}
+            crossOrigin={this.videoCrossOrigin()}
             {...videoHandlers}
 
           />
@@ -2971,6 +2991,22 @@ export class VideoPlayer extends ModuleComponent<VideoPlayerProps, VideoPlayerSt
 
               )}
 
+              {(airplayAvailable || airplayActive) && (
+
+                <ControlButton
+
+                  onClick={this.openAirPlayPicker}
+                  className={airplayActive ? "bg-white/15 text-accent" : undefined}
+                  aria-label={airplayActive ? "AirPlay connected" : "AirPlay"}
+
+                >
+
+                  <Airplay size={20} />
+
+                </ControlButton>
+
+              )}
+
               {live && (
 
                 behindLive ? (
@@ -3057,22 +3093,6 @@ export class VideoPlayer extends ModuleComponent<VideoPlayerProps, VideoPlayerSt
                   onToggleChannel={onMultiviewToggle}
 
                 />
-
-              )}
-
-              {(airplayAvailable || airplayActive) && (
-
-                <ControlButton
-
-                  onClick={this.openAirPlayPicker}
-                  className={airplayActive ? "bg-white/15 text-accent" : undefined}
-                  aria-label={airplayActive ? "AirPlay connected" : "AirPlay"}
-
-                >
-
-                  <Airplay size={20} />
-
-                </ControlButton>
 
               )}
 
