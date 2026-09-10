@@ -1,10 +1,25 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
+import legacy from "@vitejs/plugin-legacy";
 import path from "path";
+
+// webOS 6.x ships Chromium 79; Vite 7's default baseline target white-screens that engine.
+const tvBrowserTargets = ["chrome >= 79", "firefox >= 78", "safari >= 14"];
 
 export default defineConfig({
 
-  plugins: [react()],
+  plugins: [
+
+    react(),
+    legacy({
+
+      modernTargets: tvBrowserTargets,
+      modernPolyfills: true,
+      renderLegacyChunks: false,
+
+    }),
+
+  ],
 
   resolve: {
 
@@ -43,6 +58,8 @@ export default defineConfig({
   },
 
   build: {
+
+    cssTarget: ["chrome79", "firefox78", "safari14"],
 
     rollupOptions: {
 
