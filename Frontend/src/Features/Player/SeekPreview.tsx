@@ -1,6 +1,7 @@
 import type HLS from "hls.js";
 import { Component, createRef } from "react";
 
+import { shouldUseNativeHls } from "@/Utils/Player/AirPlay";
 import { isProxiedStream } from "@/Utils/Player/StreamClient";
 import { formatDuration } from "@/Utils/Time";
 
@@ -267,6 +268,13 @@ export class SeekPreview extends Component<SeekPreviewProps> {
     video.addEventListener("loadedmetadata", this.onPreviewReady);
 
     if (isHls) {
+
+      if (shouldUseNativeHls(video)) {
+
+        video.src = src;
+        return;
+
+      }
 
       const { default: HlsConstructor } = await import("hls.js");
 

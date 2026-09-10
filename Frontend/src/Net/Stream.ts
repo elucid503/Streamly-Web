@@ -1,19 +1,21 @@
 import type { IntroInfo, NextEpisode, StreamQuality, SubtitleTrack } from "@/Types";
 
+import { withIosProxyQuery } from "@/Utils/Player/AirPlay";
+
 import { request } from "./Request";
 
 export const streamAPI = {
 
   movie(id: number) {
 
-    return request<{ qualities: StreamQuality[] }>(`/api/movies/${id}/stream`);
+    return request<{ qualities: StreamQuality[] }>(withIosProxyQuery(`/api/movies/${id}/stream`));
 
   },
 
   episode(showId: number, season: number, episode: number) {
 
     return request<{ qualities: StreamQuality[] }>(
-      `/api/shows/${showId}/seasons/${season}/episodes/${episode}/stream`
+      withIosProxyQuery(`/api/shows/${showId}/seasons/${season}/episodes/${episode}/stream`)
     );
 
   },

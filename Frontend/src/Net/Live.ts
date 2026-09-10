@@ -1,5 +1,7 @@
 import type { ChannelGuideEntry, LiveChannel, LiveSourceProvider, SportsMatch } from "@/Types";
 
+import { withIosProxyQuery } from "@/Utils/Player/AirPlay";
+
 import { request } from "./Request";
 
 export const liveAPI = {
@@ -52,7 +54,7 @@ export const liveAPI = {
       /** Anonymized public source key (auto/s1/…). */
       provider?: string;
 
-    }>(`/api/live/channels/${channelId}/stream${q}`);
+    }>(withIosProxyQuery(`/api/live/channels/${channelId}/stream${q}`));
 
   },
 

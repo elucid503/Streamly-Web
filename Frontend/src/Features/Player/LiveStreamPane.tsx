@@ -2,6 +2,7 @@ import { Component, createRef } from "react";
 import type HLS from "hls.js";
 import { Volume2, VolumeX, X } from "lucide-react";
 
+import { prepareVideoForAirPlay, shouldUseNativeHls } from "@/Utils/Player/AirPlay";
 import { isProxiedStream, isWebPlayableUrl } from "@/Utils/Player/StreamClient";
 import { cn } from "@/Utils/ClassNames";
 
@@ -168,6 +169,16 @@ export class LiveStreamPane extends Component<LiveStreamPaneProps, LiveStreamPan
 
     if (stream.isHls) {
 
+      prepareVideoForAirPlay(video);
+
+      if (shouldUseNativeHls(video)) {
+
+        video.src = stream.streamUrl;
+        video.addEventListener("loadedmetadata", onReady, { once: true });
+        return;
+
+      }
+
       const { default: HlsConstructor } = await import("hls.js");
 
       if (gen !== this.sourceGen || this.videoRef.current !== video) return;
@@ -245,6 +256,7 @@ export class LiveStreamPane extends Component<LiveStreamPaneProps, LiveStreamPan
           className="h-full w-full object-contain object-center"
           playsInline
           disablePictureInPicture
+          disableRemotePlayback={false}
           muted={!audioActive}
 
         />

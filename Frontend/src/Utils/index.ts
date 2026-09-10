@@ -5,6 +5,7 @@ import { imageCache } from "./Images/Cache";
 import * as LogoBackdrop from "./Images/LogoBackdrop";
 import * as Navigation from "./Navigation";
 import * as Platform from "./Platform";
+import * as AirPlay from "./Player/AirPlay";
 import * as AlignmentClient from "./Player/AlignmentClient";
 import { AudioTap } from "./Player/AudioTap";
 import * as CtcAlign from "./Player/CtcAlign";
@@ -32,6 +33,7 @@ export default class Utils {
   static readonly ImageCache = imageCache;
   static readonly ChannelColor = ChannelColor;
   static readonly LogoBackdrop = LogoBackdrop;
+  static readonly AirPlay = AirPlay;
   static readonly AlignmentClient = AlignmentClient;
   static readonly AudioTap = AudioTap;
   static readonly CtcAlign = CtcAlign;

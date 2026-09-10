@@ -1,5 +1,7 @@
 import type { StreamInfo, StreamQuality } from "@/Types";
 
+import { forceIosMediaProxy } from "@/Utils/Player/AirPlay";
+
 export function isWebPlayableUrl(url: string): boolean {
 
   const path = url.split("?")[0]?.toLowerCase() ?? "";
@@ -8,17 +10,19 @@ export function isWebPlayableUrl(url: string): boolean {
 
 }
 
+function preferPlaybackUrl(direct: string, proxy: string, isHls: boolean): string {
+
+  if (forceIosMediaProxy() && proxy) return proxy;
+
+  if (direct && !isHls && isWebPlayableUrl(direct)) return direct;
+
+  return proxy || direct;
+
+}
+
 export function streamPlaybackUrl(stream: { url?: string; proxyUrl?: string; isHls?: boolean }): string {
 
-  const direct = stream.url?.trim() || "";
-
-  if (direct && !stream.isHls && isWebPlayableUrl(direct)) {
-
-    return direct;
-
-  }
-
-  return stream.proxyUrl?.trim() || direct;
+  return preferPlaybackUrl(stream.url?.trim() || "", stream.proxyUrl?.trim() || "", !!stream.isHls);
 
 }
 
@@ -30,9 +34,7 @@ export function isProxiedStream(url: string): boolean {
 
 export function qualityPlaybackUrl(quality: StreamQuality): string {
 
-  const direct = quality.url?.trim() || "";
-
-  const url = direct && !quality.isHls && isWebPlayableUrl(direct) ? direct : quality.proxyUrl?.trim() || direct;
+  const url = preferPlaybackUrl(quality.url?.trim() || "", quality.proxyUrl?.trim() || "", quality.isHls);
 
   if (!url || !isWebPlayableUrl(url)) return "";
 

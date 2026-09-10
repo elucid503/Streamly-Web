@@ -325,6 +325,8 @@ func (h *StreamHandler) NextEpisode(c *gin.Context) {
 // Proxying:
 //   - When the user enables proxyLiveStreams, all live playlists/segments go
 //     through /api/proxy (ISP blocks, etc.).
+//   - iOS clients always proxy (?proxy=1, or an iPhone/iPad UA) so AirPlay
+//     receivers can fetch a same-origin token URL without Referer headers.
 //   - Otherwise the stream plays directly, unless it requires request headers
 //     browsers refuse to set (Referer). Those still use the proxy so playback
 //     can work at all.
@@ -352,7 +354,7 @@ func (h *StreamHandler) LiveStream(c *gin.Context) {
 	}
 
 	streamURL := stream.URL
-	needsProxy := h.shouldProxyLiveStreams(c) || requiresBrowserForbiddenHeaders(stream.Headers)
+	needsProxy := requestWantsProxy(c) || h.shouldProxyLiveStreams(c) || requiresBrowserForbiddenHeaders(stream.Headers)
 
 	if needsProxy {
 
@@ -444,16 +446,18 @@ func (h *StreamHandler) shouldProxyLiveStreams(c *gin.Context) bool {
 }
 
 // proxyHeaderQualities replaces gated qualities with same-origin proxy URLs.
-// Direct Febbox progressive URLs without headers are returned unchanged.
+// Direct Febbox progressive URLs without headers are returned unchanged unless
+// the client asked to proxy everything (iOS AirPlay).
 func (h *StreamHandler) proxyHeaderQualities(c *gin.Context, qualities []services.QualityDTO) []services.QualityDTO {
 
 	base := baseURL(c)
+	force := requestWantsProxy(c)
 
 	out := make([]services.QualityDTO, 0, len(qualities))
 
 	for _, q := range qualities {
 
-		if len(q.Headers) > 0 {
+		if (force || len(q.Headers) > 0) && !strings.Contains(q.URL, "/api/proxy/") {
 
 			session, err := h.proxy.CreateSessionWithHeaders(c.Request.Context(), q.URL, q.Headers, q.IsHLS)
 
@@ -478,6 +482,22 @@ func (h *StreamHandler) proxyHeaderQualities(c *gin.Context, qualities []service
 	}
 
 	return out
+
+}
+
+func requestWantsProxy(c *gin.Context) bool {
+
+	switch strings.ToLower(strings.TrimSpace(c.Query("proxy"))) {
+
+	case "1", "true", "yes", "on":
+
+		return true
+
+	}
+
+	ua := strings.ToLower(c.GetHeader("User-Agent"))
+
+	return strings.Contains(ua, "iphone") || strings.Contains(ua, "ipad") || strings.Contains(ua, "ipod")
 
 }
 

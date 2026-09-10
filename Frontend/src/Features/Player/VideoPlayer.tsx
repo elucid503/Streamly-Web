@@ -1,6 +1,6 @@
 import type HLS from "hls.js";
 import { createRef, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type RefObject } from "react";
-import { ArrowLeft, Clapperboard, Expand, FastForward, Maximize, Minimize, Pause, Play, Rewind, SkipForward, Volume2, VolumeX, X } from "lucide-react";
+import { Airplay, ArrowLeft, Clapperboard, Expand, FastForward, Maximize, Minimize, Pause, Play, Rewind, SkipForward, Volume2, VolumeX, X } from "lucide-react";
 
 import { AmbienceLayer } from "@/Features/Player/AmbienceLayer";
 import { EpisodePickerPanel } from "@/Features/Player/EpisodePickerPanel";
@@ -20,6 +20,7 @@ import Stores from "@/Stores";
 import { navigate } from "@/Utils/Navigation";
 import { AdBreakDetector } from "@/Utils/Player/AdBreak";
 import { hasIntroWindow, isInIntroWindow } from "@/Utils/Player/Intro";
+import { isAirPlayActive, prepareVideoForAirPlay, shouldUseNativeHls, showAirPlayPicker, supportsAirPlayPicker, type WebKitPlaybackTargetAvailabilityEvent } from "@/Utils/Player/AirPlay";
 import { isProxiedStream, isWebPlayableUrl } from "@/Utils/Player/StreamClient";
 import { isMobile } from "@/Utils/Platform";
 import { clearMediaSession, enableBackgroundAudio, setMediaSessionHandlers, setMediaSessionMetadata, setMediaSessionPlaybackState, setMediaSessionPosition } from "@/Utils/Player/MediaSession";
@@ -215,6 +216,9 @@ interface VideoPlayerState {
 
   adBreakOverlay: boolean;
 
+  airplayAvailable: boolean;
+  airplayActive: boolean;
+
 }
 
 const miniControlClass = "flex h-8 flex-1 items-center justify-center text-foreground-muted transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-accent/40";
@@ -349,6 +353,9 @@ export class VideoPlayer extends ModuleComponent<VideoPlayerProps, VideoPlayerSt
     behindLive: false,
 
     adBreakOverlay: false,
+
+    airplayAvailable: shouldUseNativeHls() && supportsAirPlayPicker(),
+    airplayActive: false,
 
   };
 
@@ -617,6 +624,13 @@ export class VideoPlayer extends ModuleComponent<VideoPlayerProps, VideoPlayerSt
     video.addEventListener("volumechange", this.onVolumeChange);
     video.addEventListener("progress", this.onBufferProgress);
 
+    prepareVideoForAirPlay(video);
+
+    video.addEventListener("webkitplaybacktargetavailabilitychanged", this.onAirPlayAvailability);
+    video.addEventListener("webkitcurrentplaybacktargetiswirelesschanged", this.onAirPlayTargetChange);
+
+    this.setState({ airplayActive: isAirPlayActive(video) });
+
   };
 
   unbindVideoEvents = () => {
@@ -640,6 +654,34 @@ export class VideoPlayer extends ModuleComponent<VideoPlayerProps, VideoPlayerSt
     video.removeEventListener("volumechange", this.onVolumeChange);
     video.removeEventListener("progress", this.onBufferProgress);
     video.removeEventListener("error", this.onVideoError);
+
+    video.removeEventListener("webkitplaybacktargetavailabilitychanged", this.onAirPlayAvailability);
+    video.removeEventListener("webkitcurrentplaybacktargetiswirelesschanged", this.onAirPlayTargetChange);
+
+  };
+
+  onAirPlayAvailability = (event: Event) => {
+
+    const availability = (event as WebKitPlaybackTargetAvailabilityEvent).availability;
+
+    this.setState({
+
+      airplayAvailable: availability === "available" || (shouldUseNativeHls() && supportsAirPlayPicker()),
+      airplayActive: isAirPlayActive(this.videoRef.current),
+
+    });
+
+  };
+
+  onAirPlayTargetChange = () => {
+
+    this.setState({ airplayActive: isAirPlayActive(this.videoRef.current) });
+
+  };
+
+  openAirPlayPicker = () => {
+
+    showAirPlayPicker(this.videoRef.current);
 
   };
 
@@ -1522,6 +1564,17 @@ export class VideoPlayer extends ModuleComponent<VideoPlayerProps, VideoPlayerSt
 
     if (isHls) {
 
+      prepareVideoForAirPlay(video);
+
+      if (shouldUseNativeHls(video)) {
+
+        video.src = src;
+        video.addEventListener("loadedmetadata", onReady, { once: true });
+
+        return;
+
+      }
+
       const { default: HlsConstructor } = await import("hls.js");
 
       if (this.props.src !== src || this.videoRef.current !== video) return;
@@ -2276,7 +2329,7 @@ export class VideoPlayer extends ModuleComponent<VideoPlayerProps, VideoPlayerSt
   render() {
 
     const { title, subtitle, episodeTitle, description, poster, qualities = [], selectedHeight = 1080, preferredHeight, nextEpisode, onBack, ambienceEnabled, live, compact, onReturn, onDismiss, onQualityChange, onOpenSettings, seasons, episodes, currentSeason, currentEpisode, menuSeason, episodesLoading, onSeasonChange, onEpisodeSelect, primaryChannelId, multiviewStreams = [], multiviewChannels, multiviewLoading, onMultiviewSearch, onMultiviewToggle, onMultiviewRemove, streamResolving, sourceProviders, selectedSourceKey, sourceSwitching, onSourceChange, } = this.props;
-    const { playing, muted, volume, showControls, showOptions, showMultiview, showEpisodes, showSkipIntro, showUpNext, showUpNextMini, upNextCountdown, fullscreen, loading, seeking, holdPauseActive, activeSubtitleId, actionFeedback, hdrHeights, audioChannelId, playbackPrimed, behindLive, portrait, adBreakOverlay, } = this.state;
+    const { playing, muted, volume, showControls, showOptions, showMultiview, showEpisodes, showSkipIntro, showUpNext, showUpNextMini, upNextCountdown, fullscreen, loading, seeking, holdPauseActive, activeSubtitleId, actionFeedback, hdrHeights, audioChannelId, playbackPrimed, behindLive, portrait, adBreakOverlay, airplayAvailable, airplayActive, } = this.state;
 
     // Live always uses a stable grid shell so adding multiview panes does not remount
     // the primary <video> (which would tear down the HLS MediaSource attachment).
@@ -2380,7 +2433,7 @@ export class VideoPlayer extends ModuleComponent<VideoPlayerProps, VideoPlayerSt
           <AmbienceLayer
 
             videoRef={this.videoRef as RefObject<HTMLVideoElement>}
-            enabled={!!ambienceEnabled}
+            enabled={!!ambienceEnabled && !airplayActive}
 
           />
 
@@ -2412,6 +2465,7 @@ export class VideoPlayer extends ModuleComponent<VideoPlayerProps, VideoPlayerSt
                 ref={this.videoRef}
                 playsInline
                 disablePictureInPicture
+                disableRemotePlayback={false}
                 // Keep crossOrigin stable across multiview toggles — flipping it
                 // reloads the media element and kills the active live stream.
                 crossOrigin={ambienceEnabled ? "anonymous" : isProxiedStream(this.props.src) ? "use-credentials" : undefined}
@@ -2522,6 +2576,7 @@ export class VideoPlayer extends ModuleComponent<VideoPlayerProps, VideoPlayerSt
             ref={this.videoRef}
             playsInline
             disablePictureInPicture
+            disableRemotePlayback={false}
             crossOrigin={ambienceEnabled ? "anonymous" : undefined}
             {...videoHandlers}
 
@@ -3002,6 +3057,22 @@ export class VideoPlayer extends ModuleComponent<VideoPlayerProps, VideoPlayerSt
                   onToggleChannel={onMultiviewToggle}
 
                 />
+
+              )}
+
+              {(airplayAvailable || airplayActive) && (
+
+                <ControlButton
+
+                  onClick={this.openAirPlayPicker}
+                  className={airplayActive ? "bg-white/15 text-accent" : undefined}
+                  aria-label={airplayActive ? "AirPlay connected" : "AirPlay"}
+
+                >
+
+                  <Airplay size={20} />
+
+                </ControlButton>
 
               )}
 
