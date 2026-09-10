@@ -60,6 +60,57 @@ export function isTV(): boolean {
 
 }
 
+function uaMajor(ua: string, pattern: RegExp): number {
+
+  const match = ua.match(pattern);
+
+  return match ? Number(match[1]) : 0;
+
+}
+
+// onnxruntime-web ships WASM SIMD (~23MB). TVs and old engines hang or black-screen if it loads.
+export function supportsOnnxWasm(): boolean {
+
+  if (typeof navigator === "undefined") {
+
+    return false;
+
+  }
+
+  if (isTV() || isIOS()) {
+
+    return false;
+
+  }
+
+  if (typeof Worker === "undefined" || typeof WebAssembly === "undefined") {
+
+    return false;
+
+  }
+
+  const ua = navigator.userAgent;
+
+  const edge = uaMajor(ua, /Edg\/(\d+)/);
+
+  if (edge) return edge >= 91;
+
+  const firefox = uaMajor(ua, /Firefox\/(\d+)/);
+
+  if (firefox) return firefox >= 90;
+
+  const chrome = uaMajor(ua, /Chrome\/(\d+)/);
+
+  if (chrome) return chrome >= 91;
+
+  const safari = /Safari\//.test(ua) && !/Chrome\/|Chromium\/|Android/i.test(ua);
+
+  if (safari) return uaMajor(ua, /Version\/(\d+)/) >= 16;
+
+  return false;
+
+}
+
 export function isMobile(): boolean {
 
   if (typeof navigator === "undefined") {
