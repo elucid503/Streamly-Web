@@ -26,6 +26,7 @@ var (
 	hlsAudioLangRE  = regexp.MustCompile(`(?i)LANGUAGE="([^"]+)"`)
 	hlsDefaultRE    = regexp.MustCompile(`(?i)(DEFAULT=)(YES|NO)`)
 	hlsAutoselectRE = regexp.MustCompile(`(?i)(AUTOSELECT=)(YES|NO)`)
+	hlsSubsAttrRE   = regexp.MustCompile(`(?i),?SUBTITLES="[^"]*"`)
 )
 
 const proxyTokenCacheMax = 4096
@@ -167,13 +168,24 @@ func (s *ProxyService) ResolveToken(token string) (*ProxyEntry, error) {
 
 	}
 
+	// Sliding expiry: an AirPlay receiver may pull the same playlist for hours,
+	// and eviction of a token it is still using stops playback on the TV.
+	entry.ExpiresAt = time.Now().Add(s.ttl)
+	s.entryByToken[token] = entry
+
 	return &entry, nil
 
 }
 
-func (s *ProxyService) Fetch(ctx context.Context, entry *ProxyEntry, incoming http.Header) (*http.Response, error) {
+func (s *ProxyService) Fetch(ctx context.Context, entry *ProxyEntry, method string, incoming http.Header) (*http.Response, error) {
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, entry.TargetURL, nil)
+	if method != http.MethodHead {
+
+		method = http.MethodGet
+
+	}
+
+	req, err := http.NewRequestWithContext(ctx, method, entry.TargetURL, nil)
 
 	if err != nil {
 
@@ -280,6 +292,15 @@ func (s *ProxyService) RewritePlaylist(body []byte, entry *ProxyEntry, baseProxy
 			if strings.Contains(trimmed, "EXT-X-MEDIA") && strings.Contains(trimmed, "TYPE=AUDIO") {
 
 				rewritten = rewriteAudioDefault(rewritten)
+
+			}
+
+			// The subtitle EXT-X-MEDIA lines are dropped above; AVFoundation
+			// (Apple TV) rejects the whole playlist if a variant still points at
+			// the group that no longer exists.
+			if strings.Contains(trimmed, "EXT-X-STREAM-INF") {
+
+				rewritten = hlsSubsAttrRE.ReplaceAllString(rewritten, "")
 
 			}
 
@@ -427,7 +448,7 @@ func (s *ProxyService) pruneTokenCacheLocked(now time.Time) {
 
 	for token, entry := range s.entryByToken {
 
-		if now.After(entry.ExpiresAt) || len(s.entryByToken) > proxyTokenCacheMax {
+		if now.After(entry.ExpiresAt) {
 
 			delete(s.entryByToken, token)
 
@@ -437,11 +458,53 @@ func (s *ProxyService) pruneTokenCacheLocked(now time.Time) {
 
 	for key, entry := range s.tokenByKey {
 
-		if now.After(entry.expiresAt) || len(s.tokenByKey) > proxyTokenCacheMax {
+		if now.After(entry.expiresAt) {
 
 			delete(s.tokenByKey, key)
 
 		}
+
+	}
+
+	// Still over cap: drop the tokens furthest from use. ResolveToken renews the
+	// ones a live stream is actually pulling, so those sort last.
+	for len(s.entryByToken) > proxyTokenCacheMax {
+
+		oldest := ""
+		oldestAt := time.Time{}
+
+		for token, entry := range s.entryByToken {
+
+			if oldest == "" || entry.ExpiresAt.Before(oldestAt) {
+
+				oldest = token
+				oldestAt = entry.ExpiresAt
+
+			}
+
+		}
+
+		delete(s.entryByToken, oldest)
+
+	}
+
+	for len(s.tokenByKey) > proxyTokenCacheMax {
+
+		oldest := ""
+		oldestAt := time.Time{}
+
+		for key, entry := range s.tokenByKey {
+
+			if oldest == "" || entry.expiresAt.Before(oldestAt) {
+
+				oldest = key
+				oldestAt = entry.expiresAt
+
+			}
+
+		}
+
+		delete(s.tokenByKey, oldest)
 
 	}
 
@@ -558,11 +621,11 @@ func IsClientDisconnect(err error) bool {
 
 }
 
-func ForwardMediaResponse(dst http.ResponseWriter, resp *http.Response) error {
+func ForwardMediaResponse(dst http.ResponseWriter, resp *http.Response, targetURL string) error {
 
 	for key, values := range resp.Header {
 
-		if strings.EqualFold(key, "Transfer-Encoding") {
+		if strings.EqualFold(key, "Transfer-Encoding") || strings.EqualFold(key, "Content-Type") {
 
 			continue
 
@@ -576,7 +639,17 @@ func ForwardMediaResponse(dst http.ResponseWriter, resp *http.Response) error {
 
 	}
 
-	if dst.Header().Get("Accept-Ranges") == "" {
+	dst.Header().Set("Content-Type", DetectContentType(targetURL, resp.Header))
+
+	// Claiming seekability an origin does not have makes AVPlayer request a
+	// range, get the whole file back, and give up on the media.
+	rangeIgnored := resp.Request != nil && resp.Request.Header.Get("Range") != "" && resp.StatusCode == http.StatusOK
+
+	if rangeIgnored {
+
+		dst.Header().Del("Accept-Ranges")
+
+	} else if dst.Header().Get("Accept-Ranges") == "" {
 
 		dst.Header().Set("Accept-Ranges", "bytes")
 
@@ -598,35 +671,104 @@ func ForwardMediaResponse(dst http.ResponseWriter, resp *http.Response) error {
 
 }
 
+// DetectContentType prefers a specific upstream type but falls back to the URL
+// extension. Origins routinely label segments application/octet-stream or
+// text/html; hls.js ignores that, AVFoundation on an AirPlay receiver does not.
 func DetectContentType(urlStr string, header http.Header) string {
 
-	if ct := header.Get("Content-Type"); ct != "" {
+	ct := strings.TrimSpace(header.Get("Content-Type"))
+
+	if ct != "" && !isGenericContentType(ct) {
 
 		return ct
 
 	}
 
-	lower := strings.ToLower(urlStr)
+	byExt := contentTypeByExtension(urlStr)
 
-	if strings.Contains(lower, ".m3u8") || strings.Contains(lower, ".m3u") {
+	if byExt != "" {
 
-		return "application/vnd.apple.mpegurl"
-
-	}
-
-	if strings.Contains(lower, ".ts") {
-
-		return "video/mp2t"
+		return byExt
 
 	}
 
-	if strings.Contains(lower, ".mp4") {
+	if ct != "" {
 
-		return "video/mp4"
+		return ct
 
 	}
 
 	return "application/octet-stream"
+
+}
+
+func isGenericContentType(ct string) bool {
+
+	switch strings.ToLower(strings.TrimSpace(strings.Split(ct, ";")[0])) {
+
+	case "application/octet-stream", "binary/octet-stream", "application/binary", "text/plain", "text/html", "application/force-download":
+
+		return true
+
+	}
+
+	return false
+
+}
+
+func contentTypeByExtension(urlStr string) string {
+
+	path := strings.ToLower(strings.Split(strings.Split(urlStr, "#")[0], "?")[0])
+
+	dot := strings.LastIndex(path, ".")
+
+	if dot < 0 {
+
+		return ""
+
+	}
+
+	switch path[dot:] {
+
+	case ".m3u8", ".m3u":
+
+		return "application/vnd.apple.mpegurl"
+
+	case ".ts", ".mts":
+
+		return "video/mp2t"
+
+	case ".mp4", ".m4s", ".m4v", ".cmfv", ".fmp4":
+
+		return "video/mp4"
+
+	case ".m4a", ".cmfa":
+
+		return "audio/mp4"
+
+	case ".aac":
+
+		return "audio/aac"
+
+	case ".mp3":
+
+		return "audio/mpeg"
+
+	case ".webm":
+
+		return "video/webm"
+
+	case ".vtt":
+
+		return "text/vtt"
+
+	case ".key":
+
+		return "application/octet-stream"
+
+	}
+
+	return ""
 
 }
 

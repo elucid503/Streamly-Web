@@ -273,6 +273,7 @@ func main() {
 	// Proxy
 
 	api.GET("/proxy/:token", proxyHandler.Serve)
+	api.HEAD("/proxy/:token", proxyHandler.Serve)
 
 	// SPA
 

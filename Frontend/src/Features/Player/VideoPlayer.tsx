@@ -24,6 +24,7 @@ import { isAirPlayActive, prepareVideoForAirPlay, shouldUseNativeHls, showAirPla
 import { isProxiedStream, isWebPlayableUrl } from "@/Utils/Player/StreamClient";
 import { isMobile } from "@/Utils/Platform";
 import { clearMediaSession, enableBackgroundAudio, setMediaSessionHandlers, setMediaSessionMetadata, setMediaSessionPlaybackState, setMediaSessionPosition } from "@/Utils/Player/MediaSession";
+import { ScreenWakeLock } from "@/Utils/Player/WakeLock";
 import { getLiveMediaArtwork } from "@/Utils/Images/LogoBackdrop";
 import { cn } from "@/Utils/ClassNames";
 import { formatDuration } from "@/Utils/Time";
@@ -287,6 +288,7 @@ export class VideoPlayer extends ModuleComponent<VideoPlayerProps, VideoPlayerSt
 
   private mobile = isMobile();
   private nativeAirPlay = shouldUseNativeHls();
+  private wakeLock = new ScreenWakeLock();
   private portraitQuery: MediaQueryList | null = null;
 
   private controlsTimer: ReturnType<typeof setTimeout> | null = null;
@@ -478,6 +480,8 @@ export class VideoPlayer extends ModuleComponent<VideoPlayerProps, VideoPlayerSt
     window.visualViewport?.removeEventListener("scroll", this.syncViewportHeight);
     window.removeEventListener("resize", this.syncViewportHeight);
 
+    this.wakeLock.disable();
+
     this.mediaSessionArtworkRequest += 1;
     clearMediaSession();
 
@@ -531,7 +535,23 @@ export class VideoPlayer extends ModuleComponent<VideoPlayerProps, VideoPlayerSt
 
     const video = this.videoRef.current;
 
-    if (!video || document.visibilityState !== "hidden") return;
+    if (!video) return;
+
+    if (document.visibilityState === "visible") {
+
+      if (this.state.playing) this.wakeLock.enable();
+
+      // Stall timers armed before the page froze would otherwise fire the
+      // instant we resume and fail a stream that is actually fine.
+      this.clearBuffering();
+
+      return;
+
+    }
+
+    // AirPlay playback lives on the receiver — touching the local element while
+    // backgrounded is what drops the stream a few seconds in.
+    if (this.state.airplayActive) return;
 
     // iOS pauses the element when the PWA is backgrounded; resuming straight away keeps the audio running.
     if (this.state.playing && video.paused) {
@@ -676,7 +696,18 @@ export class VideoPlayer extends ModuleComponent<VideoPlayerProps, VideoPlayerSt
 
   onAirPlayTargetChange = () => {
 
-    this.setState({ airplayActive: isAirPlayActive(this.videoRef.current) });
+    const active = isAirPlayActive(this.videoRef.current);
+
+    if (active) {
+
+      // Handing off makes the local element stall and often error; none of that
+      // means the receiver failed, so drop the watchdogs rather than fail over.
+      this.playbackErrorReported = false;
+      this.clearBuffering();
+
+    }
+
+    this.setState({ airplayActive: active, loading: active ? false : this.state.loading });
 
   };
 
@@ -701,6 +732,16 @@ export class VideoPlayer extends ModuleComponent<VideoPlayerProps, VideoPlayerSt
   onVideoError = () => {
 
     this.clearSourceReadyTimer();
+
+    // While AirPlay owns playback the local element routinely errors (it has no
+    // decoder attached). Reloading the source here kills the receiver's stream.
+    if (this.state.airplayActive) {
+
+      this.setState({ loading: false });
+
+      return;
+
+    }
 
     this.setState({ loading: false, playing: false });
 
@@ -910,7 +951,7 @@ export class VideoPlayer extends ModuleComponent<VideoPlayerProps, VideoPlayerSt
 
     }
 
-    if (this.props.live && this.props.onPlaybackError && !this.liveFailoverTimer && !this.playbackErrorReported) {
+    if (this.props.live && this.props.onPlaybackError && !this.liveFailoverTimer && !this.playbackErrorReported && !this.state.airplayActive) {
 
       this.liveFailoverTimer = setTimeout(() => {
 
@@ -926,6 +967,16 @@ export class VideoPlayer extends ModuleComponent<VideoPlayerProps, VideoPlayerSt
   triggerLiveFailover = () => {
 
     if (!this.props.live || this.playbackErrorReported) return;
+
+    // A backgrounded page stalls on its own, and the receiver keeps playing
+    // regardless — switching sources from here only breaks a working stream.
+    if (this.state.airplayActive || document.visibilityState !== "visible") {
+
+      this.clearBuffering();
+
+      return;
+
+    }
 
     this.playbackErrorReported = true;
     this.clearBuffering();
@@ -971,6 +1022,7 @@ export class VideoPlayer extends ModuleComponent<VideoPlayerProps, VideoPlayerSt
     enableBackgroundAudio();
 
     this.clearBuffering();
+    this.wakeLock.enable();
     this.setState({ playing: true, playbackPrimed: true });
 
     this.syncAdBreakOverlay();
@@ -983,6 +1035,8 @@ export class VideoPlayer extends ModuleComponent<VideoPlayerProps, VideoPlayerSt
   };
 
   onPause = () => {
+
+    this.wakeLock.disable();
 
     this.setState({
 
@@ -1717,6 +1771,8 @@ export class VideoPlayer extends ModuleComponent<VideoPlayerProps, VideoPlayerSt
       });
 
     } else {
+
+      prepareVideoForAirPlay(video);
 
       video.src = src;
 

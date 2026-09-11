@@ -72,11 +72,10 @@ export function prepareVideoForAirPlay(video: HTMLVideoElement | null): void {
 
   const el = video as AirPlayVideoElement;
 
-  // Credentialed/CORS media is not AirPlay-eligible; Safari then opens the
-  // audio route sheet (iPhone Speaker) instead of listing Apple TVs.
-  el.removeAttribute("crossorigin");
-  el.removeAttribute("crossOrigin");
-
+  // Deliberately does not touch crossorigin: attachSource/videoCrossOrigin own
+  // that, and clearing it here only to have React re-apply it on the next
+  // render reloads the media element and kills whatever is playing. iOS (the
+  // AirPlay path) already renders the element without it.
   el.setAttribute("x-webkit-airplay", "allow");
   el.disableRemotePlayback = false;
 

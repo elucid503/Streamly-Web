@@ -40,11 +40,27 @@ func (h *ProxyHandler) Serve(c *gin.Context) {
 
 	ctx := c.Request.Context()
 
-	resp, err := h.proxy.Fetch(ctx, entry, c.Request.Header)
+	method := c.Request.Method
+
+	resp, err := h.proxy.Fetch(ctx, entry, method, c.Request.Header)
 
 	if err != nil {
 
-		resp, err = h.proxy.Fetch(ctx, entry, c.Request.Header)
+		resp, err = h.proxy.Fetch(ctx, entry, method, c.Request.Header)
+
+	}
+
+	// Origins that reject HEAD would otherwise look like dead media to an
+	// AirPlay receiver, which probes with HEAD before it will play anything.
+	if method == http.MethodHead && (err != nil || resp.StatusCode >= 400) {
+
+		if resp != nil {
+
+			resp.Body.Close()
+
+		}
+
+		resp, err = h.proxy.Fetch(ctx, entry, http.MethodGet, c.Request.Header)
 
 	}
 
@@ -75,6 +91,29 @@ func (h *ProxyHandler) Serve(c *gin.Context) {
 	}
 
 	contentType := services.DetectContentType(entry.TargetURL, resp.Header)
+
+	if method == http.MethodHead {
+
+		c.Header("Content-Type", contentType)
+		c.Header("Cache-Control", "no-store")
+
+		if services.IsPlaylist(contentType, entry.TargetURL) {
+
+			// The rewritten playlist is a different length than upstream's.
+			c.Header("Content-Length", "")
+
+		} else if length := resp.Header.Get("Content-Length"); length != "" {
+
+			c.Header("Content-Length", length)
+			c.Header("Accept-Ranges", "bytes")
+
+		}
+
+		c.Status(http.StatusOK)
+		return
+
+	}
+
 	reader := bufio.NewReader(resp.Body)
 
 	if services.IsPlaylist(contentType, entry.TargetURL) || isM3U8Peek(reader) {
@@ -96,7 +135,7 @@ func (h *ProxyHandler) Serve(c *gin.Context) {
 
 	resp.Body = io.NopCloser(reader)
 
-	if err := services.ForwardMediaResponse(c.Writer, resp); err != nil {
+	if err := services.ForwardMediaResponse(c.Writer, resp, entry.TargetURL); err != nil {
 
 		if !services.IsClientDisconnect(err) {
 
