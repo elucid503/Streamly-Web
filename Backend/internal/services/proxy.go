@@ -27,6 +27,7 @@ var (
 	hlsDefaultRE    = regexp.MustCompile(`(?i)(DEFAULT=)(YES|NO)`)
 	hlsAutoselectRE = regexp.MustCompile(`(?i)(AUTOSELECT=)(YES|NO)`)
 	hlsSubsAttrRE   = regexp.MustCompile(`(?i),?SUBTITLES="[^"]*"`)
+	hlsGroupIDRE    = regexp.MustCompile(`(?i)GROUP-ID="([^"]+)"`)
 )
 
 const proxyTokenCacheMax = 4096
@@ -265,6 +266,9 @@ func (s *ProxyService) RewritePlaylist(body []byte, entry *ProxyEntry, baseProxy
 
 	base, _ := url.Parse(entry.TargetURL)
 
+	englishGroups := audioGroupsWithEnglish(lines)
+	defaulted := make(map[string]bool, len(englishGroups))
+
 	out := make([]string, 0, len(lines))
 
 	for _, line := range lines {
@@ -291,7 +295,24 @@ func (s *ProxyService) RewritePlaylist(body []byte, entry *ProxyEntry, baseProxy
 
 			if strings.Contains(trimmed, "EXT-X-MEDIA") && strings.Contains(trimmed, "TYPE=AUDIO") {
 
-				rewritten = rewriteAudioDefault(rewritten)
+				group := firstSubmatch(hlsGroupIDRE, trimmed)
+
+				// Only re-point a group that actually has an English track. Forcing
+				// DEFAULT=NO across a group with no English member leaves it with no
+				// default at all, and AVFoundation rejects the whole playlist.
+				if englishGroups[group] {
+
+					want := !defaulted[group] && isEnglishAudioLang(firstSubmatch(hlsAudioLangRE, trimmed))
+
+					rewritten = setAudioDefault(rewritten, want)
+
+					if want {
+
+						defaulted[group] = true
+
+					}
+
+				}
 
 			}
 
@@ -796,32 +817,68 @@ func IsM3U8Body(body []byte) bool {
 
 }
 
-// rewriteAudioDefault sets DEFAULT=YES/AUTOSELECT=YES for English audio tracks
-// and DEFAULT=NO for all others, so players default to English automatically.
-func rewriteAudioDefault(line string) string {
+// audioGroupsWithEnglish reports the audio GROUP-IDs that contain at least one
+// English rendition, so every other group keeps the source's own defaults.
+func audioGroupsWithEnglish(lines []string) map[string]bool {
 
-	langMatch := hlsAudioLangRE.FindStringSubmatch(line)
+	groups := map[string]bool{}
 
-	if len(langMatch) < 2 {
+	for _, line := range lines {
 
-		return line
+		trimmed := strings.TrimSpace(line)
+
+		if !strings.HasPrefix(trimmed, "#EXT-X-MEDIA") || !strings.Contains(trimmed, "TYPE=AUDIO") {
+
+			continue
+
+		}
+
+		group := firstSubmatch(hlsGroupIDRE, trimmed)
+
+		if group == "" || !isEnglishAudioLang(firstSubmatch(hlsAudioLangRE, trimmed)) {
+
+			continue
+
+		}
+
+		groups[group] = true
 
 	}
 
-	isEnglish := isEnglishAudioLang(langMatch[1])
+	return groups
 
-	want := "NO"
+}
 
-	if isEnglish {
+// setAudioDefault marks one English rendition per group as the default so
+// players pick English on their own. Exactly one member of a group may say YES.
+func setAudioDefault(line string, want bool) string {
 
-		want = "YES"
+	value := "NO"
+
+	if want {
+
+		value = "YES"
 
 	}
 
-	line = hlsDefaultRE.ReplaceAllString(line, "${1}"+want)
-	line = hlsAutoselectRE.ReplaceAllString(line, "${1}"+want)
+	line = hlsDefaultRE.ReplaceAllString(line, "${1}"+value)
+	line = hlsAutoselectRE.ReplaceAllString(line, "${1}"+value)
 
 	return line
+
+}
+
+func firstSubmatch(re *regexp.Regexp, s string) string {
+
+	match := re.FindStringSubmatch(s)
+
+	if len(match) < 2 {
+
+		return ""
+
+	}
+
+	return match[1]
 
 }
 

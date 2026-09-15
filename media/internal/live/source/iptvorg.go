@@ -25,13 +25,59 @@ type iptvOrgProvider struct {
 
 type iptvOrgStream struct {
 
-	Channel string `json:"channel"`
-	Feed string `json:"feed"`
-	Title string `json:"title"`
-	URL string `json:"url"`
-	Quality string `json:"quality"`
-	UserAgent string `json:"user_agent"`
-	Referrer string `json:"referrer"`
+	Channel string
+	Feed string
+	Title string
+	URL string
+	Quality string
+	UserAgent string
+	Referrer string
+
+}
+
+// iptv-org emits JSON null for optional strings; encoding/json refuses to
+// unmarshal null into string, which used to fail the entire stream index.
+func (s *iptvOrgStream) UnmarshalJSON(data []byte) error {
+
+	var raw struct {
+
+		Channel *string `json:"channel"`
+		Feed *string `json:"feed"`
+		Title *string `json:"title"`
+		URL *string `json:"url"`
+		Quality *string `json:"quality"`
+		UserAgent *string `json:"user_agent"`
+		Referrer *string `json:"referrer"`
+
+	}
+
+	if err := json.Unmarshal(data, &raw); err != nil {
+
+		return err
+
+	}
+
+	s.Channel = derefJSONString(raw.Channel)
+	s.Feed = derefJSONString(raw.Feed)
+	s.Title = derefJSONString(raw.Title)
+	s.URL = derefJSONString(raw.URL)
+	s.Quality = derefJSONString(raw.Quality)
+	s.UserAgent = derefJSONString(raw.UserAgent)
+	s.Referrer = derefJSONString(raw.Referrer)
+
+	return nil
+
+}
+
+func derefJSONString(v *string) string {
+
+	if v == nil {
+
+		return ""
+
+	}
+
+	return strings.TrimSpace(*v)
 
 }
 

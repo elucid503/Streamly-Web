@@ -29,9 +29,15 @@ func (h *ProxyHandler) Serve(c *gin.Context) {
 
 	token := c.Param("token")
 
+	// An AirPlay receiver fetches these URLs itself, with none of the browser's
+	// context; STREAM_DEBUG=1 is the only way to see what it actually asked for.
+	proxyDebugf("%s %s ua=%q range=%q", c.Request.Method, token, c.GetHeader("User-Agent"), c.GetHeader("Range"))
+
 	entry, err := h.proxy.ResolveToken(token)
 
 	if err != nil {
+
+		proxyDebugf("token %s not found", token)
 
 		writeError(c, http.StatusNotFound, "stream session expired or not found")
 		return
@@ -91,6 +97,8 @@ func (h *ProxyHandler) Serve(c *gin.Context) {
 	}
 
 	contentType := services.DetectContentType(entry.TargetURL, resp.Header)
+
+	proxyDebugf("%s %s -> %d type=%q (upstream %q) target=%s", method, token, resp.StatusCode, contentType, resp.Header.Get("Content-Type"), entry.TargetURL)
 
 	if method == http.MethodHead {
 

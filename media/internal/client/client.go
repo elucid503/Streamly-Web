@@ -195,7 +195,7 @@ func New(opts ...Option) *Client {
 	liveCatalog := catalog.New()
 	liveGuide := guide.New(liveCatalog)
 
-	// FMHY-evaluated live TV sources: DaddyLive, NTV, Pluto, Vavoo.
+	// FMHY-evaluated live TV sources: DaddyLive, NTV, Pluto, iptv-org.
 	liveSource := source.Default()
 	liveSports := livesports.New(liveCatalog, liveSource)
 

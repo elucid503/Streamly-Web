@@ -127,7 +127,7 @@ func main() {
 
 		AllowOrigins: []string{cfg.FrontendOrigin},
 
-		AllowMethods:  []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowMethods:  []string{"GET", "HEAD", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowHeaders:  []string{"Origin", "Content-Type", "Accept", "Authorization", "Range", "If-Range"},
 		ExposeHeaders: []string{"Content-Length", "Content-Range", "Accept-Ranges"},
 

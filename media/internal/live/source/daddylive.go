@@ -12,12 +12,13 @@ import (
 	"time"
 )
 
-// DaddyLive (dlhd.st) — FMHY starred Live TV / Sports source.
-// Channel grid → stream embed → base64 HLS URL with player-host referer.
+// DaddyLive (dlive.sx, formerly dlhd.st) — FMHY starred Live TV / Sports source.
+// Channel grid → player folders → iframe hops → HLS (streamUrl / atob).
 
 type daddyLiveProvider struct {
 
 	client *http.Client
+	embedClient *http.Client
 	baseURL string
 
 	mu sync.Mutex
@@ -28,11 +29,28 @@ type daddyLiveProvider struct {
 }
 
 var (
-	daddyCardRE = regexp.MustCompile(`(?is)<a\s+class="card"\s+href="/watch\.php\?id=(\d+)"\s+data-title="([^"]+)"`)
-	daddyIFrameRE = regexp.MustCompile(`(?i)<iframe[^>]+src=["'](https?://[^"']*premiumtv[^"']+)["']`)
+	daddyBaseCandidates = []string{
+		"https://dlive.sx",
+		"https://dlhd.st",
+		"https://dlstreams.st",
+	}
+
+	daddyPlayerFolders = []string{
+		"player", "casting", "plus", "watch", "stream", "cast",
+	}
+
+	daddyCardRE = regexp.MustCompile(`(?is)<a\s+class="card"\s+([^>]+)>`)
+	daddyWatchIDRE = regexp.MustCompile(`(?i)watch\.php\?id=(\d+)`)
+	daddyTitleRE = regexp.MustCompile(`(?i)data-title="([^"]+)"`)
+	daddyIFrameRE = regexp.MustCompile(`(?i)<iframe[^>]+src=["']([^"']+)["']`)
 	daddyAtobRE = regexp.MustCompile(`(?i)source\s*:\s*window\.atob\(\s*'([A-Za-z0-9+/=]+)'\s*\)`)
-	daddyAtobRE2 = regexp.MustCompile(`(?i)atob\(\s*'([A-Za-z0-9+/=]+)'\s*\)`)
+	daddyAtobRE2 = regexp.MustCompile(`(?i)atob\(\s*'([A-Za-z0-9+/=]{16,})'\s*\)`)
+	daddyStreamURLRE = regexp.MustCompile(`(?i)streamUrl\s*:\s*"((?:\\.|[^"\\])*)"`)
+	daddyFileM3U8RE = regexp.MustCompile(`(?i)(?:file|src|source)\s*[:=]\s*["'](https?://[^"']+\.m3u8[^"']*)["']`)
+	daddyBareM3U8RE = regexp.MustCompile(`https://[^"'<\s]+\.m3u8[^"'<\s]*`)
 )
+
+const daddyMaxEmbedHops = 6
 
 // NewDaddyLive builds the DaddyLive source provider.
 func NewDaddyLive() Provider {
@@ -40,7 +58,8 @@ func NewDaddyLive() Provider {
 	return &daddyLiveProvider{
 
 		client: newHTTPClient(25 * time.Second),
-		baseURL: "https://dlhd.st",
+		embedClient: newHTTPClient(10 * time.Second),
+		baseURL: daddyBaseCandidates[0],
 
 	}
 
@@ -75,6 +94,18 @@ func (p *daddyLiveProvider) Resolve(ctx context.Context, req Request) (Stream, e
 		"User-Agent": browserUA,
 		"Referer": referer,
 		"Origin": originOf(referer),
+
+	}
+
+	if verifyPlaylist(ctx, p.client, streamURL, nil) {
+
+		return Stream{
+
+			URL: streamURL,
+			IsHLS: true,
+			Provider: p.Name(),
+
+		}, nil
 
 	}
 
@@ -148,38 +179,220 @@ func (p *daddyLiveProvider) ensureIndex(ctx context.Context) error {
 
 	}
 
-	body, status, err := getText(ctx, p.client, p.baseURL+"/24-7-channels.php", map[string]string{
-		"Accept": "text/html",
+	var last error
+
+	for _, base := range daddyBaseCandidates {
+
+		body, status, err := getText(ctx, p.client, strings.TrimRight(base, "/")+"/24-7-channels.php", map[string]string{
+			"Accept": "text/html",
+			"Referer": strings.TrimRight(base, "/") + "/",
+		})
+
+		if err != nil {
+
+			last = fmt.Errorf("daddylive: fetch channel list: %w", err)
+			continue
+
+		}
+
+		if status != http.StatusOK {
+
+			last = fmt.Errorf("daddylive: channel list status %d", status)
+			continue
+
+		}
+
+		parsed := parseDaddyCards(body)
+
+		if len(parsed) == 0 {
+
+			last = fmt.Errorf("daddylive: no channels parsed")
+			continue
+
+		}
+
+		channels := make(map[string]int, len(parsed))
+		names := make([]string, 0, len(parsed))
+
+		for _, card := range parsed {
+
+			key := normalizeName(card.title)
+
+			if key == "" {
+
+				continue
+
+			}
+
+			// Prefer lower ids when duplicates (often cleaner US feeds).
+			if existing, ok := channels[key]; ok && existing <= card.id {
+
+				continue
+
+			}
+
+			channels[key] = card.id
+			names = append(names, card.title)
+
+		}
+
+		if len(channels) == 0 {
+
+			last = fmt.Errorf("daddylive: no channels parsed")
+			continue
+
+		}
+
+		p.baseURL = strings.TrimRight(base, "/")
+		p.channels = channels
+		p.names = names
+		p.fetchedAt = time.Now()
+
+		return nil
+
+	}
+
+	if last != nil {
+
+		return last
+
+	}
+
+	return fmt.Errorf("daddylive: no channels parsed")
+
+}
+
+func (p *daddyLiveProvider) resolveStream(ctx context.Context, id int) (streamURL, referer string, err error) {
+
+	watchURL := fmt.Sprintf("%s/watch.php?id=%d", p.baseURL, id)
+
+	_, _, _ = getText(ctx, p.client, watchURL, map[string]string{
 		"Referer": p.baseURL + "/",
+	})
+
+	var last error
+
+	for _, folder := range daddyPlayerFolders {
+
+		pageURL := fmt.Sprintf("%s/%s/stream-%d.php", p.baseURL, folder, id)
+
+		found, ref, hopErr := p.resolveFromPage(ctx, pageURL, watchURL, map[string]bool{})
+
+		if hopErr != nil {
+
+			last = hopErr
+			continue
+
+		}
+
+		if found != "" {
+
+			return found, ref, nil
+
+		}
+
+	}
+
+	if last != nil {
+
+		return "", "", last
+
+	}
+
+	return "", "", fmt.Errorf("no playable embed")
+
+}
+
+func (p *daddyLiveProvider) resolveFromPage(ctx context.Context, pageURL, referer string, visited map[string]bool) (string, string, error) {
+
+	pageURL = strings.TrimSpace(pageURL)
+
+	if pageURL == "" || visited[pageURL] || len(visited) >= daddyMaxEmbedHops {
+
+		return "", "", nil
+
+	}
+
+	visited[pageURL] = true
+
+	body, status, err := getText(ctx, p.embedClient, pageURL, map[string]string{
+		"Referer": referer,
 	})
 
 	if err != nil {
 
-		return fmt.Errorf("daddylive: fetch channel list: %w", err)
+		return "", "", err
 
 	}
 
 	if status != http.StatusOK {
 
-		return fmt.Errorf("daddylive: channel list status %d", status)
+		return "", "", fmt.Errorf("embed status %d", status)
 
 	}
 
-	matches := daddyCardRE.FindAllStringSubmatch(body, -1)
+	if stream := extractDaddyPlayableURL(body); stream != "" {
 
-	if len(matches) == 0 {
-
-		return fmt.Errorf("daddylive: no channels parsed")
+		return stream, originOf(pageURL) + "/", nil
 
 	}
 
-	channels := make(map[string]int, len(matches))
-	names := make([]string, 0, len(matches))
+	var last error
 
-	for _, m := range matches {
+	for _, iframe := range daddyIFrames(body, pageURL) {
 
-		id := atoi(m[1])
-		title := htmlUnescape(m[2])
+		if isSkippableEmbed(iframe) || visited[iframe] {
+
+			continue
+
+		}
+
+		found, ref, hopErr := p.resolveFromPage(ctx, iframe, pageURL, visited)
+
+		if hopErr != nil {
+
+			last = hopErr
+			continue
+
+		}
+
+		if found != "" {
+
+			return found, ref, nil
+
+		}
+
+	}
+
+	return "", "", last
+
+}
+
+func parseDaddyCards(body string) []struct {
+	id int
+	title string
+} {
+
+	blocks := daddyCardRE.FindAllStringSubmatch(body, -1)
+	out := make([]struct {
+		id int
+		title string
+	}, 0, len(blocks))
+
+	for _, m := range blocks {
+
+		attrs := m[1]
+		idMatch := daddyWatchIDRE.FindStringSubmatch(attrs)
+		titleMatch := daddyTitleRE.FindStringSubmatch(attrs)
+
+		if len(idMatch) < 2 || len(titleMatch) < 2 {
+
+			continue
+
+		}
+
+		id := atoi(idMatch[1])
+		title := htmlUnescape(titleMatch[1])
 
 		if id == 0 || title == "" {
 
@@ -187,150 +400,242 @@ func (p *daddyLiveProvider) ensureIndex(ctx context.Context) error {
 
 		}
 
-		key := normalizeName(title)
-
-		if key == "" {
-
-			continue
-
-		}
-
-		// Prefer lower ids when duplicates (often cleaner US feeds).
-		if existing, ok := channels[key]; ok && existing <= id {
-
-			continue
-
-		}
-
-		channels[key] = id
-		names = append(names, title)
+		out = append(out, struct {
+			id int
+			title string
+		}{id: id, title: title})
 
 	}
 
-	p.channels = channels
-	p.names = names
-	p.fetchedAt = time.Now()
-
-	return nil
+	return out
 
 }
 
-func (p *daddyLiveProvider) resolveStream(ctx context.Context, id int) (streamURL, referer string, err error) {
+func extractDaddyPlayableURL(html string) string {
 
-	// 1) watch page → stream embed
-	watchURL := fmt.Sprintf("%s/watch.php?id=%d", p.baseURL, id)
+	if m := daddyStreamURLRE.FindStringSubmatch(html); len(m) == 2 {
 
-	watchBody, status, err := getText(ctx, p.client, watchURL, map[string]string{
-		"Referer": p.baseURL + "/",
-	})
+		if u := decodeDaddyQuotedURL(m[1]); looksLikeHLS(u) || strings.HasPrefix(u, "http") {
 
-	if err != nil {
+			return u
 
-		return "", "", err
+		}
 
 	}
 
-	if status != http.StatusOK {
+	if u, err := extractNTVStreamURL(html); err == nil && strings.HasPrefix(u, "http") {
 
-		return "", "", fmt.Errorf("watch status %d", status)
-
-	}
-
-	// Prefer explicit stream iframe.
-	streamEmbed := fmt.Sprintf("%s/stream/stream-%d.php", p.baseURL, id)
-
-	if m := regexp.MustCompile(`(?i)src=["'](https?://[^"']*stream/stream-\d+\.php)["']`).FindStringSubmatch(watchBody); len(m) == 2 {
-
-		streamEmbed = m[1]
+		return u
 
 	}
 
-	// 2) stream embed → premiumtv player host
-	embedBody, status, err := getText(ctx, p.client, streamEmbed, map[string]string{
-		"Referer": watchURL,
-	})
+	if m := daddyAtobRE.FindStringSubmatch(html); len(m) == 2 {
 
-	if err != nil {
+		if u := decodeDaddyAtob(m[1]); u != "" {
 
-		return "", "", err
+			return u
 
-	}
-
-	if status != http.StatusOK {
-
-		return "", "", fmt.Errorf("stream embed status %d", status)
+		}
 
 	}
 
-	playerURL := ""
+	if m := daddyAtobRE2.FindStringSubmatch(html); len(m) == 2 {
 
-	if m := daddyIFrameRE.FindStringSubmatch(embedBody); len(m) == 2 {
+		if u := decodeDaddyAtob(m[1]); u != "" {
 
-		playerURL = m[1]
+			return u
 
-	}
-
-	if playerURL == "" {
-
-		// Fallback common path pattern if iframe host moves.
-		playerURL = fmt.Sprintf("%s/premiumtv/daddy3.php?id=%d", p.baseURL, id)
+		}
 
 	}
 
-	// 3) player page → base64 HLS
-	playerBody, status, err := getText(ctx, p.client, playerURL, map[string]string{
-		"Referer": streamEmbed,
-	})
+	if m := daddyFileM3U8RE.FindStringSubmatch(html); len(m) == 2 {
 
-	if err != nil {
+		if u := decodeDaddyQuotedURL(m[1]); u != "" {
 
-		return "", "", err
+			return u
 
-	}
-
-	if status != http.StatusOK {
-
-		return "", "", fmt.Errorf("player status %d", status)
+		}
 
 	}
 
-	b64 := ""
+	if m := daddyBareM3U8RE.FindString(html); m != "" {
 
-	if m := daddyAtobRE.FindStringSubmatch(playerBody); len(m) == 2 {
+		if u := decodeDaddyQuotedURL(m); u != "" {
 
-		b64 = m[1]
+			return u
 
-	} else if m := daddyAtobRE2.FindStringSubmatch(playerBody); len(m) == 2 {
-
-		b64 = m[1]
+		}
 
 	}
 
-	if b64 == "" {
+	return ""
 
-		return "", "", fmt.Errorf("no atob stream in player page")
+}
 
-	}
+func decodeDaddyAtob(b64 string) string {
 
 	decoded, err := base64.StdEncoding.DecodeString(b64)
 
 	if err != nil {
 
-		return "", "", fmt.Errorf("decode stream: %w", err)
+		return ""
 
 	}
 
-	streamURL = strings.TrimSpace(string(decoded))
+	u := strings.TrimSpace(string(decoded))
 
-	if !strings.HasPrefix(streamURL, "http") {
+	if !strings.HasPrefix(u, "http") {
 
-		return "", "", fmt.Errorf("invalid stream url")
+		return ""
 
 	}
 
-	referer = originOf(playerURL) + "/"
+	return u
 
-	return streamURL, referer, nil
+}
+
+func decodeDaddyQuotedURL(raw string) string {
+
+	raw = strings.TrimSpace(htmlUnescape(raw))
+	raw = strings.ReplaceAll(raw, `\/`, `/`)
+	raw = strings.Trim(raw, `"'`)
+
+	if !strings.HasPrefix(raw, "http") {
+
+		return ""
+
+	}
+
+	return raw
+
+}
+
+func daddyIFrames(html, pageURL string) []string {
+
+	matches := daddyIFrameRE.FindAllStringSubmatch(html, -1)
+	out := make([]string, 0, len(matches))
+	seen := map[string]bool{}
+
+	for _, m := range matches {
+
+		abs := absURL(pageURL, htmlUnescape(m[1]))
+
+		if abs == "" || seen[abs] {
+
+			continue
+
+		}
+
+		seen[abs] = true
+		out = append(out, abs)
+
+	}
+
+	for i := 0; i < len(out); i++ {
+
+		for j := i + 1; j < len(out); j++ {
+
+			if daddyIFrameScore(out[j]) > daddyIFrameScore(out[i]) {
+
+				out[i], out[j] = out[j], out[i]
+
+			}
+
+		}
+
+	}
+
+	return out
+
+}
+
+func daddyIFrameScore(raw string) int {
+
+	host := strings.ToLower(raw)
+
+	switch {
+
+	case strings.Contains(host, "wideiptv"):
+
+		return 50
+
+	case strings.Contains(host, "cdnlivetv"):
+
+		return 40
+
+	case strings.Contains(host, "dlive.sx"), strings.Contains(host, "dlhd."):
+
+		return 20
+
+	case strings.Contains(host, "premiumtv"):
+
+		return 5
+
+	default:
+
+		return 10
+
+	}
+
+}
+
+func isSkippableEmbed(raw string) bool {
+
+	host := strings.ToLower(raw)
+
+	for _, needle := range []string{
+		"assetrage", "tiestep", "popcdn", "adbpage", "histats",
+		"doubleclick", "googlesyndication", "hubeamily", "trovesleepit",
+		"fellfortunate", "piousshiners", "nanisms", "xads",
+		"rocketstreams", "ksohls", "romponalis", "about:blank", "javascript:",
+	} {
+
+		if strings.Contains(host, needle) {
+
+			return true
+
+		}
+
+	}
+
+	return false
+
+}
+
+func absURL(base, ref string) string {
+
+	ref = strings.TrimSpace(ref)
+
+	if ref == "" {
+
+		return ""
+
+	}
+
+	u, err := url.Parse(ref)
+
+	if err != nil {
+
+		return ""
+
+	}
+
+	if u.IsAbs() {
+
+		return u.String()
+
+	}
+
+	b, err := url.Parse(base)
+
+	if err != nil {
+
+		return ""
+
+	}
+
+	return b.ResolveReference(u).String()
 
 }
 
@@ -340,7 +645,7 @@ func originOf(raw string) string {
 
 	if err != nil || u.Scheme == "" || u.Host == "" {
 
-		return "https://dlhd.st"
+		return ""
 
 	}
 
