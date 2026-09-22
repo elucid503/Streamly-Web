@@ -41,8 +41,10 @@ func normalizeName(name string) string {
 		trimmed := false
 
 		for _, suffix := range []string{
+
 			" usa", " us", " uk", " ca", " canada", " hd", " fhd", " uhd", " 4k",
 			" network", " channel", " tv", " television",
+
 		} {
 
 			if !strings.HasSuffix(name, suffix) || len(name) <= len(suffix)+1 {

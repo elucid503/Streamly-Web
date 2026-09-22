@@ -1,6 +1,6 @@
-import { cn } from "@/Utils/ClassNames";
-
 import { Component, type ButtonHTMLAttributes, type ReactNode } from "react";
+
+import { cn } from "@/Utils/ClassNames";
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 

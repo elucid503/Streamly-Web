@@ -10,9 +10,10 @@ import { Modal } from "@/UI/Modal";
 import { SelectMenu } from "@/UI/SelectMenu";
 
 import { ModuleComponent } from "@/Core/Store";
-import Net from "@/Net";
-import Stores from "@/Stores";
-import type { FavoriteItem, MainView, WatchHistoryItem } from "@/Types";
+import { versionAPI } from "@/Core/VersionApi";
+import { auth as authStore } from "@/Features/Auth/Store";
+import type { FavoriteItem, WatchHistoryItem } from "@/Features/Library/Types";
+import type { MainView } from "@/Layout/Types";
 import { cn } from "@/Utils/ClassNames";
 import { navigate } from "@/Utils/Navigation";
 
@@ -126,11 +127,11 @@ export class SearchChrome extends ModuleComponent<SearchChromeProps, SearchChrom
 
   async componentDidMount() {
 
-    this.watch(Stores.Auth);
+    this.watch(authStore);
 
     try {
 
-      const { version } = await Net.Version.get();
+      const { version } = await versionAPI.get();
 
       this.setState({ version });
 
@@ -232,8 +233,8 @@ export class SearchChrome extends ModuleComponent<SearchChromeProps, SearchChrom
     const { faqOpen, version, menuPos } = this.state;
 
     const hasQuery = searchQuery.length > 0;
-    const user = Stores.Auth.user;
-    const showContextBar = !showSearch && view !== "sports" && view !== "friends";
+    const user = authStore.user;
+    const showContextBar = !showSearch && view !== "sports";
 
     const renderContextBar = () => (
 

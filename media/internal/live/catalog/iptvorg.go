@@ -12,7 +12,7 @@ import (
 
 const (
 	defaultChannelsURL = "https://iptv-org.github.io/api/channels.json"
-	defaultLogosURL    = "https://iptv-org.github.io/api/logos.json"
+	defaultLogosURL = "https://iptv-org.github.io/api/logos.json"
 
 	fetchTimeout = 45 * time.Second
 
@@ -332,8 +332,10 @@ func displayCategory(categories []string) string {
 
 	// Prefer a product-facing label order.
 	priority := []string{
+
 		"sports", "news", "movies", "series", "entertainment", "kids",
 		"documentary", "music", "comedy", "lifestyle", "cooking", "travel",
+
 	}
 
 	lower := make(map[string]string, len(categories))

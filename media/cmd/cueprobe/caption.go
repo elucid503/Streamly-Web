@@ -140,6 +140,7 @@ func classify608(s *ccSample, b1, b2 byte) {
 				s.Popon++
 			case 0x29:
 				s.Painton++
+
 			}
 
 		}

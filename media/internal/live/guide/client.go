@@ -211,8 +211,10 @@ func (c *Client) fetchSchedules() ([]tvmazeItem, error) {
 
 	today := time.Now().Format("2006-01-02")
 	urls := []string{
+
 		tvmazeBroadcastURL,
 		tvmazeWebURL + "&date=" + today,
+
 	}
 
 	var (
@@ -435,8 +437,10 @@ func programFromItem(item tvmazeItem) (Program, bool) {
 func programsForChannel(ch catalog.Channel, byNetwork map[string][]Program) []Program {
 
 	candidates := []string{
+
 		ch.Name,
 		ch.Network,
+
 	}
 
 	candidates = append(candidates, ch.AltNames...)

@@ -1,10 +1,11 @@
+import { Component, createRef } from "react";
+import { Check, Loader2, Settings, Settings2, Subtitles, X } from "lucide-react";
+
 import { PlayerMobileSheet } from "@/Features/Player/PlayerMobileSheet";
 
 import { cn } from "@/Utils/ClassNames";
-import type { LiveSourceProvider, StreamQuality, SubtitleTrack } from "@/Types";
-
-import { Component, createRef } from "react";
-import { Check, Loader2, Settings, Settings2, Subtitles, X } from "lucide-react";
+import type { LiveSourceProvider } from "@/Features/Live/Types";
+import type { StreamQuality, SubtitleTrack } from "@/Features/Player/Types";
 
 type OptionsPanel = "quality" | "subtitles" | "source";
 

@@ -190,7 +190,6 @@ func RateLimit(cfg RateLimitConfig) gin.HandlerFunc {
 }
 
 var (
-
 	AuthRateLimit = RateLimit(RateLimitConfig{
 
 		Name: "auth",
@@ -223,5 +222,4 @@ var (
 		Burst: 25,
 
 	})
-
 )

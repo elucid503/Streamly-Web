@@ -1,3 +1,6 @@
+import { Component, createRef } from "react";
+import { ChevronLeft, ChevronRight, Clapperboard, Film, Play, X } from "lucide-react";
+
 import { Button } from "@/UI/Button";
 import { CachedImage } from "@/UI/CachedImage";
 import { HScrollRow } from "@/UI/HScrollRow";
@@ -5,10 +8,7 @@ import { Modal } from "@/UI/Modal";
 import { PlayerMobileSheet } from "@/Features/Player/PlayerMobileSheet";
 
 import { cn } from "@/Utils/ClassNames";
-import type { Episode, Season } from "@/Types";
-
-import { Component, createRef } from "react";
-import { ChevronLeft, ChevronRight, Clapperboard, Film, Play, X } from "lucide-react";
+import type { Episode, Season } from "@/Features/Catalog/Types";
 
 interface EpisodePickerPanelProps {
 

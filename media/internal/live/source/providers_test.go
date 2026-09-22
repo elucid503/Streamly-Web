@@ -149,18 +149,22 @@ func TestIPTVOrgResolveByChannelID(t *testing.T) {
 
 	// Stable free religious network with reliable HLS on iptv-org.
 	stream, err := p.Resolve(ctx, source.Request{
+
 		ChannelID: "3ABNEnglish.us",
 		Name: "3ABN English",
 		Country: "us",
+
 	})
 
 	if err != nil {
 
 		// Fall back to another commonly-listed free stream.
 		stream, err = p.Resolve(ctx, source.Request{
+
 			ChannelID: "00sReplay.us",
 			Name: "00s Replay",
 			Country: "us",
+
 		})
 
 	}

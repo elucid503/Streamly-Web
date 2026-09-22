@@ -91,18 +91,6 @@ func (d *DB) ServiceInterruption() *mongo.Collection {
 
 }
 
-func (d *DB) Profiles() *mongo.Collection {
-
-	return d.db.Collection("profiles")
-
-}
-
-func (d *DB) FriendRequests() *mongo.Collection {
-
-	return d.db.Collection("friend_requests")
-
-}
-
 func (d *DB) PushSubscriptions() *mongo.Collection {
 
 	return d.db.Collection("push_subscriptions")
@@ -143,12 +131,6 @@ func (d *DB) ensureIndexes(ctx context.Context) error {
 
 		{d.Favorites(), bson.D{{Key: "userId", Value: 1}, {Key: "kind", Value: 1}, {Key: "mediaId", Value: 1}, {Key: "channelId", Value: 1}}, true},
 		{d.Favorites(), bson.D{{Key: "userId", Value: 1}, {Key: "createdAt", Value: -1}}, false},
-
-		{d.Profiles(), bson.D{{Key: "userId", Value: 1}}, true},
-
-		{d.FriendRequests(), bson.D{{Key: "fromId", Value: 1}, {Key: "toId", Value: 1}}, true},
-		{d.FriendRequests(), bson.D{{Key: "toId", Value: 1}, {Key: "status", Value: 1}}, false},
-		{d.FriendRequests(), bson.D{{Key: "fromId", Value: 1}, {Key: "status", Value: 1}}, false},
 
 		{d.PushSubscriptions(), bson.D{{Key: "userId", Value: 1}, {Key: "endpoint", Value: 1}}, true},
 		{d.PushSubscriptions(), bson.D{{Key: "endpoint", Value: 1}}, false},

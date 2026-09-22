@@ -1,19 +1,25 @@
 import { AlertTriangle, ArrowLeft } from "lucide-react";
 
-import type { MultiviewStream } from "@/Features/Player/LiveStreamPane";
-import { MULTIVIEW_MAX_STREAMS } from "@/Features/Player/MultiviewMenu";
 import { VideoPlayer } from "@/Features/Player/VideoPlayer";
-import { SettingsPanel } from "@/Features/User/Settings";
+import { SettingsPanel } from "@/Features/Settings/Settings";
 import { Button } from "@/UI/Button";
 
 import { ModuleComponent } from "@/Core/Store";
-import Net, { ApiError } from "@/Net";
-import Stores from "@/Stores";
-import type { Episode, IntroInfo, LiveChannel, LiveSourceProvider, NextEpisode, Season, StreamInfo, StreamQuality, SubtitleTrack, WatchHistoryItem } from "@/Types";
+import { catalogAPI } from "@/Features/Catalog/Api";
+import { historyAPI } from "@/Features/Library/HistoryApi";
+import { liveAPI } from "@/Features/Live/Api";
+import { streamAPI } from "@/Features/Player/Api";
+import { ApiError } from "@/Core/Request";
+import { auth as authStore } from "@/Features/Auth/Store";
+import { settings as settingsStore } from "@/Features/Settings/Store";
+import type { Episode, Season } from "@/Features/Catalog/Types";
+import type { IntroInfo, NextEpisode, StreamInfo, StreamQuality, SubtitleTrack } from "@/Features/Player/Types";
+import type { LiveSourceProvider } from "@/Features/Live/Types";
+import type { WatchHistoryItem } from "@/Features/Library/Types";
 import { history, navigate, saveReturnPath, type NavigateFn } from "@/Utils/Navigation";
-import { closestAvailableHeight, dedupeQualitiesByHeight, nextLowerQualityHeight } from "@/Utils/Player/Stream";
-import { pickQualityByHeight, qualityPlaybackUrl, streamFromQuality, streamPlaybackUrl } from "@/Utils/Player/StreamClient";
-import { parseWatchPath } from "@/Utils/Player/WatchRoute";
+import { closestAvailableHeight, dedupeQualitiesByHeight, nextLowerQualityHeight } from "@/Features/Player/Playback/Stream";
+import { pickQualityByHeight, qualityPlaybackUrl, streamFromQuality, streamPlaybackUrl } from "@/Features/Player/Playback/StreamClient";
+import { parseWatchPath } from "@/Features/Player/Playback/WatchRoute";
 
 interface WatchPageProps {
 
@@ -72,10 +78,6 @@ interface WatchPageState {
 
   settingsOpen: boolean;
 
-  multiviewStreams: MultiviewStream[];
-  multiviewChannels: LiveChannel[];
-  multiviewLoading: boolean;
-
   /** Anonymized live source options + selection. */
   sourceProviders: LiveSourceProvider[];
   selectedSourceKey: string;
@@ -123,10 +125,6 @@ const EMPTY_STATE: Omit<WatchPageState, "loading" | "error" | "ready"> = {
   episodeCache: {},
 
   settingsOpen: false,
-
-  multiviewStreams: [],
-  multiviewChannels: [],
-  multiviewLoading: false,
 
   sourceProviders: [],
   selectedSourceKey: "auto",
@@ -185,8 +183,8 @@ export class WatchPage extends ModuleComponent<WatchPageProps, WatchPageState> {
 
   componentDidMount() {
 
-    this.watch(Stores.Auth);
-    this.watch(Stores.Settings);
+    this.watch(authStore);
+    this.watch(settingsStore);
 
     this.lastPreferredHeight = this.preferredHeight();
 
@@ -235,7 +233,7 @@ export class WatchPage extends ModuleComponent<WatchPageProps, WatchPageState> {
 
   tryLoad = () => {
 
-    if (!Stores.Auth.isAuthenticated) {
+    if (!authStore.isAuthenticated) {
 
       saveReturnPath(history.location.pathname);
 
@@ -253,9 +251,9 @@ export class WatchPage extends ModuleComponent<WatchPageProps, WatchPageState> {
 
     saveReturnPath(history.location.pathname);
 
-    Stores.Auth.setUser(null);
+    authStore.setUser(null);
 
-    Stores.Settings.setSettings(null);
+    settingsStore.setSettings(null);
 
     navigate("/auth");
 
@@ -347,7 +345,7 @@ export class WatchPage extends ModuleComponent<WatchPageProps, WatchPageState> {
 
   };
 
-  preferredHeight = (): number => Stores.Settings.settings?.preferredHeight ?? 1080;
+  preferredHeight = (): number => settingsStore.settings?.preferredHeight ?? 1080;
 
   resolvedPreferredHeight = (qualities: StreamQuality[]): number => {
 
@@ -443,8 +441,8 @@ export class WatchPage extends ModuleComponent<WatchPageProps, WatchPageState> {
 
     const [streamData, historyItems] = await Promise.all([
 
-      Net.Stream.movie(id),
-      Net.History.get(5, id).catch(() => []),
+      streamAPI.movie(id),
+      historyAPI.get(5, id).catch(() => []),
 
     ]);
 
@@ -493,7 +491,7 @@ export class WatchPage extends ModuleComponent<WatchPageProps, WatchPageState> {
 
     try {
 
-      const details = await Net.Catalog.movieDetails(id);
+      const details = await catalogAPI.movieDetails(id);
 
       if (gen !== this.loadGen) return;
 
@@ -520,7 +518,7 @@ export class WatchPage extends ModuleComponent<WatchPageProps, WatchPageState> {
 
     try {
 
-      const subtitles = await Net.Stream.movieSubtitles(id);
+      const subtitles = await streamAPI.movieSubtitles(id);
 
       if (gen !== this.loadGen) return;
 
@@ -551,8 +549,8 @@ export class WatchPage extends ModuleComponent<WatchPageProps, WatchPageState> {
 
     const [streamData, historyItems] = await Promise.all([
 
-      Net.Stream.episode(showId, season, episode),
-      Net.History.get(30, showId).catch(() => []),
+      streamAPI.episode(showId, season, episode),
+      historyAPI.get(30, showId).catch(() => []),
 
     ]);
 
@@ -621,8 +619,8 @@ export class WatchPage extends ModuleComponent<WatchPageProps, WatchPageState> {
 
       const [details, episodeDetails] = await Promise.all([
 
-        Net.Catalog.showDetails(showId),
-        Net.Catalog.episodeDetails(showId, season, episode).catch(() => null),
+        catalogAPI.showDetails(showId),
+        catalogAPI.episodeDetails(showId, season, episode).catch(() => null),
 
       ]);
 
@@ -652,7 +650,7 @@ export class WatchPage extends ModuleComponent<WatchPageProps, WatchPageState> {
 
     try {
 
-      const subtitles = await Net.Stream.episodeSubtitles(showId, season, episode);
+      const subtitles = await streamAPI.episodeSubtitles(showId, season, episode);
 
       if (gen !== this.loadGen) return;
 
@@ -670,7 +668,7 @@ export class WatchPage extends ModuleComponent<WatchPageProps, WatchPageState> {
 
     try {
 
-      const next = await Net.Stream.nextEpisode(showId, season, episode);
+      const next = await streamAPI.nextEpisode(showId, season, episode);
 
       if (gen !== this.loadGen) return;
 
@@ -732,8 +730,8 @@ export class WatchPage extends ModuleComponent<WatchPageProps, WatchPageState> {
 
       const [seasons, episodes] = await Promise.all([
 
-        Net.Catalog.showSeasons(showId).catch(() => []),
-        Net.Catalog.seasonEpisodes(showId, season),
+        catalogAPI.showSeasons(showId).catch(() => []),
+        catalogAPI.seasonEpisodes(showId, season),
 
       ]);
 
@@ -789,10 +787,10 @@ export class WatchPage extends ModuleComponent<WatchPageProps, WatchPageState> {
     this.failedLiveSources.clear();
 
     const [stream, providers] = await Promise.all([
-      Net.Live.stream(channelId, providerKey === "auto" ? undefined : providerKey),
+      liveAPI.stream(channelId, providerKey === "auto" ? undefined : providerKey),
       this.state.sourceProviders.length > 0
         ? Promise.resolve(this.state.sourceProviders)
-        : Net.Live.providers().catch(() => [] as LiveSourceProvider[]),
+        : liveAPI.providers().catch(() => [] as LiveSourceProvider[]),
     ]);
 
     if (gen !== this.loadGen) return;
@@ -831,11 +829,6 @@ export class WatchPage extends ModuleComponent<WatchPageProps, WatchPageState> {
 
       poster: stream.channel?.logo,
 
-      // Reset multiview when switching the primary live channel.
-      multiviewStreams: [],
-      multiviewChannels: [],
-      multiviewLoading: false,
-
       sourceProviders: providers ?? [],
       selectedSourceKey: selected,
       sourceSwitching: false,
@@ -862,7 +855,7 @@ export class WatchPage extends ModuleComponent<WatchPageProps, WatchPageState> {
 
     try {
 
-      const stream = await Net.Live.stream(channelId, key === "auto" ? undefined : key);
+      const stream = await liveAPI.stream(channelId, key === "auto" ? undefined : key);
 
       if (gen !== this.loadGen) return;
 
@@ -970,210 +963,6 @@ export class WatchPage extends ModuleComponent<WatchPageProps, WatchPageState> {
 
   };
 
-  handleMultiviewSearch = async (query: string) => {
-
-    if (this.state.kind !== "live") return;
-
-    this.setState({ multiviewLoading: true });
-
-    try {
-
-      const channels = query.trim()
-        ? await Net.Live.search(query.trim())
-        : await Net.Live.popular(48);
-
-      this.setState({ multiviewChannels: channels ?? [], multiviewLoading: false });
-
-    } catch {
-
-      this.setState({ multiviewLoading: false });
-
-    }
-
-  };
-
-  private multiviewLoadGen = new Map<string, number>();
-
-  bumpMultiviewGen = (channelId: string) => {
-
-    const next = (this.multiviewLoadGen.get(channelId) ?? 0) + 1;
-    this.multiviewLoadGen.set(channelId, next);
-    return next;
-
-  };
-
-  handleMultiviewToggle = async (channel: LiveChannel) => {
-
-    if (this.state.kind !== "live") return;
-
-    const { channelId, multiviewStreams } = this.state;
-
-    if (channel.id === channelId) return;
-
-    const existing = multiviewStreams.find((s) => s.channelId === channel.id);
-
-    if (existing) {
-
-      this.bumpMultiviewGen(channel.id);
-
-      this.setState({
-
-        multiviewStreams: multiviewStreams.filter((s) => s.channelId !== channel.id),
-
-      });
-
-      return;
-
-    }
-
-    // Primary + additional streams cap.
-    if (1 + multiviewStreams.length >= MULTIVIEW_MAX_STREAMS) return;
-
-    const loadGen = this.bumpMultiviewGen(channel.id);
-
-    // Optimistically open the pane so layout/selection update immediately.
-    const pending: MultiviewStream = {
-
-      channelId: channel.id,
-      name: channel.name,
-      streamUrl: "",
-      isHls: true,
-      logo: channel.logo,
-      pending: true,
-
-    };
-
-    this.setState((s) => {
-
-      if (s.channelId !== channelId) return null;
-
-      if (s.multiviewStreams.some((m) => m.channelId === channel.id)) return null;
-
-      if (1 + s.multiviewStreams.length >= MULTIVIEW_MAX_STREAMS) return null;
-
-      return { multiviewStreams: [...s.multiviewStreams, pending] };
-
-    });
-
-    try {
-
-      const stream = await Net.Live.stream(channel.id);
-
-      if (this.multiviewLoadGen.get(channel.id) !== loadGen) return;
-
-      if (!stream.streamUrl?.trim()) {
-
-        this.setState((s) => ({
-
-          multiviewStreams: s.multiviewStreams.map((m) =>
-
-            m.channelId === channel.id
-              ? { ...m, pending: false, error: true, streamUrl: "" }
-              : m
-
-          ),
-
-        }));
-
-        return;
-
-      }
-
-      const ready: MultiviewStream = {
-
-        channelId: channel.id,
-        name: stream.channel?.name?.trim() || channel.name,
-        streamUrl: stream.streamUrl,
-        isHls: stream.isHls !== false,
-        logo: stream.channel?.logo || channel.logo,
-        pending: false,
-
-      };
-
-      this.setState((s) => {
-
-        if (s.channelId !== channelId) return null;
-
-        if (!s.multiviewStreams.some((m) => m.channelId === channel.id)) return null;
-
-        return {
-
-          multiviewStreams: s.multiviewStreams.map((m) =>
-
-            m.channelId === channel.id ? ready : m
-
-          ),
-
-        };
-
-      });
-
-    } catch {
-
-      if (this.multiviewLoadGen.get(channel.id) !== loadGen) return;
-
-      this.setState((s) => ({
-
-        multiviewStreams: s.multiviewStreams.map((m) =>
-
-          m.channelId === channel.id
-            ? { ...m, pending: false, error: true, streamUrl: "" }
-            : m
-
-        ),
-
-      }));
-
-    }
-
-  };
-
-  handleMultiviewRemove = (removeId: string) => {
-
-    this.bumpMultiviewGen(removeId);
-
-    const { channelId, multiviewStreams, streamUrl, poster } = this.state;
-
-    // Removing a secondary pane.
-    if (removeId !== channelId) {
-
-      this.setState({
-
-        multiviewStreams: multiviewStreams.filter((m) => m.channelId !== removeId),
-
-      });
-
-      return;
-
-    }
-
-    // Removing the primary pane: promote the first ready secondary stream.
-    const remaining = multiviewStreams.filter((m) => m.channelId !== removeId);
-    const nextPrimary = remaining.find((m) => m.streamUrl.trim() && !m.error) ?? remaining[0];
-
-    if (!nextPrimary) {
-
-      this.setState({ multiviewStreams: [] });
-      return;
-
-    }
-
-    const rest = remaining.filter((m) => m.channelId !== nextPrimary.channelId);
-
-    this.setState({
-
-      channelId: nextPrimary.channelId,
-      streamUrl: nextPrimary.streamUrl || streamUrl,
-      isHls: nextPrimary.isHls,
-      title: nextPrimary.name,
-      subtitle: "",
-      poster: nextPrimary.logo || poster,
-      multiviewStreams: rest,
-
-    });
-
-  };
-
   saveProgress = (positionMs: number, durationMs: number) => {
 
     this.lastPlaybackPositionMs = positionMs;
@@ -1211,7 +1000,7 @@ export class WatchPage extends ModuleComponent<WatchPageProps, WatchPageState> {
 
     try {
 
-      await Net.History.upsert({
+      await historyAPI.upsert({
 
         kind,
         mediaId: kind === "live" ? 0 : mediaId,
@@ -1264,7 +1053,7 @@ export class WatchPage extends ModuleComponent<WatchPageProps, WatchPageState> {
 
     try {
 
-      const intro = kind === "movie" ? await Net.Stream.movieIntro(mediaId, durationMs) : kind === "show" ? await Net.Stream.episodeIntro(mediaId, season, episode, durationMs) : null;
+      const intro = kind === "movie" ? await streamAPI.movieIntro(mediaId, durationMs) : kind === "show" ? await streamAPI.episodeIntro(mediaId, season, episode, durationMs) : null;
 
       if (intro) this.setState({ intro });
 
@@ -1364,8 +1153,8 @@ export class WatchPage extends ModuleComponent<WatchPageProps, WatchPageState> {
 
   render() {
 
-    const { streamUrl, isHls, qualities, selectedHeight, subtitleTracks, title, subtitle, episodeTitle, description, poster, intro, nextEpisode, startPositionMs, loading, error, ready, seasons, menuEpisodes, menuSeason, menuEpisodesLoading, season, episode, kind, mediaId, channelId, settingsOpen, multiviewStreams, multiviewChannels, multiviewLoading, sourceProviders, selectedSourceKey, sourceSwitching } = this.state;
-    const settings = Stores.Settings.settings;
+    const { streamUrl, isHls, qualities, selectedHeight, subtitleTracks, title, subtitle, episodeTitle, description, poster, intro, nextEpisode, startPositionMs, loading, error, ready, seasons, menuEpisodes, menuSeason, menuEpisodesLoading, season, episode, kind, mediaId, channelId, settingsOpen, sourceProviders, selectedSourceKey, sourceSwitching } = this.state;
+    const settings = settingsStore.settings;
 
     const streamResolving = loading;
     const fatalError = error && !streamResolving && !ready;
@@ -1481,14 +1270,6 @@ export class WatchPage extends ModuleComponent<WatchPageProps, WatchPageState> {
           menuSeason={kind === "show" ? menuSeason : undefined}
 
           episodesLoading={kind === "show" ? menuEpisodesLoading : undefined}
-
-          primaryChannelId={kind === "live" ? channelId : undefined}
-          multiviewStreams={kind === "live" ? multiviewStreams : undefined}
-          multiviewChannels={kind === "live" ? multiviewChannels : undefined}
-          multiviewLoading={kind === "live" ? multiviewLoading : undefined}
-          onMultiviewSearch={kind === "live" ? this.handleMultiviewSearch : undefined}
-          onMultiviewToggle={kind === "live" ? this.handleMultiviewToggle : undefined}
-          onMultiviewRemove={kind === "live" ? this.handleMultiviewRemove : undefined}
 
           sourceProviders={kind === "live" ? sourceProviders : undefined}
           selectedSourceKey={kind === "live" ? selectedSourceKey : undefined}

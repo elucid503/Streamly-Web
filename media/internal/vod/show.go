@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"sync"
 
-	"mediakit/internal/febbox"
-	"mediakit/internal/fileparser"
-	"mediakit/internal/meta"
+	"mediakit/internal/catalog/meta"
+	"mediakit/internal/providers/febbox"
+	fileparser "mediakit/internal/vod/files"
 )
 
 // Show is a chainable handle for a TV series.

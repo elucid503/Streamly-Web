@@ -30,13 +30,17 @@ type daddyLiveProvider struct {
 
 var (
 	daddyBaseCandidates = []string{
+
 		"https://dlive.sx",
 		"https://dlhd.st",
 		"https://dlstreams.st",
+
 	}
 
 	daddyPlayerFolders = []string{
+
 		"player", "casting", "plus", "watch", "stream", "cast",
+
 	}
 
 	daddyCardRE = regexp.MustCompile(`(?is)<a\s+class="card"\s+([^>]+)>`)
@@ -97,18 +101,7 @@ func (p *daddyLiveProvider) Resolve(ctx context.Context, req Request) (Stream, e
 
 	}
 
-	if verifyPlaylist(ctx, p.client, streamURL, nil) {
-
-		return Stream{
-
-			URL: streamURL,
-			IsHLS: true,
-			Provider: p.Name(),
-
-		}, nil
-
-	}
-
+	// The playlist can be public while its segments require the player referrer.
 	if !verifyPlaylist(ctx, p.client, streamURL, headers) {
 
 		return Stream{}, fmt.Errorf("daddylive: playlist not playable for %q", name)
@@ -184,8 +177,10 @@ func (p *daddyLiveProvider) ensureIndex(ctx context.Context) error {
 	for _, base := range daddyBaseCandidates {
 
 		body, status, err := getText(ctx, p.client, strings.TrimRight(base, "/")+"/24-7-channels.php", map[string]string{
+
 			"Accept": "text/html",
 			"Referer": strings.TrimRight(base, "/") + "/",
+
 		})
 
 		if err != nil {
@@ -267,7 +262,9 @@ func (p *daddyLiveProvider) resolveStream(ctx context.Context, id int) (streamUR
 	watchURL := fmt.Sprintf("%s/watch.php?id=%d", p.baseURL, id)
 
 	_, _, _ = getText(ctx, p.client, watchURL, map[string]string{
+
 		"Referer": p.baseURL + "/",
+
 	})
 
 	var last error
@@ -316,7 +313,9 @@ func (p *daddyLiveProvider) resolveFromPage(ctx context.Context, pageURL, refere
 	visited[pageURL] = true
 
 	body, status, err := getText(ctx, p.embedClient, pageURL, map[string]string{
+
 		"Referer": referer,
+
 	})
 
 	if err != nil {
@@ -369,14 +368,18 @@ func (p *daddyLiveProvider) resolveFromPage(ctx context.Context, pageURL, refere
 }
 
 func parseDaddyCards(body string) []struct {
+
 	id int
 	title string
+
 } {
 
 	blocks := daddyCardRE.FindAllStringSubmatch(body, -1)
 	out := make([]struct {
+
 		id int
 		title string
+
 	}, 0, len(blocks))
 
 	for _, m := range blocks {
@@ -401,8 +404,10 @@ func parseDaddyCards(body string) []struct {
 		}
 
 		out = append(out, struct {
+
 			id int
 			title string
+
 		}{id: id, title: title})
 
 	}
@@ -412,6 +417,12 @@ func parseDaddyCards(body string) []struct {
 }
 
 func extractDaddyPlayableURL(html string) string {
+
+	if stream := extractDaddyConfigURL(html); stream != "" {
+
+		return stream
+
+	}
 
 	if m := daddyStreamURLRE.FindStringSubmatch(html); len(m) == 2 {
 
@@ -585,10 +596,12 @@ func isSkippableEmbed(raw string) bool {
 	host := strings.ToLower(raw)
 
 	for _, needle := range []string{
-		"assetrage", "tiestep", "popcdn", "adbpage", "histats",
+
+		"tiestep", "popcdn", "adbpage", "histats",
 		"doubleclick", "googlesyndication", "hubeamily", "trovesleepit",
 		"fellfortunate", "piousshiners", "nanisms", "xads",
 		"rocketstreams", "ksohls", "romponalis", "about:blank", "javascript:",
+
 	} {
 
 		if strings.Contains(host, needle) {

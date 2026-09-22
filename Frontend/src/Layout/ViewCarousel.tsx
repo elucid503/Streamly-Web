@@ -1,10 +1,10 @@
-import type { MainView } from "@/Types";
-import { shouldReduceMotion } from "@/Utils/Platform";
-
 import { Component, type ReactNode } from "react";
 import { motion } from "framer-motion";
 
-const VIEW_ORDER: MainView[] = ["vod", "live", "sports", "friends"];
+import type { MainView } from "@/Layout/Types";
+import { shouldReduceMotion } from "@/Utils/Platform";
+
+const VIEW_ORDER: MainView[] = ["vod", "live", "sports"];
 
 interface ViewCarouselProps {
 

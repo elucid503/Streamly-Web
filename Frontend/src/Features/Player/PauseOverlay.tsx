@@ -1,7 +1,7 @@
+import { Component } from "react";
+
 import { cn } from "@/Utils/ClassNames";
 import { formatDuration } from "@/Utils/Time";
-
-import { Component } from "react";
 
 type PauseLayout = "movie" | "episode" | "live";
 

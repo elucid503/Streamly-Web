@@ -207,7 +207,9 @@ func (p *plutoProvider) ensureSession(ctx context.Context) error {
 	bootURL := "https://boot.pluto.tv/v4/start?" + q.Encode()
 
 	body, status, err := getText(ctx, p.client, bootURL, map[string]string{
+
 		"Accept": "application/json",
+
 	})
 
 	if err != nil {
@@ -273,8 +275,10 @@ func (p *plutoProvider) ensureChannels(ctx context.Context) error {
 		u := fmt.Sprintf("https://service-channels.clusters.pluto.tv/v2/guide/channels?channelIds=&offset=%d&limit=100&sort=number%%3Aasc", offset)
 
 		body, status, err := getText(ctx, p.client, u, map[string]string{
+
 			"Accept": "application/json",
 			"Authorization": "Bearer " + token,
+
 		})
 
 		if err != nil {

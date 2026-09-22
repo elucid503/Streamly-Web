@@ -1,6 +1,6 @@
-import { cn } from "@/Utils/ClassNames";
-
 import { Component } from "react";
+
+import { cn } from "@/Utils/ClassNames";
 
 interface SwitchProps {
 

@@ -1,7 +1,7 @@
-import { imageCache } from "@/Utils/Images/Cache";
-import { cn } from "@/Utils/ClassNames";
-
 import { Component, type CSSProperties, type ReactNode } from "react";
+
+import { imageCache } from "@/UI/ImageCache";
+import { cn } from "@/Utils/ClassNames";
 
 interface CachedImageProps {
 

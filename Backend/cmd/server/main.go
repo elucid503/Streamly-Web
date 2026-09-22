@@ -11,13 +11,18 @@ import (
 	"syscall"
 	"time"
 
-	"streamly/internal/captions"
 	"streamly/internal/config"
 	"streamly/internal/database"
-	"streamly/internal/handlers"
+	"streamly/internal/features/admin"
+	"streamly/internal/features/auth"
+	"streamly/internal/features/catalog"
+	discover "streamly/internal/features/catalog/discovery"
+	"streamly/internal/features/library"
+	"streamly/internal/features/playback"
+	"streamly/internal/features/playback/captions"
+	"streamly/internal/features/settings"
+	"streamly/internal/features/sports"
 	"streamly/internal/middleware"
-	"streamly/internal/services"
-	"streamly/internal/services/discover"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
@@ -47,13 +52,11 @@ func main() {
 
 	}
 
-	authSvc := services.NewAuthService(db, cfg)
-	settingsSvc := services.NewSettingsService(db)
-	historySvc := services.NewHistoryService(db)
-	favoritesSvc := services.NewFavoritesService(db)
-	socialHub := services.NewSocialHub()
-	socialSvc := services.NewSocialService(db, socialHub)
-	mediaSvc := services.NewMediaService(cfg)
+	authSvc := auth.NewAuthService(db, cfg)
+	settingsSvc := settings.NewSettingsService(db)
+	historySvc := library.NewHistoryService(db)
+	favoritesSvc := library.NewFavoritesService(db)
+	mediaSvc := catalog.NewMediaService(cfg)
 
 	cacheCtx, cacheCancel := context.WithCancel(context.Background())
 
@@ -62,7 +65,7 @@ func main() {
 	mediaSvc.StartCatalogCache(cacheCtx)
 	defer mediaSvc.StopCatalogCache()
 
-	proxySvc := services.NewProxyService(cfg)
+	proxySvc := playback.NewProxyService(cfg)
 	subdlClient := captions.NewSubDLClient(captions.SubDLOptions{APIKey: cfg.SubDLAPIKey})
 	opensubsClient := captions.NewOpenSubsClient(captions.OpenSubsOptions{APIKey: cfg.OpenSubtitlesAPIKey})
 
@@ -80,7 +83,7 @@ func main() {
 
 	}
 
-	subtitleSvc := services.NewSubtitleResolver(mediaSvc, subdlClient, opensubsClient, cfg)
+	subtitleSvc := playback.NewSubtitleResolver(mediaSvc, subdlClient, opensubsClient, cfg)
 
 	if strings.EqualFold(strings.TrimSpace(os.Getenv("STREAM_DEBUG")), "1") || strings.EqualFold(strings.TrimSpace(os.Getenv("STREAM_DEBUG")), "true") {
 
@@ -88,23 +91,22 @@ func main() {
 
 	}
 
-	authHandler := handlers.NewAuthHandler(authSvc)
-	settingsHandler := handlers.NewSettingsHandler(settingsSvc)
-	historyHandler := handlers.NewHistoryHandler(historySvc)
-	favoritesHandler := handlers.NewFavoritesHandler(favoritesSvc)
-	socialHandler := handlers.NewSocialHandler(socialSvc)
-	catalogHandler := handlers.NewCatalogHandler(mediaSvc)
-	streamHandler := handlers.NewStreamHandler(mediaSvc, proxySvc, settingsSvc, subtitleSvc)
-	proxyHandler := handlers.NewProxyHandler(proxySvc)
-	adminHandler := handlers.NewAdminHandler(authSvc, db)
+	authHandler := auth.NewAuthHandler(authSvc)
+	settingsHandler := settings.NewSettingsHandler(settingsSvc)
+	historyHandler := library.NewHistoryHandler(historySvc)
+	favoritesHandler := library.NewFavoritesHandler(favoritesSvc)
+	catalogHandler := catalog.NewCatalogHandler(mediaSvc)
+	streamHandler := playback.NewStreamHandler(mediaSvc, proxySvc, settingsSvc, subtitleSvc)
+	proxyHandler := playback.NewProxyHandler(proxySvc)
+	adminHandler := admin.NewAdminHandler(authSvc, db)
 
 	feedSvc := discover.New(mediaSvc.Client(), filepath.Join("data", "bridge.cache.json"), mediaSvc)
 	feedSvc.Start(cacheCtx, cfg.CatalogCacheTTL)
 	defer feedSvc.Stop()
 
-	feedHandler := handlers.NewFeedHandler(feedSvc, historySvc, favoritesSvc)
+	feedHandler := catalog.NewFeedHandler(feedSvc)
 
-	pushSvc := services.NewPushService(db, cfg)
+	pushSvc := sports.NewPushService(db, cfg)
 
 	if !pushSvc.Configured() {
 
@@ -112,11 +114,11 @@ func main() {
 
 	}
 
-	sportsAlertsSvc := services.NewSportsAlertsService(db, pushSvc, mediaSvc)
+	sportsAlertsSvc := sports.NewSportsAlertsService(db, pushSvc, mediaSvc)
 	sportsAlertsSvc.Start(cacheCtx)
 	defer sportsAlertsSvc.Stop()
 
-	sportsAlertsHandler := handlers.NewSportsAlertsHandler(sportsAlertsSvc, pushSvc)
+	sportsAlertsHandler := sports.NewSportsAlertsHandler(sportsAlertsSvc, pushSvc)
 
 	gin.SetMode(gin.ReleaseMode)
 
@@ -127,12 +129,13 @@ func main() {
 
 		AllowOrigins: []string{cfg.FrontendOrigin},
 
-		AllowMethods:  []string{"GET", "HEAD", "POST", "PUT", "DELETE", "OPTIONS"},
-		AllowHeaders:  []string{"Origin", "Content-Type", "Accept", "Authorization", "Range", "If-Range"},
+		AllowMethods: []string{"GET", "HEAD", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowHeaders: []string{"Origin", "Content-Type", "Accept", "Authorization", "Range", "If-Range"},
 		ExposeHeaders: []string{"Content-Length", "Content-Range", "Accept-Ranges"},
 
 		AllowCredentials: true,
-		MaxAge:           12 * time.Hour,
+		MaxAge: 12 * time.Hour,
+
 	}))
 
 	versionBytes, _ := os.ReadFile("version.txt")
@@ -161,19 +164,19 @@ func main() {
 		c.JSON(http.StatusOK, gin.H{"version": version})
 
 	})
-	auth := api.Group("/auth")
+	authRoutes := api.Group("/auth")
 
 	// Auth
 
-	auth.POST("/register", middleware.AuthRateLimit, authHandler.Register)
-	auth.POST("/login", middleware.AuthRateLimit, authHandler.Login)
-	auth.POST("/logout", authHandler.Logout)
-	auth.GET("/me", middleware.AuthRequired(authSvc), authHandler.Me)
+	authRoutes.POST("/register", middleware.AuthRateLimit, authHandler.Register)
+	authRoutes.POST("/login", middleware.AuthRateLimit, authHandler.Login)
+	authRoutes.POST("/logout", authHandler.Logout)
+	authRoutes.GET("/me", auth.AuthRequired(authSvc), authHandler.Me)
 
 	// Protected Routes
 
 	protected := api.Group("")
-	protected.Use(middleware.AuthRequired(authSvc))
+	protected.Use(auth.AuthRequired(authSvc))
 
 	protected.GET("/settings", settingsHandler.Get)
 	protected.PUT("/settings", settingsHandler.Update)
@@ -185,22 +188,6 @@ func main() {
 	protected.GET("/favorites", favoritesHandler.List)
 	protected.POST("/favorites", favoritesHandler.Upsert)
 	protected.DELETE("/favorites/:kind/:key", favoritesHandler.Delete)
-
-	// Social
-
-	social := protected.Group("/social")
-
-	social.GET("/profile", socialHandler.GetMyProfile)
-	social.PUT("/profile", socialHandler.UpdateProfile)
-	social.GET("/profile/:id", socialHandler.GetPublicProfile)
-	social.GET("/users", middleware.SearchRateLimit, socialHandler.SearchUsers)
-	social.GET("/friends", socialHandler.ListFriends)
-	social.POST("/friends/requests", socialHandler.SendRequest)
-	social.GET("/friends/requests", socialHandler.ListRequests)
-	social.PUT("/friends/requests/:id/accept", socialHandler.AcceptRequest)
-	social.DELETE("/friends/requests/:id", socialHandler.DeleteRequest)
-	social.DELETE("/friends/:id", socialHandler.RemoveFriend)
-	social.GET("/events", socialHandler.SSEEvents)
 
 	// Catalog
 
@@ -259,7 +246,7 @@ func main() {
 	// Admin
 
 	admin := protected.Group("/admin")
-	admin.Use(middleware.AdminRequired())
+	admin.Use(auth.AdminRequired())
 
 	admin.POST("/access-codes", adminHandler.CreateAccessCode)
 	admin.GET("/access-codes", adminHandler.ListAccessCodes)
@@ -305,8 +292,9 @@ func main() {
 
 	server := &http.Server{
 
-		Addr:    ":" + cfg.Port,
+		Addr: ":" + cfg.Port,
 		Handler: r,
+
 	}
 
 	go func() {

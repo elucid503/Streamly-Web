@@ -1,9 +1,8 @@
+import { Component } from "react";
 import { motion } from "framer-motion";
-import { Clapperboard, Radio, Trophy, Users } from "lucide-react";
+import { Clapperboard, Radio, Trophy } from "lucide-react";
 
-import { ModuleComponent } from "@/Core/Store";
-import Stores from "@/Stores";
-import type { MainView } from "@/Types";
+import type { MainView } from "@/Layout/Types";
 import { cn } from "@/Utils/ClassNames";
 
 interface ViewSwitcherProps {
@@ -14,7 +13,7 @@ interface ViewSwitcherProps {
 
 }
 
-const views: { id: Exclude<MainView, "friends">; label: string; icon: typeof Clapperboard }[] = [
+const views: { id: MainView; label: string; icon: typeof Clapperboard }[] = [
 
   { id: "vod", label: "Movies & Shows", icon: Clapperboard },
   { id: "live", label: "Live TV", icon: Radio },
@@ -22,19 +21,11 @@ const views: { id: Exclude<MainView, "friends">; label: string; icon: typeof Cla
 
 ];
 
-export class ViewSwitcher extends ModuleComponent<ViewSwitcherProps> {
-
-  componentDidMount() {
-
-    this.watch(Stores.Social);
-
-  }
+export class ViewSwitcher extends Component<ViewSwitcherProps> {
 
   render() {
 
     const { active, onChange } = this.props;
-    const friendRequestCount = Stores.Social.incomingRequestCount;
-    const friendsActive = active === "friends";
 
     return (
 
@@ -86,53 +77,6 @@ export class ViewSwitcher extends ModuleComponent<ViewSwitcherProps> {
             );
 
           })}
-
-          </nav>
-
-          <nav className="rounded-full border border-border bg-surface-raised/90 p-1 shadow-xl backdrop-blur-md">
-
-            <button
-              type="button"
-              onClick={() => onChange("friends")}
-              className={cn(
-                "relative flex items-center justify-center gap-1.5 rounded-full px-5 py-2 text-xs font-medium sm:gap-2 sm:px-3.5 sm:text-sm",
-                friendsActive ? "text-surface" : "text-foreground-muted hover:text-foreground"
-              )}
-              title="Friends"
-              aria-label="Friends"
-            >
-
-              {friendsActive && (
-
-                <motion.span
-                  layoutId="bottom-nav-pill"
-                  className="absolute inset-0 rounded-full bg-foreground shadow-sm"
-                  transition={{ type: "spring", stiffness: 400, damping: 32 }}
-                />
-
-              )}
-
-              <span className="relative z-10 flex items-center gap-1.5 sm:gap-2">
-
-                <Users className="size-5 sm:size-4" />
-                <span className="hidden whitespace-nowrap sm:inline">Friends</span>
-
-                {friendRequestCount > 0 && (
-
-                  <span className={cn(
-                    "flex h-4 min-w-[1rem] items-center justify-center rounded-full px-1 text-[10px] font-semibold",
-                    friendsActive ? "bg-surface text-foreground" : "bg-foreground text-surface"
-                  )}>
-
-                    {friendRequestCount}
-
-                  </span>
-
-                )}
-
-              </span>
-
-            </button>
 
           </nav>
 

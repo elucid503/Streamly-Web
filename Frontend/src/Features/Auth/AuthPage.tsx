@@ -1,9 +1,10 @@
-import Net from "@/Net";
+import { Component } from "react";
+import { motion } from "framer-motion";
+
 import { Button } from "@/UI/Button";
 import { Input } from "@/UI/Input";
 
-import { Component } from "react";
-import { motion } from "framer-motion";
+import { authAPI } from "@/Features/Auth/Api";
 
 interface AuthPageProps {
 
@@ -53,11 +54,11 @@ export class AuthPage extends Component<AuthPageProps, AuthPageState> {
 
       if (mode === "login") {
 
-        await Net.Auth.login(email, password);
+        await authAPI.login(email, password);
 
       } else {
 
-        await Net.Auth.register(email, password, accessCode);
+        await authAPI.register(email, password, accessCode);
 
       }
 

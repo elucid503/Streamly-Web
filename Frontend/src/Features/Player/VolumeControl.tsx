@@ -1,7 +1,7 @@
-import { cn } from "@/Utils/ClassNames";
-
 import { Component, type ReactNode } from "react";
 import { Volume2, VolumeX } from "lucide-react";
+
+import { cn } from "@/Utils/ClassNames";
 
 interface VolumeControlProps {
 

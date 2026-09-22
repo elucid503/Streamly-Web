@@ -19,13 +19,15 @@ const matchesTTL = 2 * time.Minute
 // Client fetches sports fixtures from scoreboard APIs (ESPN) and optionally
 // soft-links them to catalog channels by name. It does not talk to stream providers.
 type Client struct {
-	httpClient *http.Client
-	catalog    *catalog.Client
-	resolver   *source.Resolver
 
-	mu        sync.RWMutex
-	matches   []Match
+	httpClient *http.Client
+	catalog *catalog.Client
+	resolver *source.Resolver
+
+	mu sync.RWMutex
+	matches []Match
 	matchesAt time.Time
+
 }
 
 const sportsChannelPrefix = "sports-ntv-"
@@ -42,28 +44,40 @@ func EncodeChannelID(name string) string {
 func DecodeChannelID(id string) (string, bool) {
 
 	if !strings.HasPrefix(id, sportsChannelPrefix) {
+
 		return "", false
+
 	}
 
 	raw := strings.TrimPrefix(id, sportsChannelPrefix)
 	if raw == "" || len(raw) > 256 {
+
 		return "", false
+
 	}
 
 	decoded, err := base64.RawURLEncoding.DecodeString(raw)
 	if err != nil {
+
 		return "", false
+
 	}
 
 	name := strings.TrimSpace(string(decoded))
 	if name == "" || len(name) > 120 || EncodeChannelID(name) != id {
+
 		return "", false
+
 	}
 
 	for _, r := range name {
+
 		if r < 0x20 || r == 0x7f {
+
 			return "", false
+
 		}
+
 	}
 
 	return name, true
@@ -76,8 +90,9 @@ func New(cat *catalog.Client, resolver *source.Resolver) *Client {
 	return &Client{
 
 		httpClient: &http.Client{Timeout: espnFetchTimeout},
-		catalog:    cat,
-		resolver:   resolver,
+		catalog: cat,
+		resolver: resolver,
+
 	}
 
 }
@@ -136,10 +151,14 @@ func (c *Client) attachChannels(matches []Match) {
 
 	var cat *catalog.Catalog
 	if c.catalog != nil {
+
 		loaded, err := c.catalog.List()
 		if err == nil {
+
 			cat = loaded
+
 		}
+
 	}
 
 	for i := range matches {

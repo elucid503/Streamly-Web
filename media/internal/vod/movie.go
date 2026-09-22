@@ -5,30 +5,38 @@ import (
 	"sync"
 	"time"
 
-	"mediakit/internal/febbox"
-	"mediakit/internal/fileparser"
-	"mediakit/internal/intro"
-	"mediakit/internal/introdb"
-	"mediakit/internal/meta"
-	"mediakit/internal/quality"
+	"mediakit/internal/catalog/meta"
+	"mediakit/internal/playback/quality"
+	"mediakit/internal/providers/febbox"
+	"mediakit/internal/providers/introdb"
+	fileparser "mediakit/internal/vod/files"
+	"mediakit/internal/vod/intro"
 )
 
 // Movie is a chainable handle for a film.
-type Movie struct {
-	deps Deps
-	id   int
 
-	mu      sync.Mutex
+type Movie struct {
+
+	deps Deps
+
+	id int
+
+	mu sync.Mutex
+
 	details *meta.TitleDetails
 
 	shareKey string
+
 	shareErr error
+
 	shareSet bool
 
 	file *febbox.File
+
 }
 
 // NewMovie creates a Movie handle for the given Showbox id.
+
 func NewMovie(deps Deps, id int) *Movie {
 
 	return &Movie{deps: deps, id: id}
@@ -36,6 +44,7 @@ func NewMovie(deps Deps, id int) *Movie {
 }
 
 // ID returns the Showbox catalogue id.
+
 func (m *Movie) ID() int {
 
 	return m.id
@@ -43,9 +52,11 @@ func (m *Movie) ID() int {
 }
 
 // Details fetches and caches movie metadata.
+
 func (m *Movie) Details() (meta.TitleDetails, error) {
 
 	m.mu.Lock()
+
 	defer m.mu.Unlock()
 
 	if m.details != nil {
@@ -69,9 +80,11 @@ func (m *Movie) Details() (meta.TitleDetails, error) {
 }
 
 // ShareKey resolves the Febbox share key that hosts this movie's files.
+
 func (m *Movie) ShareKey() (string, error) {
 
 	m.mu.Lock()
+
 	defer m.mu.Unlock()
 
 	if m.shareSet {
@@ -81,6 +94,7 @@ func (m *Movie) ShareKey() (string, error) {
 	}
 
 	m.shareKey, m.shareErr = m.deps.GetFebBoxID(m.id, 1) // 1 = showbox.BoxMovie
+
 	m.shareSet = true
 
 	return m.shareKey, m.shareErr
@@ -88,6 +102,7 @@ func (m *Movie) ShareKey() (string, error) {
 }
 
 // File resolves the primary playable file for this movie.
+
 func (m *Movie) File() (*MediaFile, error) {
 
 	file, err := m.resolveFile()
@@ -114,16 +129,20 @@ func (m *Movie) File() (*MediaFile, error) {
 
 	return &MediaFile{
 
-		ID:   file.FID,
+		ID: file.FID,
+
 		Name: file.FileName,
 
 		shareKey: shareKey,
+
 	}, nil
 
 }
 
 // Qualities lists available download renditions for this movie.
+
 // Share-key folders are tried first, then console IMDb bindings.
+
 func (m *Movie) Qualities() ([]quality.Quality, error) {
 
 	details, err := m.Details()
@@ -261,6 +280,7 @@ func (m *Movie) shareKeyQualities() ([]quality.Quality, error) {
 	}
 
 	file := fileparser.BestSourceFile(direct)
+
 	items, err := m.deps.GetLinks(shareKey, file.FID, "")
 
 	if err != nil {
@@ -295,45 +315,8 @@ func (m *Movie) shareKeyQualities() ([]quality.Quality, error) {
 
 }
 
-// BestQuality picks the rendition closest to targetHeight pixels.
-func (m *Movie) BestQuality(targetHeight int) (*quality.Quality, error) {
-
-	qualities, err := m.Qualities()
-
-	if err != nil {
-
-		return nil, err
-
-	}
-
-	picked := quality.PickQuality(qualities, targetHeight)
-
-	if picked == nil {
-
-		return nil, fmt.Errorf("movie %d: no qualities available", m.id)
-
-	}
-
-	return picked, nil
-
-}
-
-// StreamURL returns the best progressive or HLS URL at the target resolution.
-func (m *Movie) StreamURL(targetHeight int) (string, error) {
-
-	q, err := m.BestQuality(targetHeight)
-
-	if err != nil {
-
-		return "", err
-
-	}
-
-	return q.URL, nil
-
-}
-
 // Intro fetches intro timing from TheIntroDB for this movie.
+
 func (m *Movie) Intro(opts ...intro.Option) (*intro.Data, error) {
 
 	details, err := m.Details()
@@ -366,22 +349,8 @@ func (m *Movie) Intro(opts ...intro.Option) (*intro.Data, error) {
 
 }
 
-// SkipIntroFrom returns the seek target to skip the intro from the current position.
-func (m *Movie) SkipIntroFrom(position time.Duration) (time.Duration, error) {
-
-	data, err := m.Intro()
-
-	if err != nil {
-
-		return 0, err
-
-	}
-
-	return introdb.IntroSkipTarget(intro.ToRecord(data), position)
-
-}
-
 // CreditsStart estimates when credits begin.
+
 func (m *Movie) CreditsStart(duration time.Duration) (time.Duration, bool) {
 
 	data, err := m.Intro()
@@ -431,6 +400,7 @@ func (m *Movie) resolveFile() (*febbox.File, error) {
 	if len(direct) > 0 {
 
 		m.file = &direct[0]
+
 		return m.file, nil
 
 	}

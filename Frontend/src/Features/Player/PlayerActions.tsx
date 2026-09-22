@@ -1,7 +1,7 @@
-import { cn } from "@/Utils/ClassNames";
-
 import { useEffect, useLayoutEffect, useState, type AnimationEvent } from "react";
 import { ChevronLeft, ChevronRight, Volume1, Volume2 } from "lucide-react";
+
+import { cn } from "@/Utils/ClassNames";
 
 export type PlayerActionFeedback = | { id: number; kind: "seek"; direction: -1 | 1; label: string } | { id: number; kind: "volume"; direction: -1 | 1; label: string };
 

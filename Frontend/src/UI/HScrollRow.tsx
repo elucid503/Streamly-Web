@@ -1,7 +1,7 @@
-import { cn } from "@/Utils/ClassNames";
-
 import { Component, createRef, type CSSProperties, type ReactNode } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
+
+import { cn } from "@/Utils/ClassNames";
 
 interface HScrollRowProps {
 

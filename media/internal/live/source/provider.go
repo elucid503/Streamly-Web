@@ -15,19 +15,23 @@ var ErrNoProviders = errors.New("live/source: no providers configured")
 // Request carries catalog channel identity for source resolution.
 // Providers match by ID, name, alt names, or network — never by stored stream URLs.
 type Request struct {
+
 	ChannelID string
-	Name      string
-	AltNames  []string
-	Network   string
-	Country   string
+	Name string
+	AltNames []string
+	Network string
+	Country string
+
 }
 
 // Stream is a playable media reference returned by a source provider.
 type Stream struct {
-	URL      string
-	IsHLS    bool
-	Headers  map[string]string
+
+	URL string
+	IsHLS bool
+	Headers map[string]string
 	Provider string
+
 }
 
 // Provider resolves catalog channel identity into playable streams.
@@ -38,17 +42,22 @@ type Provider interface {
 
 	// Resolve returns a stream for the given catalog channel request.
 	Resolve(ctx context.Context, req Request) (Stream, error)
+
 }
 
 // Matcher is optionally implemented by providers that can cheaply confirm
 // whether their current inventory contains a request without resolving a stream.
 type Matcher interface {
+
 	Matches(ctx context.Context, req Request) bool
+
 }
 
 // Resolver queries registered providers in order until one succeeds.
 type Resolver struct {
+
 	providers []Provider
+
 }
 
 // NewResolver builds a multi-provider resolver.
@@ -76,9 +85,9 @@ func Default() *Resolver {
 
 	return NewResolver(
 		NewDaddyLive(), // FMHY ⭐ — best major US cable coverage right now
-		NewNTV(),       // FMHY ⭐ — kept; fails closed when cdnlive 502s
-		NewPluto(),     // FMHY free FAST — reliable official API
-		NewIPTVOrg(),   // EasyWebTV / iptv-org open streams (catalog ID match)
+		NewNTV(), // FMHY ⭐ — kept; fails closed when cdnlive 502s
+		NewPluto(), // FMHY free FAST — reliable official API
+		NewIPTVOrg(), // EasyWebTV / iptv-org open streams (catalog ID match)
 	)
 
 }
@@ -132,7 +141,7 @@ func (r *Resolver) ResolveWith(ctx context.Context, req Request, publicKey strin
 
 	}
 
-	var last error
+	var failures []error
 
 	for _, p := range providers {
 
@@ -140,13 +149,14 @@ func (r *Resolver) ResolveWith(ctx context.Context, req Request, publicKey strin
 
 		if err != nil {
 
-			last = err
+			failures = append(failures, fmt.Errorf("%s: %w", p.Name(), err))
 			continue
 
 		}
 
 		if stream.URL == "" {
 
+			failures = append(failures, fmt.Errorf("%s: empty stream URL", p.Name()))
 			continue
 
 		}
@@ -169,13 +179,7 @@ func (r *Resolver) ResolveWith(ctx context.Context, req Request, publicKey strin
 
 	}
 
-	if last != nil {
-
-		return Stream{}, last
-
-	}
-
-	return Stream{}, ErrUnavailable
+	return Stream{}, fmt.Errorf("%w for %q: %w", ErrUnavailable, firstNonEmpty(req.ChannelID, req.Name), errors.Join(failures...))
 
 }
 
@@ -184,22 +188,30 @@ func (r *Resolver) ResolveWith(ctx context.Context, req Request, publicKey strin
 func (r *Resolver) Matches(ctx context.Context, req Request, publicKey string) bool {
 
 	if r == nil {
+
 		return false
+
 	}
 
 	internal := InternalName(publicKey)
 	if internal == "" {
+
 		return false
+
 	}
 
 	p := r.providerByName(internal)
 	matcher, ok := p.(Matcher)
 	if !ok {
+
 		return false
+
 	}
 
 	if ctx == nil {
+
 		ctx = context.Background()
+
 	}
 
 	return matcher.Matches(ctx, req)

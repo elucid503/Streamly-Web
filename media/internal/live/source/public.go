@@ -1,6 +1,8 @@
 package source
 
-import "strings"
+import (
+	"strings"
+)
 
 // PublicProvider is an anonymized source option exposed to API clients.
 // Keys and labels must not reveal upstream brand or domain names.
@@ -20,10 +22,12 @@ type PublicProvider struct {
 // publicMap maps internal provider names → public keys (stable).
 // Never expose internal names over the wire.
 var publicMap = []struct {
+
 	Internal string
 	Key string
 	Label string
 	Description string
+
 }{
 
 	{"daddylive", "s1", "Source 1", "Primary live feed"},
@@ -77,31 +81,6 @@ func InternalName(publicKey string) string {
 
 }
 
-// PublicLabel returns the display label for a public key.
-func PublicLabel(publicKey string) string {
-
-	publicKey = normalizePublicKey(publicKey)
-
-	if publicKey == "" || publicKey == "auto" {
-
-		return "Automatic"
-
-	}
-
-	for _, m := range publicMap {
-
-		if m.Key == publicKey {
-
-			return m.Label
-
-		}
-
-	}
-
-	return "Source"
-
-}
-
 // PublicProviderList builds the client-facing provider list for a resolver.
 // Only providers that are actually registered are included (plus Automatic).
 func PublicProviderList(r *Resolver) []PublicProvider {
@@ -109,9 +88,11 @@ func PublicProviderList(r *Resolver) []PublicProvider {
 	out := []PublicProvider{
 
 		{
+
 			Key: "auto",
 			Label: "Automatic",
 			Description: "Try sources in preferred order",
+
 		},
 
 	}

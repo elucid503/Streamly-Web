@@ -19,25 +19,23 @@ type Config struct {
 	JWTSecret string
 	JWTExpiry time.Duration
 
-	CookieSecure   bool
-	CookieDomain   string
+	CookieSecure bool
+	CookieDomain string
 	FrontendOrigin string
 
-	FebboxCookie        string
-	IntroDBKey          string
-	TMDBAPIKey          string
-	SubDLAPIKey         string
+	FebboxCookie string
+	IntroDBKey string
+	TMDBAPIKey string
+	SubDLAPIKey string
 	OpenSubtitlesAPIKey string
-
-	TVBaseURL string
 
 	ChildMode string
 
-	BootstrapCode  string
+	BootstrapCode string
 	DefaultQuality int
 
-	ProxyTokenTTL    time.Duration
-	CatalogCacheTTL  time.Duration
+	ProxyTokenTTL time.Duration
+	CatalogCacheTTL time.Duration
 	CatalogCacheFile string
 	SubtitleCacheTTL time.Duration
 
@@ -55,30 +53,28 @@ func Load() (*Config, error) {
 
 	cfg := &Config{
 
-		Port:      envOr("PORT", "8080"),
-		MongoURI:  os.Getenv("MONGO_URI"),
+		Port: envOr("PORT", "8080"),
+		MongoURI: os.Getenv("MONGO_URI"),
 		JWTSecret: envOr("JWT_SECRET", "change-me-in-production"),
 		JWTExpiry: durationOr("JWT_EXPIRY", 7*24*time.Hour),
 
-		CookieSecure:   boolOr("COOKIE_SECURE", false),
-		CookieDomain:   os.Getenv("COOKIE_DOMAIN"),
+		CookieSecure: boolOr("COOKIE_SECURE", false),
+		CookieDomain: os.Getenv("COOKIE_DOMAIN"),
 		FrontendOrigin: envOr("FRONTEND_ORIGIN", "http://localhost:5173"),
 
-		FebboxCookie:        os.Getenv("FEBBOX_UI_COOKIE"),
-		IntroDBKey:          os.Getenv("INTRODB_API_KEY"),
-		TMDBAPIKey:          os.Getenv("TMDB_API_KEY"),
-		SubDLAPIKey:         os.Getenv("SUBDL_API_KEY"),
+		FebboxCookie: os.Getenv("FEBBOX_UI_COOKIE"),
+		IntroDBKey: os.Getenv("INTRODB_API_KEY"),
+		TMDBAPIKey: os.Getenv("TMDB_API_KEY"),
+		SubDLAPIKey: os.Getenv("SUBDL_API_KEY"),
 		OpenSubtitlesAPIKey: os.Getenv("OPENSUBTITLES_API_KEY"),
-
-		TVBaseURL: os.Getenv("TV_BASE_URL"),
 
 		ChildMode: envOr("CHILD_MODE", "0"),
 
-		BootstrapCode:  os.Getenv("BOOTSTRAP_ACCESS_CODE"),
+		BootstrapCode: os.Getenv("BOOTSTRAP_ACCESS_CODE"),
 		DefaultQuality: intOr("DEFAULT_QUALITY", 1080),
 
-		ProxyTokenTTL:    durationOr("PROXY_TOKEN_TTL", 4*time.Hour),
-		CatalogCacheTTL:  durationOr("CATALOG_CACHE_TTL", time.Hour),
+		ProxyTokenTTL: durationOr("PROXY_TOKEN_TTL", 4*time.Hour),
+		CatalogCacheTTL: durationOr("CATALOG_CACHE_TTL", time.Hour),
 		CatalogCacheFile: envOr("CATALOG_CACHE_FILE", "data/catalog.cache.json"),
 		SubtitleCacheTTL: durationOr("SUBTITLE_CACHE_TTL", 15*time.Minute),
 
@@ -87,6 +83,7 @@ func Load() (*Config, error) {
 		VAPIDPublicKey: envOr("VAPID_PUBLIC_KEY", ""),
 		VAPIDPrivateKey: envOr("VAPID_PRIVATE_KEY", ""),
 		VAPIDSubject: envOr("VAPID_SUBJECT", ""),
+
 	}
 
 	if cfg.VAPIDSubject == "" {
@@ -119,7 +116,6 @@ func loadDotEnv() {
 			filepath.Join(dir, ".env"),
 			filepath.Join(dir, "..", ".env"),
 			filepath.Join(dir, "..", "..", ".env"),
-
 		)
 
 	}
@@ -177,24 +173,6 @@ func intOr(key string, fallback int) int {
 	}
 
 	return fallback
-
-}
-
-func boolFalse(key string) bool {
-
-	if v := strings.TrimSpace(os.Getenv(key)); v != "" {
-
-		switch strings.ToLower(v) {
-
-		case "0", "false", "no", "off":
-
-			return true
-
-		}
-
-	}
-
-	return false
 
 }
 

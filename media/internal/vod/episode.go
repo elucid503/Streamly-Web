@@ -4,22 +4,24 @@ import (
 	"fmt"
 	"time"
 
-	"mediakit/internal/febbox"
-	"mediakit/internal/fileparser"
-	"mediakit/internal/intro"
-	"mediakit/internal/introdb"
-	"mediakit/internal/meta"
-	"mediakit/internal/quality"
+	"mediakit/internal/catalog/meta"
+	"mediakit/internal/playback/quality"
+	"mediakit/internal/providers/febbox"
+	"mediakit/internal/providers/introdb"
+	fileparser "mediakit/internal/vod/files"
+	"mediakit/internal/vod/intro"
 )
 
 // Episode is a chainable handle for one episode of a TV show.
 type Episode struct {
+
 	show *Show
 
-	season  int
+	season int
 	episode int
 
 	file *febbox.File
+
 }
 
 // SeasonNumber returns the season number.
@@ -147,13 +149,14 @@ func (e *Episode) File() (*MediaFile, error) {
 
 	return &MediaFile{
 
-		ID:   file.FID,
+		ID: file.FID,
 		Name: file.FileName,
 
-		Season:  e.season,
+		Season: e.season,
 		Episode: e.episode,
 
 		shareKey: shareKey,
+
 	}, nil
 
 }
@@ -209,28 +212,6 @@ func (e *Episode) tryShareKeyQualities() ([]quality.Quality, bool) {
 	}
 
 	return qualities, true
-
-}
-
-func (e *Episode) consoleQualities(imdbID string) ([]quality.Quality, bool) {
-
-	fid, err := e.show.deps.GetConsoleEpisodeFID(imdbID, e.season, e.episode)
-
-	if err != nil || fid <= 0 {
-
-		return nil, false
-
-	}
-
-	items, err := e.show.deps.GetConsoleLinks(fid)
-
-	if err != nil || len(items) == 0 {
-
-		return nil, false
-
-	}
-
-	return quality.ToQualities(items), true
 
 }
 
@@ -348,44 +329,6 @@ func (e *Episode) allEpisodeFiles(shareKey string) ([]febbox.File, error) {
 
 }
 
-// BestQuality picks the rendition closest to targetHeight pixels.
-func (e *Episode) BestQuality(targetHeight int) (*quality.Quality, error) {
-
-	qualities, err := e.Qualities()
-
-	if err != nil {
-
-		return nil, err
-
-	}
-
-	picked := quality.PickQuality(qualities, targetHeight)
-
-	if picked == nil {
-
-		return nil, fmt.Errorf("episode S%02dE%02d: no qualities available", e.season, e.episode)
-
-	}
-
-	return picked, nil
-
-}
-
-// StreamURL returns the best progressive or HLS URL at the target resolution.
-func (e *Episode) StreamURL(targetHeight int) (string, error) {
-
-	q, err := e.BestQuality(targetHeight)
-
-	if err != nil {
-
-		return "", err
-
-	}
-
-	return q.URL, nil
-
-}
-
 // Intro fetches intro timing from TheIntroDB for this episode.
 func (e *Episode) Intro(opts ...intro.Option) (*intro.Data, error) {
 
@@ -416,21 +359,6 @@ func (e *Episode) Intro(opts ...intro.Option) (*intro.Data, error) {
 	}
 
 	return intro.FromRecord(record), nil
-
-}
-
-// SkipIntroFrom returns the seek target to skip the intro from the current position.
-func (e *Episode) SkipIntroFrom(position time.Duration) (time.Duration, error) {
-
-	data, err := e.Intro()
-
-	if err != nil {
-
-		return 0, err
-
-	}
-
-	return introdb.IntroSkipTarget(intro.ToRecord(data), position)
 
 }
 

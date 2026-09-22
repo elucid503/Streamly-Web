@@ -1,5 +1,4 @@
 import { Component } from "react";
-
 import type { TypedEmitter } from "tiny-typed-emitter";
 
 export abstract class ModuleComponent<P = object, S = object> extends Component<P, S> {

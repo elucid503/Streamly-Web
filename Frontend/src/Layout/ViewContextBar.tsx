@@ -3,8 +3,9 @@ import { Dices, Heart, Play, Radio, Sparkles } from "lucide-react";
 
 import { HScrollRow } from "@/UI/HScrollRow";
 
-import { lastWatched } from "@/Utils/History";
-import type { FavoriteItem, MainView, WatchHistoryItem } from "@/Types";
+import { lastWatched } from "@/Features/Library/History";
+import type { FavoriteItem, WatchHistoryItem } from "@/Features/Library/Types";
+import type { MainView } from "@/Layout/Types";
 import { cn } from "@/Utils/ClassNames";
 
 export type ContextActionId = "continue" | "dice" | "shuffle-favorites";
@@ -76,7 +77,7 @@ export class ViewContextBar extends Component<ViewContextBarProps> {
 
     }
 
-    if (view === "sports" || view === "friends") return [];
+    if (view === "sports") return [];
 
     const actions: ContextAction[] = [];
 

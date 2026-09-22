@@ -13,18 +13,6 @@ import (
 	"mediakit/internal/live/source"
 )
 
-type watchSample struct {
-
-	Index int
-	At time.Time
-	Frame string
-	SCTE string
-	Tags []string
-	Captions bool
-	FFMPEG string
-
-}
-
 func runWatch(interval, duration time.Duration, outDir string) {
 
 	httpClient := newInspectHTTP(35 * time.Second)
@@ -32,22 +20,28 @@ func runWatch(interval, duration time.Duration, outDir string) {
 	targets := []target{
 
 		{
+
 			Name: "bloomberg-iptvorg",
 			Kind: kindStreamly,
 			Provider: source.NewIPTVOrg(),
 			ChannelIDs: []string{"BloombergTV.us"},
 			ChannelNames: []string{"Bloomberg"},
+
 		},
 		{
+
 			Name: "xumo-fox-sports",
 			Kind: kindXumo,
 			XumoID: "99991196",
+
 		},
 		{
+
 			Name: "daddylive-espn",
 			Kind: kindStreamly,
 			Provider: source.NewDaddyLive(),
 			ChannelNames: []string{"ESPN"},
+
 		},
 
 	}
@@ -204,11 +198,13 @@ func sampleOne(h *inspectHTTP, t target, outDir string, n int, _ time.Duration) 
 func grabFrame(ctx context.Context, streamURL string, headers map[string]string, out string) error {
 
 	args := []string{
+
 		"-nostdin",
 		"-hide_banner",
 		"-loglevel", "error",
 		"-user_agent", inspectUA,
 		"-rw_timeout", "15000000",
+
 	}
 
 	if ref := headers["Referer"]; ref != "" {

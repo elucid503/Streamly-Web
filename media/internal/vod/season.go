@@ -3,8 +3,8 @@ package vod
 import (
 	"fmt"
 
-	"mediakit/internal/febbox"
-	"mediakit/internal/fileparser"
+	"mediakit/internal/providers/febbox"
+	fileparser "mediakit/internal/vod/files"
 )
 
 // Season is a chainable handle for one season of a TV show.

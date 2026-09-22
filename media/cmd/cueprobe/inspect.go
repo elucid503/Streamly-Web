@@ -505,6 +505,7 @@ func collectCueTags(body string) []string {
 			add("EXT-X-DISCONTINUITY")
 		case strings.HasPrefix(upper, "#EXT-X-PROGRAM-DATE-TIME"):
 			add("EXT-X-PROGRAM-DATE-TIME")
+
 		}
 
 	}

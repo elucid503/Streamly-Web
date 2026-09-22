@@ -225,7 +225,9 @@ func (p *iptvOrgProvider) ensureIndex(ctx context.Context) error {
 	}
 
 	body, status, err := getText(ctx, p.client, "https://iptv-org.github.io/api/streams.json", map[string]string{
+
 		"Accept": "application/json",
+
 	})
 
 	if err != nil {

@@ -40,154 +40,202 @@ func fmhyLiveTVTargets() []target {
 	return []target{
 
 		{
+
 			Name: "TVCL",
 			FMHY: "https://www.tvchannellists.com/",
 			Kind: kindSkip,
 			Note: "channel encyclopedia, no streams",
+
 		},
 		{
+
 			Name: "NTV",
 			FMHY: "https://ntv.cx/",
 			Kind: kindStreamly,
 			Provider: source.NewNTV(),
 			ChannelNames: []string{"ESPN", "CNN", "NBC"},
+
 		},
 		{
+
 			Name: "StreamSports99",
 			FMHY: "https://streamsports99.website/",
 			Kind: kindScrape,
 			PageURL: "https://streamsports99.website/",
+
 		},
 		{
+
 			Name: "DaddyLive TV",
 			FMHY: "https://dlhd.st/",
 			Kind: kindStreamly,
 			Provider: source.NewDaddyLive(),
 			ChannelNames: []string{"ESPN", "CNN", "NBC"},
+
 		},
 		{
+
 			Name: "Famelack",
 			FMHY: "https://famelack.com/",
 			Kind: kindScrape,
 			PageURL: "https://famelack.com/",
+
 		},
 		{
+
 			Name: "EasyWebTV / iptv-org",
 			FMHY: "https://zhangboheng.github.io/Easy-Web-TV-M3u8/routes/tv.html",
 			Kind: kindStreamly,
 			Provider: source.NewIPTVOrg(),
 			ChannelIDs: []string{"BloombergTV.us", "NASA.tv", "C-SPAN.us", "3ABNEnglish.us"},
 			ChannelNames: []string{"Bloomberg", "NASA", "C-SPAN"},
+
 		},
 		{
+
 			Name: "SportsBite TV",
 			FMHY: "https://sportsbite.org/channels",
 			Kind: kindScrape,
 			PageURL: "https://sportsbite.org/channels",
+
 		},
 		{
+
 			Name: "TitanTV",
 			FMHY: "https://titantv.com/",
 			Kind: kindSkip,
 			Note: "program listings only",
+
 		},
 		{
+
 			Name: "TV Freedom",
 			FMHY: "https://tvfreedom.surge.sh/",
 			Kind: kindScrape,
 			PageURL: "https://tvfreedom.surge.sh/",
+
 		},
 		{
+
 			Name: "vavoo.to",
 			FMHY: "https://vavoo.to/",
 			Kind: kindScrape,
 			PageURL: "https://vavoo.to/",
+
 		},
 		{
+
 			Name: "Live24",
 			FMHY: "https://livelive24.com/",
 			Kind: kindScrape,
 			PageURL: "https://livelive24.com/",
+
 		},
 		{
+
 			Name: "Xumo Play (FAST loop)",
 			FMHY: "https://play.xumo.com/networks",
 			Kind: kindXumo,
 			XumoID: "99951252",
 			Note: "Cheaters — scheduled FAST assets",
+
 		},
 		{
+
 			Name: "Xumo Play (sports live flag)",
 			FMHY: "https://play.xumo.com/networks",
 			Kind: kindXumo,
 			XumoID: "99991196",
 			Note: "FOX Sports — live:true unbounded asset",
+
 		},
 		{
+
 			Name: "Pluto TV",
 			FMHY: "https://pluto.tv/live-tv",
 			Kind: kindStreamly,
 			Provider: source.NewPluto(),
 			ChannelNames: []string{"Court TV", "ION", "Pluto TV Trending Now", "Pluto TV Spotlight"},
+
 		},
 		{
+
 			Name: "Watchott Live",
 			FMHY: "https://iptv.watchott.org/",
 			Kind: kindScrape,
 			PageURL: "https://iptv.watchott.org/",
+
 		},
 		{
+
 			Name: "HOOFOOT IPTV",
 			FMHY: "https://hoofoot.ru/iptv/",
 			Kind: kindScrape,
 			PageURL: "https://hoofoot.ru/iptv/",
+
 		},
 		{
+
 			Name: "TV Explorer",
 			FMHY: "https://tvexplorer.live/",
 			Kind: kindScrape,
 			PageURL: "https://tvexplorer.live/",
+
 		},
 		{
+
 			Name: "Rive IPTV",
 			FMHY: "https://www.rivestream.app/iptv",
 			Kind: kindScrape,
 			PageURL: "https://www.rivestream.app/iptv",
+
 		},
 		{
+
 			Name: "FreeInterTV",
 			FMHY: "http://www.freeintertv.com/",
 			Kind: kindScrape,
 			PageURL: "http://www.freeintertv.com/",
+
 		},
 		{
+
 			Name: "Global Free TV",
 			FMHY: "https://www.globalfreetv.com/",
 			Kind: kindScrape,
 			PageURL: "https://www.globalfreetv.com/",
+
 		},
 		{
+
 			Name: "SquidTV",
 			FMHY: "https://www.squidtv.net/",
 			Kind: kindScrape,
 			PageURL: "https://www.squidtv.net/",
+
 		},
 		{
+
 			Name: "TVAtlas",
 			FMHY: "https://tvatlas.app/",
 			Kind: kindScrape,
 			PageURL: "https://tvatlas.app/country/us",
+
 		},
 		{
+
 			Name: "DistroTV",
 			FMHY: "https://distro.tv/",
 			Kind: kindDistro,
+
 		},
 		{
+
 			Name: "Puffer",
 			FMHY: "https://puffer.stanford.edu/",
 			Kind: kindSkip,
 			Note: "OTA research, signup required",
+
 		},
 
 	}

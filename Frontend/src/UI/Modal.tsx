@@ -1,8 +1,8 @@
-import { cn } from "@/Utils/ClassNames";
-
 import { Component, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { X } from "lucide-react";
+
+import { cn } from "@/Utils/ClassNames";
 
 interface ModalProps {
 

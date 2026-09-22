@@ -17,7 +17,8 @@ const ACTIVE_OPACITY = 0.82;
 const VIDEO_RETRY_MS = 400;
 const VIDEO_RETRY_MAX = 60;
 
-const COLOR_LERP = 0.028;
+const COLOR_LERP = 0.056;
+const ANIMATION_INTERVAL_MS = 1000 / 30;
 
 interface Rgb {
 
@@ -104,6 +105,8 @@ export class AmbienceLayer extends Component<AmbienceLayerProps> {
 
   componentDidMount() {
 
+    document.addEventListener("visibilitychange", this.onVisibilityChange);
+
     this.sampleCanvas.width = SAMPLE_W;
 
     this.sampleCanvas.height = SAMPLE_H;
@@ -136,15 +139,35 @@ export class AmbienceLayer extends Component<AmbienceLayerProps> {
 
   componentWillUnmount() {
 
+    document.removeEventListener("visibilitychange", this.onVisibilityChange);
+
     this.deactivate();
 
   }
+
+  onVisibilityChange = () => {
+
+    if (document.hidden) {
+
+      this.stopSampling();
+      this.stopAnimation();
+
+    } else if (this.props.enabled) {
+
+      this.startSampling();
+      this.startAnimation();
+
+    }
+
+  };
 
   activate = () => {
 
     this.renderGradient(this.displayPrimary, this.displaySecondary);
 
     this.bindVideoEvents();
+
+    this.maybeSample(true);
 
     this.startSampling();
     this.startAnimation();
@@ -165,23 +188,34 @@ export class AmbienceLayer extends Component<AmbienceLayerProps> {
 
   startAnimation = () => {
 
-    this.stopAnimation();
+    if (this.animFrameId !== null || document.hidden || !this.props.enabled) return;
 
-    const tick = () => {
+    let lastFrame = 0;
 
-      if (!this.props.enabled) return;
+    const tick = (now: number) => {
 
-      const prevPrimary = this.displayPrimary;
+      this.animFrameId = null;
 
-      const prevSecondary = this.displaySecondary;
+      if (!this.props.enabled || document.hidden) return;
 
-      this.displayPrimary = lerpRgb(this.displayPrimary, this.targetPrimary, COLOR_LERP);
+      if (now - lastFrame >= ANIMATION_INTERVAL_MS) {
 
-      this.displaySecondary = lerpRgb(this.displaySecondary, this.targetSecondary, COLOR_LERP);
+        lastFrame = now;
 
-      const moved = colorDistance(prevPrimary, this.displayPrimary) + colorDistance(prevSecondary, this.displaySecondary) > 0.4;
+        this.displayPrimary = lerpRgb(this.displayPrimary, this.targetPrimary, COLOR_LERP);
+        this.displaySecondary = lerpRgb(this.displaySecondary, this.targetSecondary, COLOR_LERP);
 
-      if (moved) {
+        const remaining = colorDistance(this.displayPrimary, this.targetPrimary) + colorDistance(this.displaySecondary, this.targetSecondary);
+
+        if (remaining < 1) {
+
+          this.displayPrimary = this.targetPrimary;
+          this.displaySecondary = this.targetSecondary;
+          this.renderGradient(this.displayPrimary, this.displaySecondary);
+
+          return;
+
+        }
 
         this.renderGradient(this.displayPrimary, this.displaySecondary);
 
@@ -289,7 +323,7 @@ export class AmbienceLayer extends Component<AmbienceLayerProps> {
 
     this.lastSample = 0;
 
-    this.maybeSample();
+    this.maybeSample(true);
 
   };
 
@@ -297,7 +331,7 @@ export class AmbienceLayer extends Component<AmbienceLayerProps> {
 
     this.stopSampling();
 
-    if (!this.props.enabled) return;
+    if (!this.props.enabled || document.hidden) return;
 
     this.sampleTimer = setInterval(this.maybeSample, SAMPLE_INTERVAL_MS);
 
@@ -317,9 +351,9 @@ export class AmbienceLayer extends Component<AmbienceLayerProps> {
 
   };
 
-  maybeSample = () => {
+  maybeSample = (force = false) => {
 
-    if (this.sampling || !this.props.enabled) return;
+    if (this.sampling || !this.props.enabled || document.hidden) return;
 
     const now = performance.now();
 
@@ -327,7 +361,7 @@ export class AmbienceLayer extends Component<AmbienceLayerProps> {
 
     const video = this.props.videoRef.current;
 
-    if (!video || video.readyState < 2 || video.videoWidth === 0) {
+    if (!video || video.readyState < 2 || video.videoWidth === 0 || (!force && (video.paused || video.ended))) {
 
       return;
 
@@ -352,6 +386,8 @@ export class AmbienceLayer extends Component<AmbienceLayerProps> {
         this.targetPrimary = sampled.primary;
 
         this.targetSecondary = sampled.secondary;
+
+        this.startAnimation();
 
       }
 

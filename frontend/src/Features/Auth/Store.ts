@@ -1,0 +1,31 @@
+import { TypedEmitter } from "tiny-typed-emitter";
+
+import type { User } from "@/Features/Auth/Types";
+
+interface AuthEvents {
+
+  change: () => void;
+
+}
+
+class AuthModule extends TypedEmitter<AuthEvents> {
+
+  user: User | null = null;
+
+  setUser(user: User | null) {
+
+    this.user = user;
+
+    this.emit("change");
+
+  }
+
+  get isAuthenticated() {
+
+    return this.user !== null;
+
+  }
+
+}
+
+export const auth = new AuthModule();

@@ -237,21 +237,28 @@ var teamRSNs = map[string][]string{
 	"golden knights": {"SCRIPPS", "KMCC"},
 
 	// NFL prefers national — team RSNs less common for primetime
+
 }
 
 // nfl/mlb disambiguation for "rangers" / "kings"
 var teamRSNsByCategory = map[string]map[string][]string{
 
 	"baseball": {
+
 		"rangers": {"FanDuel Sports Network Southwest", "Rangers Sports Network"},
+
 	},
 	"hockey": {
+
 		"rangers": {"MSG"},
 		"kings": {"FanDuel Sports Network SoCal", "FanDuel Sports Network West"},
+
 	},
 	"basketball": {
+
 		"kings": {"NBC Sports California"},
 		"rangers": {}, // N/A
+
 	},
 
 }
@@ -267,20 +274,6 @@ var categoryDefaultNetworks = map[string][]string{
 	"motor-sports": {"ESPN", "ABC", "Fox Sports 1"},
 	"golf": {"Golf Channel", "CBS", "NBC"},
 	"mma": {"ESPN", "UFC Fight Pass"},
-
-}
-
-// matchChannel picks the best catalog channel for a fixture using live ESPN
-// broadcast data first, then team RSN maps, then national defaults.
-func matchChannel(m Match, cat *catalog.Catalog) *MatchedChannel {
-
-	if ch := matchBroadcastChannel(m, cat); ch != nil {
-
-		return ch
-
-	}
-
-	return matchTeamOrDefaultChannel(m, cat)
 
 }
 

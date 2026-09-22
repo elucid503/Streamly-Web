@@ -7,17 +7,20 @@ import { PWAInstallGate } from "@/Features/PWA/InstallGate";
 import { Button } from "@/UI/Button";
 
 import { ModuleComponent } from "@/Core/Store";
-import Net from "@/Net";
-import Stores from "@/Stores";
+import { authAPI } from "@/Features/Auth/Api";
+import { settingsAPI } from "@/Features/Settings/Api";
+import { auth as authStore } from "@/Features/Auth/Store";
+import { settings as settingsStore } from "@/Features/Settings/Store";
+import { configureStoreEmitters } from "@/Core/ConfigureStores";
 import { consumeReturnPath, currentPath, history, navigate, parseRoute, saveReturnPath } from "@/Utils/Navigation";
 import { isMobile, shouldReduceMotion } from "@/Utils/Platform";
-import { registerSportsWorker } from "@/Utils/Sports/Alerts";
+import { registerSportsWorker } from "@/Features/Sports/Alerts";
 
 // Lazy loads pages for better performance.
 
 const AuthPage = lazy(() => import("@/Features/Auth/AuthPage").then((m) => ({ default: m.AuthPage })));
-const DetailPage = lazy(() => import("@/Features/Content/Detail").then((m) => ({ default: m.DetailPage })) );
-const HomePage = lazy(() => import("@/Features/Browse/Home").then((m) => ({ default: m.HomePage })));
+const DetailPage = lazy(() => import("@/Features/Catalog/Detail").then((m) => ({ default: m.DetailPage })) );
+const HomePage = lazy(() => import("@/Features/Home/Home").then((m) => ({ default: m.HomePage })));
 const WatchPage = lazy(() => import("@/Features/Player/Watch").then((m) => ({ default: m.WatchPage })));
 
 interface AppState {
@@ -55,10 +58,10 @@ export class App extends ModuleComponent<object, AppState> {
 
   async componentDidMount() {
 
-    Stores.ConfigureEmitters();
+    configureStoreEmitters();
 
-    this.watch(Stores.Auth);
-    this.watch(Stores.Settings);
+    this.watch(authStore);
+    this.watch(settingsStore);
 
     this.syncPlayerViewport();
 
@@ -136,17 +139,17 @@ export class App extends ModuleComponent<object, AppState> {
 
     try {
 
-      const [user, settings] = await Promise.all([Net.Auth.me(), Net.Settings.get()]);
+      const [user, settings] = await Promise.all([authAPI.me(), settingsAPI.get()]);
 
-      Stores.Auth.setUser(user);
-      Stores.Settings.setSettings(settings);
+      authStore.setUser(user);
+      settingsStore.setSettings(settings);
 
       void registerSportsWorker();
 
     } catch {
 
-      Stores.Auth.setUser(null);
-      Stores.Settings.setSettings(null);
+      authStore.setUser(null);
+      settingsStore.setSettings(null);
 
       saveReturnPath(currentPath(history.location));
 
@@ -162,11 +165,11 @@ export class App extends ModuleComponent<object, AppState> {
 
   onAuthSuccess = async () => {
 
-    const [user, settings] = await Promise.all([Net.Auth.me(), Net.Settings.get()]);
+    const [user, settings] = await Promise.all([authAPI.me(), settingsAPI.get()]);
 
-    Stores.Auth.setUser(user);
+    authStore.setUser(user);
 
-    Stores.Settings.setSettings(settings);
+    settingsStore.setSettings(settings);
 
     void registerSportsWorker();
 
@@ -204,7 +207,7 @@ export class App extends ModuleComponent<object, AppState> {
 
     const route = parseRoute(location);
 
-    if (!Stores.Auth.isAuthenticated && route.name !== "auth") {
+    if (!authStore.isAuthenticated && route.name !== "auth") {
 
       saveReturnPath(currentPath(location));
 
@@ -218,7 +221,7 @@ export class App extends ModuleComponent<object, AppState> {
 
         return this.renderShell(
 
-          Stores.Auth.isAuthenticated ? (
+          authStore.isAuthenticated ? (
 
             <HomePage navigate={navigate} />
 
@@ -272,7 +275,7 @@ export class App extends ModuleComponent<object, AppState> {
 
     const { activeWatchPath, location, playerReady } = this.state;
 
-    if (!activeWatchPath || !Stores.Auth.isAuthenticated) return null;
+    if (!activeWatchPath || !authStore.isAuthenticated) return null;
 
     const route = parseRoute(location);
     const minimized = route.name !== "watch";
