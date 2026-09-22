@@ -78,7 +78,7 @@ func Load() (*Config, error) {
 		CatalogCacheFile: envOr("CATALOG_CACHE_FILE", "data/catalog.cache.json"),
 		SubtitleCacheTTL: durationOr("SUBTITLE_CACHE_TTL", 15*time.Minute),
 
-		StaticDir: envOr("STATIC_DIR", "../Frontend/dist"),
+		StaticDir: envOr("STATIC_DIR", "../frontend/dist"),
 
 		VAPIDPublicKey: envOr("VAPID_PUBLIC_KEY", ""),
 		VAPIDPrivateKey: envOr("VAPID_PRIVATE_KEY", ""),
